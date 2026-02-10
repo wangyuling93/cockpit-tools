@@ -1497,7 +1497,58 @@ pub fn focus_codex_instance(last_pid: Option<u32>, codex_home: Option<&str>) -> 
     Ok(pid)
 }
 
+#[cfg(target_os = "windows")]
+fn collect_vscode_process_entries_from_powershell() -> Vec<(u32, Option<String>)> {
+    let mut entries: Vec<(u32, Option<String>)> = Vec::new();
+    let output = powershell_output(&[
+        "-Command",
+        "Get-CimInstance Win32_Process -Filter \"Name='Code.exe'\" | ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }",
+    ]);
+    let output = match output {
+        Ok(value) => value,
+        Err(_) => return entries,
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, '|');
+        let pid_str = parts.next().unwrap_or("").trim();
+        let cmdline = parts.next().unwrap_or("").trim();
+        let pid = match pid_str.parse::<u32>() {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let lower = cmdline.to_lowercase();
+        if is_helper_command_line(&lower) || lower.contains("crashpad_handler") {
+            continue;
+        }
+        let dir = extract_user_data_dir_from_command_line(cmdline).and_then(|value| {
+            let normalized = normalize_path_for_compare(&value);
+            if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            }
+        });
+        entries.push((pid, dir));
+    }
+    entries.sort_by_key(|(pid, _)| *pid);
+    entries.dedup_by(|a, b| a.0 == b.0);
+    entries
+}
+
 pub fn collect_vscode_process_entries() -> Vec<(u32, Option<String>)> {
+    #[cfg(target_os = "windows")]
+    {
+        let entries = collect_vscode_process_entries_from_powershell();
+        if !entries.is_empty() {
+            return entries;
+        }
+    }
+
     let mut entries = Vec::new();
     let mut system = System::new();
     system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
@@ -1563,37 +1614,6 @@ pub fn collect_vscode_process_entries() -> Vec<(u32, Option<String>)> {
                     continue;
                 }
                 if lower.contains("crashpad_handler") || is_helper_command_line(&lower) {
-                    continue;
-                }
-                let dir = extract_user_data_dir_from_command_line(cmdline);
-                entries.push((pid, dir));
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let output = powershell_output(&[
-            "-NoProfile",
-            "-Command",
-            "Get-CimInstance Win32_Process -Filter \"Name='Code.exe'\" | ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }",
-        ]);
-        if let Ok(output) = output {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for line in stdout.lines() {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                let mut parts = line.splitn(2, '|');
-                let pid_str = parts.next().unwrap_or("").trim();
-                let cmdline = parts.next().unwrap_or("").trim();
-                let pid = match pid_str.parse::<u32>() {
-                    Ok(value) => value,
-                    Err(_) => continue,
-                };
-                let lower = cmdline.to_lowercase();
-                if is_helper_command_line(&lower) {
                     continue;
                 }
                 let dir = extract_user_data_dir_from_command_line(cmdline);
