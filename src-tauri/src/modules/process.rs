@@ -209,9 +209,11 @@ fn parse_windows_exec_candidates(
     let mut scored_candidates = 0usize;
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
-        if !line.trim().is_empty() {
-            raw_lines += 1;
+        let trimmed_line = line.trim();
+        if trimmed_line.is_empty() || trimmed_line.starts_with("STAGE:") {
+            continue;
         }
+        raw_lines += 1;
         let Some(path) = normalize_windows_candidate_path(line) else {
             continue;
         };
@@ -258,6 +260,12 @@ fn parse_windows_exec_candidates(
 
 #[cfg(target_os = "windows")]
 fn decode_utf16le(bytes: &[u8]) -> String {
+    // Skip UTF-16 LE BOM if present
+    let bytes = if bytes.starts_with(&[0xFF, 0xFE]) {
+        &bytes[2..]
+    } else {
+        bytes
+    };
     let mut words = Vec::with_capacity(bytes.len() / 2);
     let mut iter = bytes.iter().copied();
     while let Some(lo) = iter.next() {
@@ -350,10 +358,13 @@ fn detect_vscode_exec_path_by_registry() -> Option<std::path::PathBuf> {
     let keywords = ["visual studio code", "vs code", "vscode"];
     for root in uninstall_roots {
         let cmd = format!("reg query \"{}\" /s /v DisplayName", root);
-        let output = Command::new("cmd")
+        let output = match Command::new("cmd")
             .args(["/u", "/c", &cmd])
             .output()
-            .ok()?;
+        {
+            Ok(o) => o,
+            Err(_) => continue,
+        };
         if !output.status.success() {
             continue;
         }

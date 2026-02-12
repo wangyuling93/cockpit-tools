@@ -41,6 +41,8 @@ interface GeneralConfig {
   auto_switch_threshold: number;
 }
 
+type AppPathTarget = 'antigravity' | 'codex' | 'vscode' | 'opencode' | 'windsurf';
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'general' | 'network' | 'about'>('general');
@@ -77,6 +79,7 @@ export function SettingsPage() {
   const [codexAppPath, setCodexAppPath] = useState('');
   const [vscodeAppPath, setVscodeAppPath] = useState('');
   const [windsurfAppPath, setWindsurfAppPath] = useState('');
+  const [appPathResetDetectingTargets, setAppPathResetDetectingTargets] = useState<Set<AppPathTarget>>(new Set());
   const [opencodeSyncOnSwitch, setOpencodeSyncOnSwitch] = useState(true);
   const [autoSwitchEnabled, setAutoSwitchEnabled] = useState(false);
   const [autoSwitchThreshold, setAutoSwitchThreshold] = useState('5');
@@ -375,9 +378,36 @@ export function SettingsPage() {
     openUrl(url);
   };
 
-  const handlePickAppPath = async (
-    target: 'antigravity' | 'codex' | 'vscode' | 'opencode' | 'windsurf'
-  ) => {
+  const isAppPathResetDetecting = (target: AppPathTarget) => appPathResetDetectingTargets.has(target);
+
+  const setAppPathForTarget = (target: AppPathTarget, path: string) => {
+    if (target === 'antigravity') {
+      setAntigravityAppPath(path);
+    } else if (target === 'codex') {
+      setCodexAppPath(path);
+    } else if (target === 'vscode') {
+      setVscodeAppPath(path);
+    } else if (target === 'windsurf') {
+      setWindsurfAppPath(path);
+    } else {
+      setOpencodeAppPath(path);
+    }
+  };
+
+  const getResetLabelByTarget = (target: AppPathTarget) => {
+    if (target === 'vscode') {
+      return t('settings.general.vscodePathReset', '重置默认');
+    }
+    if (target === 'windsurf') {
+      return t('settings.general.windsurfPathReset', '重置默认');
+    }
+    if (target === 'opencode') {
+      return t('settings.general.opencodePathReset', '重置默认');
+    }
+    return t('settings.general.codexPathReset', '重置默认');
+  };
+
+  const handlePickAppPath = async (target: AppPathTarget) => {
     try {
       const selected = await open({
         multiple: false,
@@ -387,52 +417,31 @@ export function SettingsPage() {
       const path = Array.isArray(selected) ? selected[0] : selected;
       if (!path) return;
 
-      if (target === 'antigravity') {
-        setAntigravityAppPath(path);
-      } else if (target === 'codex') {
-        setCodexAppPath(path);
-      } else if (target === 'vscode') {
-        setVscodeAppPath(path);
-      } else if (target === 'windsurf') {
-        setWindsurfAppPath(path);
-      } else {
-        setOpencodeAppPath(path);
-      }
+      setAppPathForTarget(target, path);
     } catch (err) {
       console.error('选择启动路径失败:', err);
     }
   };
 
-  const handleResetAppPath = async (
-    target: 'antigravity' | 'codex' | 'vscode' | 'opencode' | 'windsurf'
-  ) => {
+  const handleResetAppPath = async (target: AppPathTarget) => {
+    if (isAppPathResetDetecting(target)) return;
+    setAppPathResetDetectingTargets((prev) => {
+      const next = new Set(prev);
+      next.add(target);
+      return next;
+    });
     try {
       const detected = await invoke<string | null>('detect_app_path', { app: target, force: true });
-      const path = detected || '';
-      if (target === 'antigravity') {
-        setAntigravityAppPath(path);
-      } else if (target === 'codex') {
-        setCodexAppPath(path);
-      } else if (target === 'vscode') {
-        setVscodeAppPath(path);
-      } else if (target === 'windsurf') {
-        setWindsurfAppPath(path);
-      } else {
-        setOpencodeAppPath(path);
-      }
+      setAppPathForTarget(target, detected || '');
     } catch (err) {
       console.error('重置启动路径失败:', err);
-      if (target === 'antigravity') {
-        setAntigravityAppPath('');
-      } else if (target === 'codex') {
-        setCodexAppPath('');
-      } else if (target === 'vscode') {
-        setVscodeAppPath('');
-      } else if (target === 'windsurf') {
-        setWindsurfAppPath('');
-      } else {
-        setOpencodeAppPath('');
-      }
+      setAppPathForTarget(target, '');
+    } finally {
+      setAppPathResetDetectingTargets((prev) => {
+        const next = new Set(prev);
+        next.delete(target);
+        return next;
+      });
     }
   };
 
@@ -637,12 +646,22 @@ export function SettingsPage() {
                       placeholder={t('settings.general.codexAppPathPlaceholder', '默认路径')}
                       onChange={(e) => setAntigravityAppPath(e.target.value)}
                     />
-                    <button className="btn btn-secondary" onClick={() => handlePickAppPath('antigravity')}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePickAppPath('antigravity')}
+                      disabled={isAppPathResetDetecting('antigravity')}
+                    >
                       {t('settings.general.codexPathSelect', '选择')}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleResetAppPath('antigravity')}>
-                      <RefreshCw size={16} />
-                      {t('settings.general.codexPathReset', '恢复默认')}
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleResetAppPath('antigravity')}
+                      disabled={isAppPathResetDetecting('antigravity')}
+                    >
+                      <RefreshCw size={16} className={isAppPathResetDetecting('antigravity') ? 'spin' : undefined} />
+                      {isAppPathResetDetecting('antigravity')
+                        ? t('common.loading', '加载中...')
+                        : getResetLabelByTarget('antigravity')}
                     </button>
                   </div>
                 </div>
@@ -752,12 +771,22 @@ export function SettingsPage() {
                       placeholder={t('settings.general.codexAppPathPlaceholder', '默认路径')}
                       onChange={(e) => setCodexAppPath(e.target.value)}
                     />
-                    <button className="btn btn-secondary" onClick={() => handlePickAppPath('codex')}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePickAppPath('codex')}
+                      disabled={isAppPathResetDetecting('codex')}
+                    >
                       {t('settings.general.codexPathSelect', '选择')}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleResetAppPath('codex')}>
-                      <RefreshCw size={16} />
-                      {t('settings.general.codexPathReset', '恢复默认')}
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleResetAppPath('codex')}
+                      disabled={isAppPathResetDetecting('codex')}
+                    >
+                      <RefreshCw size={16} className={isAppPathResetDetecting('codex') ? 'spin' : undefined} />
+                      {isAppPathResetDetecting('codex')
+                        ? t('common.loading', '加载中...')
+                        : getResetLabelByTarget('codex')}
                     </button>
                   </div>
                 </div>
@@ -796,15 +825,22 @@ export function SettingsPage() {
                       placeholder={t('settings.general.opencodeAppPathPlaceholder')}
                       onChange={(e) => setOpencodeAppPath(e.target.value)}
                     />
-                    <button className="btn btn-secondary" onClick={() => handlePickAppPath('opencode')}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePickAppPath('opencode')}
+                      disabled={isAppPathResetDetecting('opencode')}
+                    >
                       {t('settings.general.opencodePathSelect', '选择')}
                     </button>
                     <button
                       className="btn btn-secondary"
                       onClick={() => handleResetAppPath('opencode')}
+                      disabled={isAppPathResetDetecting('opencode')}
                     >
-                      <RefreshCw size={16} />
-                      {t('settings.general.opencodePathReset')}
+                      <RefreshCw size={16} className={isAppPathResetDetecting('opencode') ? 'spin' : undefined} />
+                      {isAppPathResetDetecting('opencode')
+                        ? t('common.loading', '加载中...')
+                        : getResetLabelByTarget('opencode')}
                     </button>
                   </div>
                 </div>
@@ -876,12 +912,22 @@ export function SettingsPage() {
                       placeholder={t('settings.general.vscodeAppPathPlaceholder', '默认路径')}
                       onChange={(e) => setVscodeAppPath(e.target.value)}
                     />
-                    <button className="btn btn-secondary" onClick={() => handlePickAppPath('vscode')}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePickAppPath('vscode')}
+                      disabled={isAppPathResetDetecting('vscode')}
+                    >
                       {t('settings.general.vscodePathSelect', '选择')}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleResetAppPath('vscode')}>
-                      <RefreshCw size={16} />
-                      {t('settings.general.vscodePathReset', '重置默认')}
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleResetAppPath('vscode')}
+                      disabled={isAppPathResetDetecting('vscode')}
+                    >
+                      <RefreshCw size={16} className={isAppPathResetDetecting('vscode') ? 'spin' : undefined} />
+                      {isAppPathResetDetecting('vscode')
+                        ? t('common.loading', '加载中...')
+                        : getResetLabelByTarget('vscode')}
                     </button>
                   </div>
                 </div>
@@ -953,12 +999,22 @@ export function SettingsPage() {
                       placeholder={t('settings.general.windsurfAppPathPlaceholder', '默认路径')}
                       onChange={(e) => setWindsurfAppPath(e.target.value)}
                     />
-                    <button className="btn btn-secondary" onClick={() => handlePickAppPath('windsurf')}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePickAppPath('windsurf')}
+                      disabled={isAppPathResetDetecting('windsurf')}
+                    >
                       {t('settings.general.windsurfPathSelect', '选择')}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => handleResetAppPath('windsurf')}>
-                      <RefreshCw size={16} />
-                      {t('settings.general.windsurfPathReset', '重置默认')}
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleResetAppPath('windsurf')}
+                      disabled={isAppPathResetDetecting('windsurf')}
+                    >
+                      <RefreshCw size={16} className={isAppPathResetDetecting('windsurf') ? 'spin' : undefined} />
+                      {isAppPathResetDetecting('windsurf')
+                        ? t('common.loading', '加载中...')
+                        : getResetLabelByTarget('windsurf')}
                     </button>
                   </div>
                 </div>

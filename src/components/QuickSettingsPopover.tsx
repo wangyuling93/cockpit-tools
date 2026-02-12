@@ -36,6 +36,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<GeneralConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pathDetecting, setPathDetecting] = useState(false);
   const [customRefresh, setCustomRefresh] = useState('');
   const [customThreshold, setCustomThreshold] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
@@ -152,6 +153,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   };
 
   const handleResetAppPath = async (target: 'antigravity' | 'codex' | 'vscode' | 'windsurf') => {
+    if (pathDetecting) return;
+    setPathDetecting(true);
     try {
       const detected = await invoke<string | null>('detect_app_path', { app: target, force: true });
       const path = detected || '';
@@ -166,6 +169,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       saveConfig({ [key]: path });
     } catch (err) {
       console.error('Failed to reset path:', err);
+    } finally {
+      setPathDetecting(false);
     }
   };
 
@@ -358,6 +363,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                   <button
                     className="qs-btn"
                     onClick={() => handlePickAppPath(getAppTarget())}
+                    disabled={pathDetecting}
                     title={t('settings.general.codexPathSelect', '选择')}
                   >
                     {t('settings.general.codexPathSelect', '选择')}
@@ -365,9 +371,14 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                   <button
                     className="qs-btn"
                     onClick={() => handleResetAppPath(getAppTarget())}
-                    title={t('settings.general.codexPathReset', '恢复默认')}
+                    disabled={pathDetecting}
+                    title={
+                      pathDetecting
+                        ? t('common.loading', '加载中...')
+                        : t('settings.general.codexPathReset', '恢复默认')
+                    }
                   >
-                    <RefreshCw size={12} />
+                    <RefreshCw size={12} className={pathDetecting ? 'spin' : undefined} />
                   </button>
                 </div>
               </div>

@@ -5,7 +5,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { AccountsPage } from './pages/AccountsPage';
 import { CodexAccountsPage } from './pages/CodexAccountsPage';
 import { GitHubCopilotAccountsPage } from './pages/GitHubCopilotAccountsPage';
@@ -509,14 +509,28 @@ function App() {
                     className="btn btn-secondary"
                     onClick={handleResetMissingAppPath}
                     disabled={appPathSetting || appPathDetecting}
+                    title={
+                      appPathDetecting
+                        ? t('common.loading', '加载中...')
+                        : (
+                          appPathMissing.app === 'vscode'
+                            ? t('settings.general.vscodePathReset', '重置默认')
+                            : appPathMissing.app === 'windsurf'
+                              ? t('settings.general.windsurfPathReset', '重置默认')
+                              : t('settings.general.codexPathReset', '重置默认')
+                        )
+                    }
                   >
-                    {appPathMissing.app === 'vscode'
-                      ? t('settings.general.vscodePathReset', '重置默认')
-                      : appPathMissing.app === 'windsurf'
-                        ? t('settings.general.windsurfPathReset', '重置默认')
-                      : appPathMissing.app === 'codex'
-                          ? t('settings.general.codexPathReset', '重置默认')
-                          : t('settings.general.codexPathReset', '重置默认')}
+                    <RefreshCw size={14} className={appPathDetecting ? 'spin' : undefined} />
+                    {appPathDetecting
+                      ? t('common.loading', '加载中...')
+                      : (
+                        appPathMissing.app === 'vscode'
+                          ? t('settings.general.vscodePathReset', '重置默认')
+                          : appPathMissing.app === 'windsurf'
+                            ? t('settings.general.windsurfPathReset', '重置默认')
+                            : t('settings.general.codexPathReset', '重置默认')
+                      )}
                   </button>
                 </div>
               </div>
