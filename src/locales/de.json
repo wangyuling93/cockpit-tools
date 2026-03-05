@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "OpenCode-Schalter konnte nicht aktualisiert werden: {{error}}",
     "columns": {
       "hourly": "5-Std-Quote",
-      "weekly": "Wochenquote"
+      "weekly": "Wochenquote",
+      "accountId": "ChatGPT-Konto-ID",
+      "workspace": "Arbeitsbereich",
+      "loginProvider": "Anmeldemethode",
+      "codeReview": "Code-Review-Kontingent",
+      "accountIdCompact": "-Konto-ID"
     },
     "filterTags": "Tags filtern",
     "filterTagsCount": "Schlagworte",
     "noAvailableTags": "Keine verfügbaren Tags",
     "clearFilter": "Filter löschen",
-    "editTags": "Tags bearbeiten"
+    "editTags": "Tags bearbeiten",
+    "account": {
+      "signInCompact": "Angemeldet mit {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot-Konten verwalten",

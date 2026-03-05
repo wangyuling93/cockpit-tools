@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "فشل تحديث مفتاح OpenCode: {{error}}",
     "columns": {
       "hourly": "حصة 5 ساعات",
-      "weekly": "حصة أسبوعية"
+      "weekly": "حصة أسبوعية",
+      "accountId": "معرّف حساب ChatGPT",
+      "workspace": "اسم مساحة العمل",
+      "loginProvider": "طريقة تسجيل الدخول",
+      "codeReview": "حصة مراجعة الكود",
+      "accountIdCompact": "معرّف حساب ChatGPT"
     },
     "filterTags": "تصفية العلامات",
     "filterTagsCount": "العلامات",
     "noAvailableTags": "لا توجد علامات متاحة",
     "clearFilter": "مسح التصفية",
-    "editTags": "تحرير العلامات"
+    "editTags": "تحرير العلامات",
+    "account": {
+      "signInCompact": "تم تسجيل الدخول باستخدام {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "إدارة حسابات GitHub Copilot",

@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "OpenCode のスイッチ更新に失敗しました: {{error}}",
     "columns": {
       "hourly": "5時間クォータ",
-      "weekly": "週間クォータ"
+      "weekly": "週間クォータ",
+      "accountId": "ChatGPTアカウントID",
+      "workspace": "ワークスペース",
+      "loginProvider": "ログイン方法",
+      "codeReview": "コードレビュー枠",
+      "accountIdCompact": "アカウントID"
     },
     "filterTags": "タグで絞り込み",
     "filterTagsCount": "タグ",
     "noAvailableTags": "利用可能なタグはありません",
     "clearFilter": "フィルターをクリア",
-    "editTags": "タグを編集"
+    "editTags": "タグを編集",
+    "account": {
+      "signInCompact": "{{provider}} でサインインしました"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot アカウント管理",

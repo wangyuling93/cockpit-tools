@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "更新 OpenCode 開關失敗：{{error}}",
     "columns": {
       "hourly": "5小時配額",
-      "weekly": "週配額"
+      "weekly": "週配額",
+      "accountId": "ChatGPT 帳號 ID",
+      "workspace": "工作空間",
+      "loginProvider": "登入方式",
+      "codeReview": "程式碼審查配額",
+      "accountIdCompact": "帳號ID"
     },
     "filterTags": "標籤篩選",
     "filterTagsCount": "標籤",
     "noAvailableTags": "目前沒有可用標籤",
     "clearFilter": "清除篩選",
-    "editTags": "編輯標籤"
+    "editTags": "編輯標籤",
+    "account": {
+      "signInCompact": "{{provider}} 登入"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot 帳號管理",

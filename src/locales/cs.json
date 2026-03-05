@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Nepodařilo se aktualizovat přepínač OpenCode: {{error}}",
     "columns": {
       "hourly": "Kvóta 5h",
-      "weekly": "Kvóta týdn."
+      "weekly": "Kvóta týdn.",
+      "accountId": "ID účtu ChatGPT",
+      "workspace": "Pracovní prostor",
+      "loginProvider": "Způsob přihlášení",
+      "codeReview": "Limit revize kódu",
+      "accountIdCompact": "ID účtu ChatGPT"
     },
     "filterTags": "Filtrovat štítky",
     "filterTagsCount": "Štítky",
     "noAvailableTags": "Žádné dostupné štítky",
     "clearFilter": "Vymazat filtr",
-    "editTags": "Upravit štítky"
+    "editTags": "Upravit štítky",
+    "account": {
+      "signInCompact": "Přihlášen pomocí {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Správa účtů GitHub Copilot",

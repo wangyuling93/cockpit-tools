@@ -7,6 +7,19 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [0.9.16] - 2026-03-05
+
+### Added
+- **Windows Codex desktop control management**: Added first-class Windows support for Codex desktop process control, including launch, stop, focus, and restart flow (close first, then reopen).
+- **Windows Codex auto path detection for Store installs**: Added Appx-based path detection via `OpenAI.Codex` `InstallLocation\\app\\Codex.exe`, so Cockpit can resolve Codex executable path in Microsoft Store installation scenarios.
+
+### Changed
+- **Announcement delivery is now non-intrusive by default**: New announcements no longer force-open the detail modal; unread items are indicated by the red badge only and are opened manually from Announcement Center.
+- **Codex account identity display is now compact and single-line**: Codex account cards/tables now show `Signed in with <provider> | Account ID: <id>` in one line, and workspace name is removed from default account identity display to reduce UI noise.
+- **Codex code review quota label is fixed to English**: The code review quota metric now always uses `Code Review` as the display label.
+- **Windows Codex control model aligned to official single-instance lock**: Codex multi-instance is now explicitly marked unsupported on Windows/macOS in Codex instance management, with clear UI/backend reason text, and operations are constrained to single-instance control semantics.
+
+---
 ## [0.9.15] - 2026-03-04
 
 ### Changed

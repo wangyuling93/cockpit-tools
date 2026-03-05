@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Error al actualizar el interruptor de OpenCode: {{error}}",
     "columns": {
       "hourly": "Cuota 5h",
-      "weekly": "Cuota sem"
+      "weekly": "Cuota sem",
+      "accountId": "ID de cuenta de ChatGPT",
+      "workspace": "Espacio de trabajo",
+      "loginProvider": "Método de inicio de sesión",
+      "codeReview": "Cuota de revisión de código",
+      "accountIdCompact": "ID de cuenta de ChatGPT"
     },
     "filterTags": "Filtrar etiquetas",
     "filterTagsCount": "Etiquetas",
     "noAvailableTags": "No hay etiquetas disponibles",
     "clearFilter": "Limpiar filtro",
-    "editTags": "Editar etiquetas"
+    "editTags": "Editar etiquetas",
+    "account": {
+      "signInCompact": "Iniciado sesión con {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Gestión de cuentas de GitHub Copilot",

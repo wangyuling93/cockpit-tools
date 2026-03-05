@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Impossibile aggiornare l'interruttore OpenCode: {{error}}",
     "columns": {
       "hourly": "Quota 5h",
-      "weekly": "Quota sett."
+      "weekly": "Quota sett.",
+      "accountId": "ID account ChatGPT",
+      "workspace": "Spazio di lavoro",
+      "loginProvider": "Metodo di accesso",
+      "codeReview": "Quota revisione codice",
+      "accountIdCompact": "ID account ChatGPT"
     },
     "filterTags": "Filtra tag",
     "filterTagsCount": "Tag",
     "noAvailableTags": "Nessun tag disponibile",
     "clearFilter": "Cancella filtro",
-    "editTags": "Modifica tag"
+    "editTags": "Modifica tag",
+    "account": {
+      "signInCompact": "Accedi con {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Gestione account GitHub Copilot",

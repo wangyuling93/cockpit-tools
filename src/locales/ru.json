@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Не удалось обновить переключатель OpenCode: {{error}}",
     "columns": {
       "hourly": "Квота 5ч",
-      "weekly": "Квота нед"
+      "weekly": "Квота нед",
+      "accountId": "ID аккаунта ChatGPT",
+      "workspace": "Рабочее пространство",
+      "loginProvider": "Способ входа",
+      "codeReview": "Лимит проверки кода",
+      "accountIdCompact": "ID аккаунта ChatGPT"
     },
     "filterTags": "Фильтр по тегам",
     "filterTagsCount": "Теги",
     "noAvailableTags": "Нет доступных тегов",
     "clearFilter": "Очистить фильтр",
-    "editTags": "Редактировать теги"
+    "editTags": "Редактировать теги",
+    "account": {
+      "signInCompact": "Выполнен вход с помощью {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Управление аккаунтами GitHub Copilot",

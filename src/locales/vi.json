@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Không thể cập nhật công tắc OpenCode: {{error}}",
     "columns": {
       "hourly": "Hạn mức 5h",
-      "weekly": "Hạn mức tuần"
+      "weekly": "Hạn mức tuần",
+      "accountId": "ID tài khoản ChatGPT",
+      "workspace": "Không gian làm việc",
+      "loginProvider": "Phương thức đăng nhập",
+      "codeReview": "Hạn mức rà soát mã",
+      "accountIdCompact": "ID tài khoản ChatGPT"
     },
     "filterTags": "Lọc thẻ",
     "filterTagsCount": "Thẻ",
     "noAvailableTags": "Không có thẻ nào",
     "clearFilter": "Xóa bộ lọc",
-    "editTags": "Chỉnh sửa thẻ"
+    "editTags": "Chỉnh sửa thẻ",
+    "account": {
+      "signInCompact": "Đã đăng nhập bằng {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Quản lý tài khoản GitHub Copilot",

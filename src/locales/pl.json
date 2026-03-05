@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Nie udało się zaktualizować przełącznika OpenCode: {{error}}",
     "columns": {
       "hourly": "Limit 5h",
-      "weekly": "Limit tyg."
+      "weekly": "Limit tyg.",
+      "accountId": "ID konta ChatGPT",
+      "workspace": "Obszar roboczy",
+      "loginProvider": "Metoda logowania",
+      "codeReview": "Limit przeglądu kodu",
+      "accountIdCompact": "ID konta ChatGPT"
     },
     "filterTags": "Filtruj tagi",
     "filterTagsCount": "Tagi",
     "noAvailableTags": "Brak dostępnych tagów",
     "clearFilter": "Wyczyść filtr",
-    "editTags": "Edytuj tagi"
+    "editTags": "Edytuj tagi",
+    "account": {
+      "signInCompact": "Zalogowano się za pomocą {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Zarządzanie kontami GitHub Copilot",

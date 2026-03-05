@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Failed to update OpenCode toggle: {{error}}",
     "columns": {
       "hourly": "5-hour quota",
-      "weekly": "Weekly quota"
+      "weekly": "Weekly quota",
+      "accountId": "ChatGPT Account ID",
+      "workspace": "Workspace",
+      "loginProvider": "Login Provider",
+      "codeReview": "Code Review",
+      "accountIdCompact": "Account ID"
     },
     "filterTags": "Filter Tags",
     "filterTagsCount": "Tags",
     "noAvailableTags": "No tags available",
     "clearFilter": "Clear Filter",
-    "editTags": "Edit Tags"
+    "editTags": "Edit Tags",
+    "account": {
+      "signInCompact": "Signed in with {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot Account Management",

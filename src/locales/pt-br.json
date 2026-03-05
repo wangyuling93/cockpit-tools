@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "Falha ao atualizar o alternador do OpenCode: {{error}}",
     "columns": {
       "hourly": "Cota 5h",
-      "weekly": "Cota sem."
+      "weekly": "Cota sem.",
+      "accountId": "ID da conta ChatGPT",
+      "workspace": "Espaço de trabalho",
+      "loginProvider": "Método de login",
+      "codeReview": "Cota de revisão de código",
+      "accountIdCompact": "ID da conta ChatGPT"
     },
     "filterTags": "Filtrar tags",
     "filterTagsCount": "Etiquetas",
     "noAvailableTags": "Nenhuma tag disponível",
     "clearFilter": "Limpar filtro",
-    "editTags": "Editar tags"
+    "editTags": "Editar tags",
+    "account": {
+      "signInCompact": "Conectado com {{provider}}"
+    }
   },
   "githubCopilot": {
     "title": "Gerenciamento de contas do GitHub Copilot",

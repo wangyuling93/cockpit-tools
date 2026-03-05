@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronLeft, X } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useTranslation } from 'react-i18next';
@@ -87,8 +87,6 @@ export function AnnouncementCenter({
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
-  const shownPopupIdsRef = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     void fetchState(false);
   }, [fetchState]);
@@ -102,19 +100,6 @@ export function AnnouncementCenter({
       window.removeEventListener('general-language-updated', handleLanguageChanged);
     };
   }, [fetchState]);
-
-  useEffect(() => {
-    const popupAnnouncement = announcementState.popupAnnouncement;
-    if (!popupAnnouncement) {
-      return;
-    }
-    if (shownPopupIdsRef.current.has(popupAnnouncement.id)) {
-      return;
-    }
-    shownPopupIdsRef.current.add(popupAnnouncement.id);
-    setDetailAnnouncement(popupAnnouncement);
-    setDetailFromList(false);
-  }, [announcementState.popupAnnouncement]);
 
   useEffect(() => {
     setFailedImages(new Set());

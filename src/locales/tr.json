@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "OpenCode anahtarı güncellenemedi: {{error}}",
     "columns": {
       "hourly": "5 saatlik kota",
-      "weekly": "Haftalık kota"
+      "weekly": "Haftalık kota",
+      "accountId": "ChatGPT Hesap Kimliği",
+      "workspace": "Çalışma alanı",
+      "loginProvider": "Giriş yöntemi",
+      "codeReview": "Kod inceleme kotası",
+      "accountIdCompact": "Hesap Kimliği"
     },
     "filterTags": "Etiketleri filtrele",
     "filterTagsCount": "Etiketler",
     "noAvailableTags": "Kullanılabilir etiket yok",
     "clearFilter": "Filtreyi temizle",
-    "editTags": "Etiketleri düzenle"
+    "editTags": "Etiketleri düzenle",
+    "account": {
+      "signInCompact": "{{provider}} ile oturum açıldı"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot Hesap Yönetimi",

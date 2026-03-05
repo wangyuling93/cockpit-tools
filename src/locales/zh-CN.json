@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "更新 OpenCode 开关失败: {{error}}",
     "columns": {
       "hourly": "5小时配额",
-      "weekly": "周配额"
+      "weekly": "周配额",
+      "accountId": "ChatGPT 账号ID",
+      "workspace": "空间名称",
+      "loginProvider": "登录来源",
+      "codeReview": "代码审查配额",
+      "accountIdCompact": "账号ID"
     },
     "filterTags": "标签筛选",
     "filterTagsCount": "标签",
     "noAvailableTags": "暂无可用标签",
     "clearFilter": "清空筛选",
-    "editTags": "编辑标签"
+    "editTags": "编辑标签",
+    "account": {
+      "signInCompact": "{{provider}} 登录"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot 账号管理",

@@ -1136,13 +1136,21 @@
     "opencodeSwitchFailed": "OpenCode 스위치 업데이트 실패: {{error}}",
     "columns": {
       "hourly": "5시간 쿼터",
-      "weekly": "주간 쿼터"
+      "weekly": "주간 쿼터",
+      "accountId": "ChatGPT 계정 ID",
+      "workspace": "워크스페이스",
+      "loginProvider": "로그인 방식",
+      "codeReview": "코드 리뷰 할당량",
+      "accountIdCompact": "계정 ID"
     },
     "filterTags": "태그 필터",
     "filterTagsCount": "태그",
     "noAvailableTags": "사용 가능한 태그가 없습니다",
     "clearFilter": "필터 지우기",
-    "editTags": "태그 편집"
+    "editTags": "태그 편집",
+    "account": {
+      "signInCompact": "{{provider}}(으)로 로그인됨"
+    }
   },
   "githubCopilot": {
     "title": "GitHub Copilot 계정 관리",
