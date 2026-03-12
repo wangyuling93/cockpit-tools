@@ -287,6 +287,9 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
   const mergedRetryStatus = actionRetryStatus || retryStatus;
   const isError =
     Boolean(actionError) && !isChecking && !isDownloading && !isInstalling && !isDownloaded;
+  const modalTitle = updateInfo
+    ? t('update_notification.title')
+    : t('settings.about.checkUpdate');
 
   const handleClose = () => {
     if (isRestarting || isInstalling) {
@@ -308,7 +311,7 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
               <span className="update-icon">
                 <Sparkles size={18} />
               </span>
-              {t('update_notification.title')}
+              {modalTitle}
             </h2>
             <button
               className="modal-close"
@@ -347,7 +350,7 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
             <span className="update-icon">
               <Sparkles size={18} />
             </span>
-            {t('update_notification.title')}
+            {modalTitle}
           </h2>
           <button
             className="modal-close"

@@ -1163,15 +1163,62 @@ function App() {
             openUpdateNotification('auto');
           }
         } else {
-          // Manual update: show notification dialog
+          // Auto-check only opens the dialog after a real update is found.
           if (autoInstall && isLinuxManagedUpdate) {
             writeUpdateLog(
               'info',
               `Linux 包管理安装(${updateRuntimeInfo?.linux_install_kind || 'unknown'})跳过静默下载，改为一键安装弹窗`,
             );
           }
-          writeUpdateLog('info', '后台自动更新关闭，展示手动更新弹窗');
-          openUpdateNotification('auto');
+          writeUpdateLog('info', '后台自动更新关闭，先执行无弹窗检查，仅在发现新版本时展示弹窗');
+          try {
+            const update = await retryWithBackoff(
+              async () => runUpdaterCheck(),
+              {
+                delaysMs: UPDATE_CHECK_RETRY_DELAYS_MS,
+                shouldRetry: isRetryableUpdaterError,
+                onRetry: ({ retryIndex, totalRetries, delayMs, error }) => {
+                  const compactError = sanitizeUpdaterErrorMessage(error);
+                  console.warn(
+                    `[App] Background manual update check failed, retrying (${retryIndex}/${totalRetries}) in ${delayMs}ms:`,
+                    error,
+                  );
+                  writeUpdateLog(
+                    'warn',
+                    `后台手动更新检查失败，准备重试(${retryIndex}/${totalRetries})，delay=${delayMs}ms，error=${compactError}`,
+                  );
+                },
+              },
+            );
+
+            if (update) {
+              writeUpdateLog('info', `检测到新版本，展示手动更新弹窗: version=${update.version}`);
+              await closeUpdaterHandle(update);
+              openUpdateNotification('auto');
+            } else {
+              writeUpdateLog('info', '更新检查完成：当前已是最新版本');
+              setUpdateRetryStatus('');
+              setUpdateDownloadError('');
+              setUpdateErrorDetails('');
+              setUpdateAction((prev) => {
+                if (prev.state === 'ready') {
+                  return prev;
+                }
+                return {
+                  state: 'hidden',
+                  version: null,
+                  progress: 0,
+                  requiresInstall: true,
+                };
+              });
+            }
+          } catch (err) {
+            console.error('[App] Background update check failed:', err);
+            writeUpdateLog(
+              'warn',
+              `后台手动更新检查失败，跳过弹窗: error=${sanitizeUpdaterErrorMessage(err)}`,
+            );
+          }
         }
 
         await invoke('update_last_check_time');
@@ -1188,6 +1235,7 @@ function App() {
     }, 8000);
     return () => clearTimeout(timer);
   }, [
+    closeUpdaterHandle,
     isLinuxManagedUpdate,
     openUpdateNotification,
     runUpdaterCheck,
