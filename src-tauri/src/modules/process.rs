@@ -1105,6 +1105,13 @@ fn update_app_path_in_config(app: &str, path: &Path) {
                 return;
             }
         }
+        "workbuddy" => {
+            if current.workbuddy_app_path != normalized {
+                current.workbuddy_app_path = normalized;
+            } else {
+                return;
+            }
+        }
         _ => return,
     }
     let _ = config::save_user_config(&current);
@@ -1796,6 +1803,61 @@ fn detect_trae_exec_path() -> Option<std::path::PathBuf> {
     None
 }
 
+fn detect_workbuddy_exec_path() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        let candidates = [
+            "/Applications/WorkBuddy.app/Contents/MacOS/WorkBuddy",
+            "/Applications/WorkBuddy.app/Contents/MacOS/Electron",
+            "/Applications/WorkBuddy.app",
+        ];
+        for candidate in candidates {
+            let path = std::path::PathBuf::from(candidate);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            candidates.push(
+                std::path::PathBuf::from(&local_appdata)
+                    .join("Programs")
+                    .join("WorkBuddy")
+                    .join("WorkBuddy.exe"),
+            );
+        }
+        if let Ok(program_files) = std::env::var("PROGRAMFILES") {
+            candidates.push(
+                std::path::PathBuf::from(program_files)
+                    .join("WorkBuddy")
+                    .join("WorkBuddy.exe"),
+            );
+        }
+        for candidate in candidates {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let candidates = ["/usr/bin/workbuddy", "/usr/local/bin/workbuddy", "/opt/workbuddy/workbuddy"];
+        for candidate in candidates {
+            let path = std::path::PathBuf::from(candidate);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(target_os = "macos")]
 fn resolve_codebuddy_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
     let path = std::path::PathBuf::from(path_str);
@@ -1988,6 +2050,54 @@ fn resolve_trae_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
     None
 }
 
+#[cfg(target_os = "macos")]
+fn resolve_workbuddy_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::PathBuf::from(path_str);
+    if let Some(app_root) = normalize_macos_app_root(&path) {
+        let app_root_path = std::path::PathBuf::from(&app_root);
+        let macos_dir = app_root_path.join("Contents").join("MacOS");
+
+        for binary_name in ["WorkBuddy", "Electron"] {
+            let candidate = macos_dir.join(binary_name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+
+        if let Ok(entries) = std::fs::read_dir(&macos_dir) {
+            let mut fallback: Option<std::path::PathBuf> = None;
+            for entry in entries.flatten() {
+                let candidate = entry.path();
+                if !candidate.is_file() {
+                    continue;
+                }
+                let file_name = candidate
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if file_name.contains("crashpad") || file_name.contains("helper") {
+                    continue;
+                }
+                if file_name.contains("workbuddy") || file_name == "electron" {
+                    return Some(candidate);
+                }
+                if fallback.is_none() {
+                    fallback = Some(candidate);
+                }
+            }
+            if let Some(candidate) = fallback {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if path.is_file() {
+        return Some(path);
+    }
+    None
+}
+
 #[cfg(not(target_os = "macos"))]
 fn resolve_qoder_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
     resolve_macos_exec_path(path_str, "Qoder")
@@ -1996,6 +2106,11 @@ fn resolve_qoder_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
 #[cfg(not(target_os = "macos"))]
 fn resolve_trae_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
     resolve_macos_exec_path(path_str, "Trae")
+}
+
+#[cfg(not(target_os = "macos"))]
+fn resolve_workbuddy_macos_exec_path(path_str: &str) -> Option<std::path::PathBuf> {
+    resolve_macos_exec_path(path_str, "WorkBuddy")
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -2269,6 +2384,10 @@ pub fn ensure_trae_launch_path_configured() -> Result<(), String> {
     resolve_trae_launch_path().map(|_| ())
 }
 
+pub fn ensure_workbuddy_launch_path_configured() -> Result<(), String> {
+    resolve_workbuddy_launch_path().map(|_| ())
+}
+
 fn resolve_vscode_launch_path() -> Result<std::path::PathBuf, String> {
     if let Some(custom) = normalize_custom_path(Some(&config::get_user_config().vscode_app_path)) {
         #[cfg(target_os = "macos")]
@@ -2396,6 +2515,33 @@ fn resolve_trae_launch_path() -> Result<std::path::PathBuf, String> {
     Err(app_path_missing_error("trae"))
 }
 
+fn resolve_workbuddy_launch_path() -> Result<std::path::PathBuf, String> {
+    if let Some(custom) = normalize_custom_path(Some(&config::get_user_config().workbuddy_app_path))
+    {
+        if let Some(exec) = resolve_workbuddy_macos_exec_path(&custom) {
+            return Ok(exec);
+        }
+        return Err(app_path_missing_error("workbuddy"));
+    }
+
+    if let Some(detected) = detect_workbuddy_exec_path() {
+        let detected_str = detected.to_string_lossy();
+        if let Some(exec) = resolve_workbuddy_macos_exec_path(&detected_str) {
+            return Ok(exec);
+        }
+        #[cfg(target_os = "macos")]
+        if detected.is_file() {
+            return Ok(detected);
+        }
+        #[cfg(not(target_os = "macos"))]
+        if detected.exists() {
+            return Ok(detected);
+        }
+    }
+
+    Err(app_path_missing_error("workbuddy"))
+}
+
 #[cfg(target_os = "macos")]
 fn resolve_codex_launch_path() -> Result<std::path::PathBuf, String> {
     if let Some(custom) = normalize_custom_path(Some(&config::get_user_config().codex_app_path)) {
@@ -2493,6 +2639,15 @@ pub fn detect_and_save_app_path(app: &str, force: bool) -> Option<String> {
             if let Some(detected) = detect_opencode_exec_path() {
                 update_app_path_in_config("opencode", &detected);
                 return Some(config::get_user_config().opencode_app_path);
+            }
+        }
+        "workbuddy" => {
+            if !force && !current.workbuddy_app_path.trim().is_empty() {
+                return Some(current.workbuddy_app_path);
+            }
+            if let Some(detected) = detect_workbuddy_exec_path() {
+                update_app_path_in_config("workbuddy", &detected);
+                return Some(config::get_user_config().workbuddy_app_path);
             }
         }
         _ => {}
@@ -3046,6 +3201,25 @@ fn resolve_expected_codebuddy_cn_launch_path_for_match() -> Option<String> {
     Some(normalized)
 }
 
+fn resolve_expected_workbuddy_launch_path_for_match() -> Option<String> {
+    let launch_path = match resolve_workbuddy_launch_path() {
+        Ok(path) => path,
+        Err(err) => {
+            crate::modules::logger::log_warn(&format!(
+                "[WorkBuddy Resolve] 启动路径未配置或无效，跳过 PID 匹配：{}",
+                err
+            ));
+            return None;
+        }
+    };
+    let normalized = normalize_path_for_compare(launch_path.to_string_lossy().as_ref());
+    if normalized.is_empty() {
+        crate::modules::logger::log_warn("[WorkBuddy Resolve] 启动路径为空，跳过 PID 匹配");
+        return None;
+    }
+    Some(normalized)
+}
+
 #[cfg(target_os = "macos")]
 fn resolve_expected_codex_launch_path_for_match() -> Option<String> {
     let launch_path = match resolve_codex_launch_path() {
@@ -3350,48 +3524,9 @@ pub fn collect_antigravity_process_entries() -> Vec<(u32, Option<String>)> {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
-        let mut result = Vec::new();
-        let mut system = System::new();
-        system.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing()
-                .with_exe(UpdateKind::OnlyIfNotSet)
-                .with_cmd(UpdateKind::OnlyIfNotSet),
-        );
-
-        let current_pid = std::process::id();
-
-        for (pid, process) in system.processes() {
-            let pid_u32 = pid.as_u32();
-            if pid_u32 == current_pid {
-                continue;
-            }
-
-            let name = process.name().to_string_lossy().to_lowercase();
-            let exe_path = process
-                .exe()
-                .and_then(|p| p.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            let args = process.cmd();
-            let args_str = args
-                .iter()
-                .map(|arg| arg.to_string_lossy().to_lowercase())
-                .collect::<Vec<String>>()
-                .join(" ");
-
-            if !is_antigravity_main_process(&name, &exe_path, Some(&args_str)) {
-                continue;
-            }
-
-            let dir = extract_user_data_dir(&args);
-            result.push((pid_u32, dir));
-        }
-
-        return filter_entries_by_expected_launch_path("AG", result, expected_launch);
+        Vec::new()
     }
 }
 
@@ -3523,6 +3658,14 @@ fn resolve_codebuddy_cn_target_and_fallback(user_data_dir: Option<&str>) -> Opti
     build_user_data_dir_match_target(
         user_data_dir,
         get_default_codebuddy_cn_user_data_dir_for_os(),
+        !strict_process_detect_enabled(),
+    )
+}
+
+fn resolve_workbuddy_target_and_fallback(user_data_dir: Option<&str>) -> Option<(String, bool)> {
+    build_user_data_dir_match_target(
+        user_data_dir,
+        get_default_workbuddy_user_data_dir_for_os(),
         !strict_process_detect_enabled(),
     )
 }
@@ -3913,60 +4056,9 @@ pub fn collect_vscode_process_entries() -> Vec<(u32, Option<String>)> {
         return collect_vscode_process_entries_from_sysinfo_fallback(expected);
     }
 
-    let mut entries = Vec::new();
-
-    // On macOS, only use ps to avoid sysinfo TCC dialogs
-    #[cfg(not(target_os = "macos"))]
-    {
-        let mut system = System::new();
-        system.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing()
-                .with_exe(UpdateKind::OnlyIfNotSet)
-                .with_cmd(UpdateKind::OnlyIfNotSet),
-        );
-
-        let current_pid = std::process::id();
-
-        for (pid, process) in system.processes() {
-            let pid_u32 = pid.as_u32();
-            if pid_u32 == current_pid {
-                continue;
-            }
-
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
-            let name = process.name().to_string_lossy().to_lowercase();
-            let exe_path = process
-                .exe()
-                .and_then(|p| p.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-
-            let args_str = process
-                .cmd()
-                .iter()
-                .map(|arg| arg.to_string_lossy().to_lowercase())
-                .collect::<Vec<String>>()
-                .join(" ");
-            let is_helper = is_helper_command_line(&args_str) || args_str.contains("crashpad");
-
-            #[cfg(target_os = "windows")]
-            let is_vscode = name == "code.exe" || exe_path.ends_with("\\code.exe");
-            #[cfg(target_os = "linux")]
-            let is_vscode = name == "code" || exe_path.ends_with("/code");
-
-            if !is_vscode || is_helper {
-                continue;
-            }
-
-            let dir = extract_user_data_dir(process.cmd());
-            entries.push((pid_u32, dir));
-        }
-    }
-
     #[cfg(target_os = "macos")]
     {
+        let mut entries = Vec::new();
         let output = Command::new("ps").args(["-axo", "pid,command"]).output();
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -3993,10 +4085,12 @@ pub fn collect_vscode_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
 
     #[cfg(target_os = "linux")]
     {
+        let mut entries = Vec::new();
         if let Ok(proc_entries) = std::fs::read_dir("/proc") {
             for entry in proc_entries.flatten() {
                 let file_name = entry.file_name();
@@ -4032,37 +4126,8 @@ pub fn collect_vscode_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
-
-    let mut map: HashMap<u32, Option<String>> = HashMap::new();
-    for (pid, dir) in entries {
-        let normalized = dir.and_then(|value| {
-            let value = value.trim().to_string();
-            if value.is_empty() {
-                return None;
-            }
-            let normalized = normalize_path_for_compare(&value);
-            if normalized.is_empty() {
-                None
-            } else {
-                Some(normalized)
-            }
-        });
-        match map.get(&pid) {
-            None => {
-                map.insert(pid, normalized);
-            }
-            Some(existing) => {
-                if existing.is_none() && normalized.is_some() {
-                    map.insert(pid, normalized);
-                }
-            }
-        }
-    }
-
-    let mut result: Vec<(u32, Option<String>)> = map.into_iter().collect();
-    result.sort_by_key(|(pid, _)| *pid);
-    filter_entries_by_expected_launch_path("VSCode", result, expected_launch)
 }
 
 pub fn resolve_vscode_pid_from_entries(
@@ -4289,6 +4354,177 @@ fn collect_codebuddy_process_entries_from_sysinfo_fallback(
     entries
 }
 
+#[cfg(target_os = "windows")]
+fn collect_workbuddy_process_entries_from_powershell(
+    expected_exe_path: &str,
+) -> Vec<(u32, Option<String>)> {
+    let mut entries = Vec::new();
+    let process_name = Path::new(expected_exe_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("WorkBuddy.exe");
+    let script = build_windows_path_filtered_process_probe_script(process_name, expected_exe_path);
+    let output = powershell_output_with_timeout(
+        &["-NoProfile", "-Command", &script],
+        WINDOWS_PROCESS_PROBE_TIMEOUT,
+    );
+    let output = match output {
+        Ok(value) => value,
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::TimedOut {
+                crate::modules::logger::log_warn("[WorkBuddy Probe] PowerShell 进程探测超时（5s）");
+            } else {
+                crate::modules::logger::log_warn(&format!(
+                    "[WorkBuddy Probe] PowerShell 进程探测失败：{}",
+                    err
+                ));
+            }
+            return entries;
+        }
+    };
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        crate::modules::logger::log_warn(&format!(
+            "[WorkBuddy Probe] PowerShell 进程探测返回非 0 状态：{}, stderr={}",
+            output.status,
+            stderr.trim()
+        ));
+        return entries;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, '|');
+        let pid_str = parts.next().unwrap_or("").trim();
+        let cmdline = parts.next().unwrap_or("").trim();
+        let pid = match pid_str.parse::<u32>() {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let lower = cmdline.to_lowercase();
+        if is_helper_command_line(&lower) || lower.contains("crashpad_handler") {
+            continue;
+        }
+        let dir = extract_user_data_dir_from_command_line(cmdline).and_then(|value| {
+            let normalized = normalize_path_for_compare(&value);
+            if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            }
+        });
+        entries.push((pid, dir));
+    }
+    entries.sort_by_key(|(pid, _)| *pid);
+    entries.dedup_by(|a, b| a.0 == b.0);
+    entries
+}
+
+#[cfg(target_os = "windows")]
+fn collect_workbuddy_process_entries_from_sysinfo_fallback(
+    expected_exe_path: &str,
+) -> Vec<(u32, Option<String>)> {
+    let expected = normalize_path_for_compare(expected_exe_path);
+    if expected.is_empty() {
+        return Vec::new();
+    }
+
+    let expected_file_name = Path::new(expected_exe_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("workbuddy.exe")
+        .to_ascii_lowercase();
+
+    let mut entries: Vec<(u32, Option<String>)> = Vec::new();
+    let mut candidates = 0usize;
+    let mut path_mismatch = 0usize;
+    let mut missing_exe = 0usize;
+    let mut cmdline_fallback_hit = 0usize;
+
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_exe(UpdateKind::OnlyIfNotSet)
+            .with_cmd(UpdateKind::OnlyIfNotSet),
+    );
+    let current_pid = std::process::id();
+
+    for (pid, process) in system.processes() {
+        let pid_u32 = pid.as_u32();
+        if pid_u32 == current_pid {
+            continue;
+        }
+
+        let name = process.name().to_string_lossy().to_lowercase();
+        let exe_path = process
+            .exe()
+            .and_then(|value| value.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let args_line = process
+            .cmd()
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_lowercase())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let is_workbuddy = name == expected_file_name
+            || exe_path.ends_with(&format!("\\{}", expected_file_name))
+            || name == "workbuddy.exe"
+            || exe_path.ends_with("\\workbuddy.exe")
+            || exe_path.contains("\\workbuddy\\");
+        if !is_workbuddy
+            || is_helper_command_line(&args_line)
+            || args_line.contains("crashpad_handler")
+        {
+            continue;
+        }
+        candidates += 1;
+
+        let (actual, used_cmdline_fallback) = resolve_windows_process_exe_for_match(process);
+        match actual {
+            Some(actual_path) if actual_path == expected => {
+                if used_cmdline_fallback {
+                    cmdline_fallback_hit += 1;
+                }
+                let dir = extract_user_data_dir(process.cmd()).and_then(|value| {
+                    let normalized = normalize_path_for_compare(&value);
+                    if normalized.is_empty() {
+                        None
+                    } else {
+                        Some(normalized)
+                    }
+                });
+                entries.push((pid_u32, dir));
+            }
+            Some(_) => path_mismatch += 1,
+            None => missing_exe += 1,
+        }
+    }
+
+    entries.sort_by_key(|(pid, _)| *pid);
+    entries.dedup_by(|a, b| a.0 == b.0);
+
+    if entries.is_empty() {
+        crate::modules::logger::log_warn(&format!(
+            "[WorkBuddy Probe] sysinfo fallback no match: expected={}, candidates={}, path_mismatch={}, missing_exe={}, cmdline_fallback_hit={}",
+            expected, candidates, path_mismatch, missing_exe, cmdline_fallback_hit
+        ));
+    } else {
+        crate::modules::logger::log_info(&format!(
+            "[WorkBuddy Probe] sysinfo fallback matched: expected={}, matched={}, candidates={}, path_mismatch={}, missing_exe={}, cmdline_fallback_hit={}",
+            expected, entries.len(), candidates, path_mismatch, missing_exe, cmdline_fallback_hit
+        ));
+    }
+
+    entries
+}
+
 pub fn collect_codebuddy_process_entries() -> Vec<(u32, Option<String>)> {
     let expected_launch = resolve_expected_codebuddy_launch_path_for_match();
     if expected_launch.is_none() {
@@ -4310,62 +4546,9 @@ pub fn collect_codebuddy_process_entries() -> Vec<(u32, Option<String>)> {
         return collect_codebuddy_process_entries_from_sysinfo_fallback(expected);
     }
 
-    let mut entries = Vec::new();
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let mut system = System::new();
-        system.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing()
-                .with_exe(UpdateKind::OnlyIfNotSet)
-                .with_cmd(UpdateKind::OnlyIfNotSet),
-        );
-
-        let current_pid = std::process::id();
-
-        for (pid, process) in system.processes() {
-            let pid_u32 = pid.as_u32();
-            if pid_u32 == current_pid {
-                continue;
-            }
-
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
-            let name = process.name().to_string_lossy().to_lowercase();
-            let exe_path = process
-                .exe()
-                .and_then(|p| p.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            let args_str = process
-                .cmd()
-                .iter()
-                .map(|arg| arg.to_string_lossy().to_lowercase())
-                .collect::<Vec<String>>()
-                .join(" ");
-            let is_helper = is_helper_command_line(&args_str) || args_str.contains("crashpad");
-
-            #[cfg(target_os = "windows")]
-            let is_codebuddy = name == "codebuddy.exe"
-                || exe_path.ends_with("\\codebuddy.exe")
-                || exe_path.contains("\\codebuddy\\");
-            #[cfg(target_os = "linux")]
-            let is_codebuddy = name == "codebuddy"
-                || exe_path.ends_with("/codebuddy")
-                || exe_path.contains("/codebuddy/");
-
-            if !is_codebuddy || is_helper {
-                continue;
-            }
-
-            let dir = extract_user_data_dir(process.cmd());
-            entries.push((pid_u32, dir));
-        }
-    }
-
     #[cfg(target_os = "macos")]
     {
+        let mut entries = Vec::new();
         let output = Command::new("ps").args(["-axo", "pid,command"]).output();
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -4392,10 +4575,12 @@ pub fn collect_codebuddy_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
 
     #[cfg(target_os = "linux")]
     {
+        let mut entries = Vec::new();
         if let Ok(proc_entries) = std::fs::read_dir("/proc") {
             for entry in proc_entries.flatten() {
                 let file_name = entry.file_name();
@@ -4431,37 +4616,49 @@ pub fn collect_codebuddy_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
 
-    let mut map: HashMap<u32, Option<String>> = HashMap::new();
-    for (pid, dir) in entries {
-        let normalized = dir.and_then(|value| {
-            let value = value.trim().to_string();
-            if value.is_empty() {
-                return None;
-            }
-            let normalized = normalize_path_for_compare(&value);
-            if normalized.is_empty() {
-                None
-            } else {
-                Some(normalized)
-            }
-        });
-        match map.get(&pid) {
-            None => {
-                map.insert(pid, normalized);
-            }
-            Some(existing) => {
-                if existing.is_none() && normalized.is_some() {
-                    map.insert(pid, normalized);
+    #[cfg(target_os = "linux")]
+    {
+        let mut entries = Vec::new();
+        if let Ok(proc_entries) = std::fs::read_dir("/proc") {
+            for entry in proc_entries.flatten() {
+                let file_name = entry.file_name();
+                let pid_str = file_name.to_string_lossy();
+                if !pid_str.chars().all(|ch| ch.is_ascii_digit()) {
+                    continue;
                 }
+                let pid = match pid_str.parse::<u32>() {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let cmdline_path = format!("/proc/{}/cmdline", pid);
+                let cmdline = match std::fs::read(&cmdline_path) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if cmdline.is_empty() {
+                    continue;
+                }
+                let cmdline_str = String::from_utf8_lossy(&cmdline).replace('\0', " ");
+                let cmd_lower = cmdline_str.to_lowercase();
+                let exe_path = std::fs::read_link(format!("/proc/{}/exe", pid))
+                    .ok()
+                    .and_then(|p| p.to_str().map(|s| s.to_lowercase()))
+                    .unwrap_or_default();
+                if !cmd_lower.contains("codebuddy") && !exe_path.contains("/codebuddy") {
+                    continue;
+                }
+                if is_helper_command_line(&cmd_lower) {
+                    continue;
+                }
+                let dir = extract_user_data_dir_from_command_line(&cmdline_str);
+                entries.push((pid, dir));
             }
         }
+        return entries;
     }
-
-    let mut result: Vec<(u32, Option<String>)> = map.into_iter().collect();
-    result.sort_by_key(|(pid, _)| *pid);
-    filter_entries_by_expected_launch_path("CodeBuddy", result, expected_launch)
 }
 
 pub fn collect_codebuddy_cn_process_entries() -> Vec<(u32, Option<String>)> {
@@ -4485,68 +4682,9 @@ pub fn collect_codebuddy_cn_process_entries() -> Vec<(u32, Option<String>)> {
         return collect_codebuddy_process_entries_from_sysinfo_fallback(expected);
     }
 
-    let mut entries = Vec::new();
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let mut system = System::new();
-        system.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing()
-                .with_exe(UpdateKind::OnlyIfNotSet)
-                .with_cmd(UpdateKind::OnlyIfNotSet),
-        );
-
-        let current_pid = std::process::id();
-
-        for (pid, process) in system.processes() {
-            let pid_u32 = pid.as_u32();
-            if pid_u32 == current_pid {
-                continue;
-            }
-
-            #[cfg(any(target_os = "windows", target_os = "linux"))]
-            let name = process.name().to_string_lossy().to_lowercase();
-            let exe_path = process
-                .exe()
-                .and_then(|p| p.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            let args_str = process
-                .cmd()
-                .iter()
-                .map(|arg| arg.to_string_lossy().to_lowercase())
-                .collect::<Vec<String>>()
-                .join(" ");
-            let is_helper = is_helper_command_line(&args_str) || args_str.contains("crashpad");
-
-            #[cfg(target_os = "windows")]
-            let is_codebuddy = name == "codebuddy.exe"
-                || name == "codebuddy cn.exe"
-                || exe_path.ends_with("\\codebuddy.exe")
-                || exe_path.ends_with("\\codebuddy cn.exe")
-                || exe_path.contains("\\codebuddy\\")
-                || exe_path.contains("\\codebuddy cn\\");
-            #[cfg(target_os = "linux")]
-            let is_codebuddy = name == "codebuddy"
-                || name == "codebuddy-cn"
-                || exe_path.ends_with("/codebuddy")
-                || exe_path.ends_with("/codebuddy-cn")
-                || exe_path.contains("/codebuddy/")
-                || exe_path.contains("/codebuddy-cn/");
-
-            if !is_codebuddy || is_helper {
-                continue;
-            }
-
-            let dir = extract_user_data_dir(process.cmd());
-            entries.push((pid_u32, dir));
-        }
-    }
-
     #[cfg(target_os = "macos")]
     {
+        let mut entries = Vec::new();
         let output = Command::new("ps").args(["-axo", "pid,command"]).output();
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -4575,10 +4713,12 @@ pub fn collect_codebuddy_cn_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
 
     #[cfg(target_os = "linux")]
     {
+        let mut entries = Vec::new();
         if let Ok(proc_entries) = std::fs::read_dir("/proc") {
             for entry in proc_entries.flatten() {
                 let file_name = entry.file_name();
@@ -4614,37 +4754,8 @@ pub fn collect_codebuddy_cn_process_entries() -> Vec<(u32, Option<String>)> {
                 entries.push((pid, dir));
             }
         }
+        return entries;
     }
-
-    let mut map: HashMap<u32, Option<String>> = HashMap::new();
-    for (pid, dir) in entries {
-        let normalized = dir.and_then(|value| {
-            let value = value.trim().to_string();
-            if value.is_empty() {
-                return None;
-            }
-            let normalized = normalize_path_for_compare(&value);
-            if normalized.is_empty() {
-                None
-            } else {
-                Some(normalized)
-            }
-        });
-        match map.get(&pid) {
-            None => {
-                map.insert(pid, normalized);
-            }
-            Some(existing) => {
-                if existing.is_none() && normalized.is_some() {
-                    map.insert(pid, normalized);
-                }
-            }
-        }
-    }
-
-    let mut result: Vec<(u32, Option<String>)> = map.into_iter().collect();
-    result.sort_by_key(|(pid, _)| *pid);
-    filter_entries_by_expected_launch_path("CodeBuddy CN", result, expected_launch)
 }
 
 pub fn resolve_codebuddy_pid_from_entries(
@@ -4673,6 +4784,116 @@ pub fn resolve_codebuddy_cn_pid_from_entries(
 pub fn resolve_codebuddy_cn_pid(last_pid: Option<u32>, user_data_dir: Option<&str>) -> Option<u32> {
     let entries = collect_codebuddy_cn_process_entries();
     resolve_codebuddy_cn_pid_from_entries(last_pid, user_data_dir, &entries)
+}
+
+pub fn collect_workbuddy_process_entries() -> Vec<(u32, Option<String>)> {
+    let expected_launch = resolve_expected_workbuddy_launch_path_for_match();
+    if expected_launch.is_none() {
+        return Vec::new();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let expected = expected_launch
+            .as_deref()
+            .expect("expected launch path must exist");
+        let entries = collect_workbuddy_process_entries_from_powershell(expected);
+        if !entries.is_empty() {
+            return entries;
+        }
+        crate::modules::logger::log_warn(
+            "[WorkBuddy Probe] PowerShell returned empty; fallback to sysinfo probe",
+        );
+        return collect_workbuddy_process_entries_from_sysinfo_fallback(expected);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut entries = Vec::new();
+        let output = Command::new("ps").args(["-axo", "pid,command"]).output();
+        if let Ok(output) = output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines().skip(1) {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                let mut parts = line.splitn(2, |ch: char| ch.is_whitespace());
+                let pid_str = parts.next().unwrap_or("").trim();
+                let cmdline = parts.next().unwrap_or("").trim();
+                let pid = match pid_str.parse::<u32>() {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let lower = cmdline.to_lowercase();
+                let is_workbuddy = lower.contains("workbuddy.app/contents/macos/");
+                if !is_workbuddy {
+                    continue;
+                }
+                if lower.contains("crashpad_handler") || is_helper_command_line(&lower) {
+                    continue;
+                }
+                let dir = extract_user_data_dir_from_command_line(cmdline);
+                entries.push((pid, dir));
+            }
+        }
+        return entries;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut entries = Vec::new();
+        if let Ok(proc_entries) = std::fs::read_dir("/proc") {
+            for entry in proc_entries.flatten() {
+                let file_name = entry.file_name();
+                let pid_str = file_name.to_string_lossy();
+                if !pid_str.chars().all(|ch| ch.is_ascii_digit()) {
+                    continue;
+                }
+                let pid = match pid_str.parse::<u32>() {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let cmdline_path = format!("/proc/{}/cmdline", pid);
+                let cmdline = match std::fs::read(&cmdline_path) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if cmdline.is_empty() {
+                    continue;
+                }
+                let cmdline_str = String::from_utf8_lossy(&cmdline).replace('\0', " ");
+                let cmd_lower = cmdline_str.to_lowercase();
+                let exe_path = std::fs::read_link(format!("/proc/{}/exe", pid))
+                    .ok()
+                    .and_then(|p| p.to_str().map(|s| s.to_lowercase()))
+                    .unwrap_or_default();
+                if !cmd_lower.contains("workbuddy") && !exe_path.contains("/workbuddy") {
+                    continue;
+                }
+                if is_helper_command_line(&cmd_lower) {
+                    continue;
+                }
+                let dir = extract_user_data_dir_from_command_line(&cmdline_str);
+                entries.push((pid, dir));
+            }
+        }
+        return entries;
+    }
+}
+
+pub fn resolve_workbuddy_pid_from_entries(
+    last_pid: Option<u32>,
+    user_data_dir: Option<&str>,
+    entries: &[(u32, Option<String>)],
+) -> Option<u32> {
+    let (target, allow_none_for_target) = resolve_workbuddy_target_and_fallback(user_data_dir)?;
+    resolve_pid_from_entries_by_user_data_dir(last_pid, &target, allow_none_for_target, entries)
+}
+
+pub fn resolve_workbuddy_pid(last_pid: Option<u32>, user_data_dir: Option<&str>) -> Option<u32> {
+    let entries = collect_workbuddy_process_entries();
+    resolve_workbuddy_pid_from_entries(last_pid, user_data_dir, &entries)
 }
 
 fn get_default_codebuddy_user_data_dir_for_os() -> Option<String> {
@@ -4744,6 +4965,45 @@ fn get_default_codebuddy_cn_user_data_dir_for_os() -> Option<String> {
         return Some(
             home.join(".config")
                 .join("CodeBuddy CN")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    #[allow(unreachable_code)]
+    None
+}
+
+fn get_default_workbuddy_user_data_dir_for_os() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let home = dirs::home_dir()?;
+        return Some(
+            home.join("Library")
+                .join("Application Support")
+                .join("WorkBuddy")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").ok()?;
+        return Some(
+            Path::new(&appdata)
+                .join("WorkBuddy")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let home = dirs::home_dir()?;
+        return Some(
+            home.join(".config")
+                .join("WorkBuddy")
                 .to_string_lossy()
                 .to_string(),
         );
@@ -6934,6 +7194,243 @@ pub fn start_codebuddy_cn_default_with_args_with_new_window(
     {
         let _ = (extra_args, use_new_window);
         Err("CodeBuddy CN 多开实例仅支持 macOS、Windows 和 Linux".to_string())
+    }
+}
+
+pub fn start_workbuddy_with_args_with_new_window(
+    user_data_dir: &str,
+    extra_args: &[String],
+    use_new_window: bool,
+) -> Result<u32, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let target = user_data_dir.trim();
+        if target.is_empty() {
+            return Err("实例目录为空，无法启动".to_string());
+        }
+        let app_root = resolve_macos_app_root_from_config("workbuddy").or_else(|| {
+            resolve_workbuddy_launch_path()
+                .ok()
+                .and_then(|p| resolve_macos_app_root_from_launch_path(&p))
+        });
+        let app_root = app_root.ok_or_else(|| app_path_missing_error("workbuddy"))?;
+
+        let mut args: Vec<String> = Vec::new();
+        args.push("--user-data-dir".to_string());
+        args.push(target.to_string());
+        if use_new_window {
+            args.push("--new-window".to_string());
+        } else {
+            args.push("--reuse-window".to_string());
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                args.push(trimmed.to_string());
+            }
+        }
+
+        let open_pid = spawn_open_app_with_options(&app_root, &args, true)
+            .map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 启动命令已发送（open -a）");
+        let probe_started = Instant::now();
+        let timeout = Duration::from_secs(6);
+        while probe_started.elapsed() < timeout {
+            if let Some(resolved_pid) = resolve_workbuddy_pid(None, Some(target)) {
+                return Ok(resolved_pid);
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+        crate::modules::logger::log_warn(&format!(
+            "[WorkBuddy Start] 启动后 6s 内未匹配到实例 PID，回退 open pid={}",
+            open_pid
+        ));
+        return Ok(open_pid);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+
+        let target = user_data_dir.trim();
+        if target.is_empty() {
+            return Err("实例目录为空，无法启动".to_string());
+        }
+        let launch_path = resolve_workbuddy_launch_path()?;
+
+        let mut cmd = Command::new(&launch_path);
+        if should_detach_child() {
+            cmd.creation_flags(0x08000000 | CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+        } else {
+            cmd.creation_flags(0x08000000);
+        }
+        cmd.arg("--user-data-dir").arg(target);
+        if use_new_window {
+            cmd.arg("--new-window");
+        } else {
+            cmd.arg("--reuse-window");
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                cmd.arg(trimmed);
+            }
+        }
+
+        let child = spawn_command_with_trace(&mut cmd)
+            .map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 启动命令已发送");
+        return Ok(child.id());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let target = user_data_dir.trim();
+        if target.is_empty() {
+            return Err("实例目录为空，无法启动".to_string());
+        }
+        let launch_path = resolve_workbuddy_launch_path()?;
+
+        let mut cmd = Command::new(&launch_path);
+        if should_detach_child() {
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+        }
+        cmd.arg("--user-data-dir").arg(target);
+        if use_new_window {
+            cmd.arg("--new-window");
+        } else {
+            cmd.arg("--reuse-window");
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                cmd.arg(trimmed);
+            }
+        }
+
+        let child =
+            spawn_detached_unix(&mut cmd).map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 启动命令已发送");
+        return Ok(child.id());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        let _ = (user_data_dir, extra_args, use_new_window);
+        Err("WorkBuddy 多开实例仅支持 macOS、Windows 和 Linux".to_string())
+    }
+}
+
+pub fn start_workbuddy_default_with_args_with_new_window(
+    extra_args: &[String],
+    use_new_window: bool,
+) -> Result<u32, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let app_root = resolve_macos_app_root_from_config("workbuddy").or_else(|| {
+            resolve_workbuddy_launch_path()
+                .ok()
+                .and_then(|p| resolve_macos_app_root_from_launch_path(&p))
+        });
+        let app_root = app_root.ok_or_else(|| app_path_missing_error("workbuddy"))?;
+
+        let mut args: Vec<String> = Vec::new();
+        if use_new_window {
+            args.push("--new-window".to_string());
+        } else {
+            args.push("--reuse-window".to_string());
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                args.push(trimmed.to_string());
+            }
+        }
+
+        let open_pid = spawn_open_app(&app_root, &args)
+            .map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 默认实例启动命令已发送（open -a）");
+        let probe_started = Instant::now();
+        let timeout = Duration::from_secs(6);
+        while probe_started.elapsed() < timeout {
+            if let Some(resolved_pid) = resolve_workbuddy_pid(None, None) {
+                return Ok(resolved_pid);
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+        crate::modules::logger::log_warn(&format!(
+            "[WorkBuddy Start] 启动后 6s 内未匹配到默认实例 PID，回退 open pid={}",
+            open_pid
+        ));
+        return Ok(open_pid);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+
+        let launch_path = resolve_workbuddy_launch_path()?;
+        let mut cmd = Command::new(&launch_path);
+        if should_detach_child() {
+            cmd.creation_flags(0x08000000 | CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+        } else {
+            cmd.creation_flags(0x08000000);
+        }
+        if use_new_window {
+            cmd.arg("--new-window");
+        } else {
+            cmd.arg("--reuse-window");
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                cmd.arg(trimmed);
+            }
+        }
+        let child = spawn_command_with_trace(&mut cmd)
+            .map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 默认实例启动命令已发送");
+        return Ok(child.id());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let launch_path = resolve_workbuddy_launch_path()?;
+        let mut cmd = Command::new(&launch_path);
+        if should_detach_child() {
+            cmd.stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+        }
+        if use_new_window {
+            cmd.arg("--new-window");
+        } else {
+            cmd.arg("--reuse-window");
+        }
+        for arg in extra_args {
+            let trimmed = arg.trim();
+            if !trimmed.is_empty() {
+                cmd.arg(trimmed);
+            }
+        }
+        let child =
+            spawn_detached_unix(&mut cmd).map_err(|e| format!("启动 WorkBuddy 失败：{}", e))?;
+        crate::modules::logger::log_info("WorkBuddy 默认实例启动命令已发送");
+        return Ok(child.id());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        let _ = (extra_args, use_new_window);
+        Err("WorkBuddy 多开实例仅支持 macOS、Windows 和 Linux".to_string())
     }
 }
 

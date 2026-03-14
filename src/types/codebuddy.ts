@@ -219,9 +219,10 @@ export interface CodebuddyResourceSummary {
   packageName: string | null;
   cycleStartTime: string | null;
   cycleEndTime: string | null;
-  remain: number | null;
-  used: number | null;
+  remain: number;
+  used: number;
   total: number | null;
+  usedPercent: number;
   remainPercent: number | null;
   boundUpdatedAt: number | null;
 }
@@ -469,6 +470,7 @@ export function getCodebuddyResourceSummary(account: CodebuddyAccount): Codebudd
   const total = totalAgg || null;
   const remain = remainAgg;
   const used = usedAgg;
+  const usedPercent = total && total > 0 ? Math.max(0, Math.min(100, (used / total) * 100)) : 0;
   const remainPercent = total && total > 0 ? Math.max(0, Math.min(100, (remain / total) * 100)) : null;
   const boundUpdatedAt = getAccountQuotaUpdatedAtMs(account);
 
@@ -479,6 +481,7 @@ export function getCodebuddyResourceSummary(account: CodebuddyAccount): Codebudd
     remain,
     used,
     total,
+    usedPercent,
     remainPercent,
     boundUpdatedAt,
   };
@@ -512,4 +515,87 @@ export function getCodebuddyExtraCreditSummary(account: CodebuddyAccount): Codeb
   const usedPercent = totalAgg > 0 ? Math.max(0, Math.min(100, (usedAgg / totalAgg) * 100)) : 0;
   const remainPercent = totalAgg > 0 ? Math.max(0, Math.min(100, (remainAgg / totalAgg) * 100)) : null;
   return { remain: remainAgg, total: totalAgg, used: usedAgg, usedPercent, remainPercent };
+}
+
+/** 配额显示项 */
+export interface CodebuddyQuotaDisplayItem {
+  key: string;
+  label: string;
+  used: number;
+  total: number;
+  remain: number;
+  usedPercent: number;
+  remainPercent: number | null;
+  quotaClass: string;
+  refreshAt: number | null;
+}
+
+/** 解析包名称 */
+function resolveCodebuddyPackageName(resource: CodebuddyOfficialQuotaResource): string {
+  if (resource.packageCode === CB_PACKAGE_CODE.extra) {
+    return '加量包';
+  }
+  if (resource.packageCode === CB_PACKAGE_CODE.activity) {
+    return '活动赠送包';
+  }
+  if (
+    resource.packageCode === CB_PACKAGE_CODE.free ||
+    resource.packageCode === CB_PACKAGE_CODE.gift ||
+    resource.packageCode === CB_PACKAGE_CODE.freeMon
+  ) {
+    return '基础体验包';
+  }
+  if (
+    resource.packageCode === CB_PACKAGE_CODE.proMon ||
+    resource.packageCode === CB_PACKAGE_CODE.proYear
+  ) {
+    return '专业版订阅';
+  }
+  return resource.packageName || '基础包';
+}
+
+/** 获取 CodeBuddy 配额显示项列表 */
+export function getCodebuddyQuotaDisplayItems(account: CodebuddyAccount, _t: (key: string, defaultValue?: string) => string): CodebuddyQuotaDisplayItem[] {
+  const model = getCodebuddyOfficialQuotaModel(account);
+  const items: CodebuddyQuotaDisplayItem[] = [];
+
+  // 添加基础包（多个独立的包）
+  for (const resource of model.resources) {
+    if (resource.total <= 0 && resource.remain <= 0) continue;
+
+    const remainPercent = resource.remainPercent ?? Math.max(0, 100 - resource.usedPercent);
+    const quotaClass = remainPercent <= 10 ? 'low' : remainPercent <= 30 ? 'medium' : 'high';
+
+    items.push({
+      key: `base-${resource.packageCode || items.length}`,
+      label: resolveCodebuddyPackageName(resource),
+      used: resource.used,
+      total: resource.total,
+      remain: resource.remain,
+      usedPercent: resource.usedPercent,
+      remainPercent: resource.remainPercent,
+      quotaClass,
+      refreshAt: resource.refreshAt,
+    });
+  }
+
+  // 添加加量包
+  if (model.extra.total > 0 || model.extra.remain > 0) {
+    const remainPercent = model.extra.remainPercent ?? Math.max(0, 100 - model.extra.usedPercent);
+    const quotaClass = remainPercent <= 10 ? 'low' : remainPercent <= 30 ? 'medium' : 'high';
+
+    items.push({
+      key: 'extra',
+      label: '加量包',
+      used: model.extra.used,
+      total: model.extra.total,
+      remain: model.extra.remain,
+      usedPercent: model.extra.usedPercent,
+      remainPercent: model.extra.remainPercent,
+      quotaClass,
+      refreshAt: model.extra.refreshAt,
+    });
+  }
+
+  return items; // 返回所有项，由 UI 层决定如何展示
 }

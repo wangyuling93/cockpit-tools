@@ -14,6 +14,7 @@ import './QuickSettingsPopover.css';
 interface GeneralConfig {
   language: string;
   theme: string;
+  ui_scale: number;
   auto_refresh_minutes: number;
   codex_auto_refresh_minutes: number;
   ghcp_auto_refresh_minutes: number;
@@ -25,7 +26,10 @@ interface GeneralConfig {
   codebuddy_cn_auto_refresh_minutes: number;
   qoder_auto_refresh_minutes: number;
   trae_auto_refresh_minutes: number;
+  workbuddy_auto_refresh_minutes: number;
   close_behavior: string;
+  minimize_behavior?: 'dock_and_tray' | 'tray_only';
+  hide_dock_icon?: boolean;
   opencode_app_path: string;
   antigravity_app_path: string;
   codex_app_path: string;
@@ -37,6 +41,7 @@ interface GeneralConfig {
   codebuddy_cn_app_path: string;
   qoder_app_path: string;
   trae_app_path: string;
+  workbuddy_app_path: string;
   opencode_sync_on_switch: boolean;
   opencode_auth_overwrite_on_switch: boolean;
   codex_launch_on_switch: boolean;
@@ -64,6 +69,8 @@ interface GeneralConfig {
   qoder_quota_alert_threshold: number;
   trae_quota_alert_enabled: boolean;
   trae_quota_alert_threshold: number;
+  workbuddy_quota_alert_enabled: boolean;
+  workbuddy_quota_alert_threshold: number;
 }
 
 export type QuickSettingsType =
@@ -77,7 +84,8 @@ export type QuickSettingsType =
   | 'codebuddy'
   | 'codebuddy_cn'
   | 'qoder'
-  | 'trae';
+  | 'trae'
+  | 'workbuddy';
 
 type QuotaAlertEnabledKey =
   | 'quota_alert_enabled'
@@ -90,7 +98,8 @@ type QuotaAlertEnabledKey =
   | 'codebuddy_quota_alert_enabled'
   | 'codebuddy_cn_quota_alert_enabled'
   | 'qoder_quota_alert_enabled'
-  | 'trae_quota_alert_enabled';
+  | 'trae_quota_alert_enabled'
+  | 'workbuddy_quota_alert_enabled';
 type QuotaAlertThresholdKey =
   | 'quota_alert_threshold'
   | 'codex_quota_alert_threshold'
@@ -102,7 +111,8 @@ type QuotaAlertThresholdKey =
   | 'codebuddy_quota_alert_threshold'
   | 'codebuddy_cn_quota_alert_threshold'
   | 'qoder_quota_alert_threshold'
-  | 'trae_quota_alert_threshold';
+  | 'trae_quota_alert_threshold'
+  | 'workbuddy_quota_alert_threshold';
 
 interface QuickSettingsPopoverProps {
   type: QuickSettingsType;
@@ -200,6 +210,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       case 'codebuddy_cn': return 'codebuddy_cn_auto_refresh_minutes';
       case 'qoder': return 'qoder_auto_refresh_minutes';
       case 'trae': return 'trae_auto_refresh_minutes';
+      case 'workbuddy': return 'workbuddy_auto_refresh_minutes';
+      default: return 'auto_refresh_minutes';
     }
   };
 
@@ -213,6 +225,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         await invoke('save_general_config', {
           language: merged.language,
           theme: merged.theme,
+          uiScale: merged.ui_scale,
           autoRefreshMinutes: merged.auto_refresh_minutes,
           codexAutoRefreshMinutes: merged.codex_auto_refresh_minutes,
           ghcpAutoRefreshMinutes: merged.ghcp_auto_refresh_minutes,
@@ -225,6 +238,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
           qoderAutoRefreshMinutes: merged.qoder_auto_refresh_minutes,
           traeAutoRefreshMinutes: merged.trae_auto_refresh_minutes,
           closeBehavior: merged.close_behavior,
+          minimizeBehavior: merged.minimize_behavior,
+          hideDockIcon: merged.hide_dock_icon,
           opencodeAppPath: merged.opencode_app_path,
           antigravityAppPath: merged.antigravity_app_path,
           codexAppPath: merged.codex_app_path,
@@ -236,6 +251,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
           codebuddyCnAppPath: merged.codebuddy_cn_app_path,
           qoderAppPath: merged.qoder_app_path,
           traeAppPath: merged.trae_app_path,
+          workbuddyAppPath: merged.workbuddy_app_path,
           opencodeSyncOnSwitch: merged.opencode_sync_on_switch,
           opencodeAuthOverwriteOnSwitch: merged.opencode_auth_overwrite_on_switch,
           codexLaunchOnSwitch: merged.codex_launch_on_switch,
@@ -289,7 +305,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       | 'codebuddy'
       | 'codebuddy_cn'
       | 'qoder'
-      | 'trae',
+      | 'trae'
+      | 'workbuddy',
   ) => {
     try {
       const selected = await open({ multiple: false, directory: false });
@@ -315,7 +332,9 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                       ? 'qoder_app_path'
                     : target === 'trae'
                       ? 'trae_app_path'
-                  : 'kiro_app_path';
+                    : target === 'workbuddy'
+                      ? 'workbuddy_app_path'
+                      : 'kiro_app_path';
 
       saveConfig({ [key]: path });
     } catch (err) {
@@ -338,7 +357,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       | 'codebuddy'
       | 'codebuddy_cn'
       | 'qoder'
-      | 'trae',
+      | 'trae'
+      | 'workbuddy',
   ) => {
     if (pathDetecting) return;
     setPathDetecting(true);
@@ -364,7 +384,9 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                       ? 'qoder_app_path'
                     : target === 'trae'
                       ? 'trae_app_path'
-                  : 'kiro_app_path';
+                    : target === 'workbuddy'
+                      ? 'workbuddy_app_path'
+                      : 'kiro_app_path';
       saveConfig({ [key]: path });
     } catch (err) {
       console.error('Failed to reset path:', err);
@@ -402,6 +424,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
           return 'Qoder';
         case 'trae':
           return 'Trae';
+        case 'workbuddy':
+          return 'Workbuddy';
       }
     })();
     return `${platformLabel} ${t('nav.settings', '设置')}`;
@@ -433,6 +457,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         return 'qoder_quota_alert_enabled';
       case 'trae':
         return 'trae_quota_alert_enabled';
+      case 'workbuddy':
+        return 'workbuddy_quota_alert_enabled';
       default:
         return 'quota_alert_enabled';
     }
@@ -460,6 +486,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         return 'qoder_quota_alert_threshold';
       case 'trae':
         return 'trae_quota_alert_threshold';
+      case 'workbuddy':
+        return 'workbuddy_quota_alert_threshold';
       default:
         return 'quota_alert_threshold';
     }
@@ -488,6 +516,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       case 'qoder':
         return t('quickSettings.refreshInterval', '配额自动刷新');
       case 'trae':
+        return t('quickSettings.refreshInterval', '配额自动刷新');
+      case 'workbuddy':
         return t('quickSettings.refreshInterval', '配额自动刷新');
     }
   };
@@ -519,6 +549,10 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         return config.qoder_app_path;
       case 'trae':
         return config.trae_app_path;
+      case 'workbuddy':
+        return config.workbuddy_app_path;
+      default:
+        return '';
     }
   };
 
@@ -546,6 +580,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         return t('quickSettings.qoder.appPath', 'Qoder 路径');
       case 'trae':
         return t('quickSettings.trae.appPath', 'Trae 路径');
+      case 'workbuddy':
+        return t('quickSettings.workbuddy.appPath', 'Workbuddy 路径');
     }
   };
 
@@ -559,7 +595,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
     | 'codebuddy'
     | 'codebuddy_cn'
     | 'qoder'
-    | 'trae' => {
+    | 'trae'
+    | 'workbuddy' => {
     switch (type) {
       case 'antigravity':
         return 'antigravity';
@@ -583,6 +620,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         return 'qoder';
       case 'trae':
         return 'trae';
+      case 'workbuddy':
+        return 'workbuddy';
     }
   };
 

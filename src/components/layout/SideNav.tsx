@@ -35,6 +35,7 @@ const PAGE_PLATFORM_MAP: Partial<Record<Page, PlatformId>> = {
   'codebuddy-cn': 'codebuddy_cn',
   qoder: 'qoder',
   trae: 'trae',
+  workbuddy: 'workbuddy',
 };
 
 export function SideNav({

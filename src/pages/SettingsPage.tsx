@@ -49,13 +49,18 @@ interface GeneralConfig {
   kiro_app_path: string;
   cursor_app_path: string;
   codebuddy_app_path: string;
+  codebuddy_cn_app_path: string;
   qoder_app_path: string;
   trae_app_path: string;
+  workbuddy_app_path: string;
   codebuddy_auto_refresh_minutes: number;
+  codebuddy_cn_auto_refresh_minutes: number;
   qoder_auto_refresh_minutes: number;
   trae_auto_refresh_minutes: number;
   codebuddy_quota_alert_enabled: boolean;
   codebuddy_quota_alert_threshold: number;
+  codebuddy_cn_quota_alert_enabled: boolean;
+  codebuddy_cn_quota_alert_threshold: number;
   qoder_quota_alert_enabled: boolean;
   qoder_quota_alert_threshold: number;
   trae_quota_alert_enabled: boolean;
@@ -91,7 +96,8 @@ type AppPathTarget =
   | 'cursor'
   | 'codebuddy'
   | 'qoder'
-  | 'trae';
+  | 'trae'
+  | 'workbuddy';
 const REFRESH_PRESET_VALUES = ['-1', '2', '5', '10', '15'];
 const THRESHOLD_PRESET_VALUES = ['0', '20', '40', '60'];
 const UI_SCALE_OPTIONS = ['0.9', '1', '1.1', '1.25', '1.5'] as const;
@@ -107,6 +113,7 @@ const FALLBACK_PLATFORM_SETTINGS_ORDER: Record<PlatformId, number> = {
   codebuddy_cn: 8,
   qoder: 9,
   trae: 10,
+  workbuddy: 11,
 };
 type UpdateCheckSource = 'auto' | 'manual';
 type UpdateCheckFinishedDetail = {
@@ -164,6 +171,7 @@ export function SettingsPage() {
   const [cursorAutoRefresh, setCursorAutoRefresh] = useState('10');
   const [geminiAutoRefresh, setGeminiAutoRefresh] = useState('10');
   const [closeBehavior, setCloseBehavior] = useState<'ask' | 'minimize' | 'quit'>('ask');
+  const [minimizeBehavior, setMinimizeBehavior] = useState<'dock_and_tray' | 'tray_only'>('dock_and_tray');
   const [hideDockIcon, setHideDockIcon] = useState(false);
   const [opencodeAppPath, setOpencodeAppPath] = useState('');
   const [antigravityAppPath, setAntigravityAppPath] = useState('');
@@ -173,13 +181,18 @@ export function SettingsPage() {
   const [kiroAppPath, setKiroAppPath] = useState('');
   const [cursorAppPath, setCursorAppPath] = useState('');
   const [codebuddyAppPath, setCodebuddyAppPath] = useState('');
+  const [codebuddyCnAppPath, setCodebuddyCnAppPath] = useState('');
   const [qoderAppPath, setQoderAppPath] = useState('');
   const [traeAppPath, setTraeAppPath] = useState('');
+  const [workbuddyAppPath, setWorkbuddyAppPath] = useState('');
   const [codebuddyAutoRefresh, setCodebuddyAutoRefresh] = useState('10');
+  const [codebuddyCnAutoRefresh, setCodebuddyCnAutoRefresh] = useState('10');
   const [qoderAutoRefresh, setQoderAutoRefresh] = useState('10');
   const [traeAutoRefresh, setTraeAutoRefresh] = useState('10');
   const [codebuddyQuotaAlertEnabled, setCodebuddyQuotaAlertEnabled] = useState(false);
   const [codebuddyQuotaAlertThreshold, setCodebuddyQuotaAlertThreshold] = useState('20');
+  const [codebuddyCnQuotaAlertEnabled, setCodebuddyCnQuotaAlertEnabled] = useState(false);
+  const [codebuddyCnQuotaAlertThreshold, setCodebuddyCnQuotaAlertThreshold] = useState('20');
   const [qoderQuotaAlertEnabled, setQoderQuotaAlertEnabled] = useState(false);
   const [qoderQuotaAlertThreshold, setQoderQuotaAlertThreshold] = useState('20');
   const [traeQuotaAlertEnabled, setTraeQuotaAlertEnabled] = useState(false);
@@ -367,6 +380,7 @@ export function SettingsPage() {
     const windsurfAutoRefreshNum = parseInt(windsurfAutoRefresh, 10) || -1;
     const kiroAutoRefreshNum = parseInt(kiroAutoRefresh, 10) || -1;
     const codebuddyAutoRefreshNum = parseInt(codebuddyAutoRefresh, 10) || -1;
+    const codebuddyCnAutoRefreshNum = parseInt(codebuddyCnAutoRefresh, 10) || -1;
     const qoderAutoRefreshNum = parseInt(qoderAutoRefresh, 10) || -1;
     const traeAutoRefreshNum = parseInt(traeAutoRefresh, 10) || -1;
     const cursorAutoRefreshNum = parseInt(cursorAutoRefresh, 10) || -1;
@@ -382,6 +396,7 @@ export function SettingsPage() {
     const parsedWindsurfQuotaAlertThreshold = Number.parseInt(windsurfQuotaAlertThreshold, 10);
     const parsedKiroQuotaAlertThreshold = Number.parseInt(kiroQuotaAlertThreshold, 10);
     const parsedCodebuddyQuotaAlertThreshold = Number.parseInt(codebuddyQuotaAlertThreshold, 10);
+    const parsedCodebuddyCnQuotaAlertThreshold = Number.parseInt(codebuddyCnQuotaAlertThreshold, 10);
     const parsedQoderQuotaAlertThreshold = Number.parseInt(qoderQuotaAlertThreshold, 10);
     const parsedTraeQuotaAlertThreshold = Number.parseInt(traeQuotaAlertThreshold, 10);
     const parsedCursorQuotaAlertThreshold = Number.parseInt(cursorQuotaAlertThreshold, 10);
@@ -404,11 +419,13 @@ export function SettingsPage() {
           windsurfAutoRefreshMinutes: windsurfAutoRefreshNum,
           kiroAutoRefreshMinutes: kiroAutoRefreshNum,
           codebuddyAutoRefreshMinutes: codebuddyAutoRefreshNum,
+          codebuddyCnAutoRefreshMinutes: codebuddyCnAutoRefreshNum,
           qoderAutoRefreshMinutes: qoderAutoRefreshNum,
           traeAutoRefreshMinutes: traeAutoRefreshNum,
           cursorAutoRefreshMinutes: cursorAutoRefreshNum,
           geminiAutoRefreshMinutes: geminiAutoRefreshNum,
           closeBehavior,
+          minimizeBehavior,
           hideDockIcon,
           opencodeAppPath,
           antigravityAppPath,
@@ -418,8 +435,10 @@ export function SettingsPage() {
           kiroAppPath,
           cursorAppPath,
           codebuddyAppPath,
+          codebuddyCnAppPath,
           qoderAppPath,
           traeAppPath,
+          workbuddyAppPath,
           opencodeSyncOnSwitch,
           opencodeAuthOverwriteOnSwitch,
           codexLaunchOnSwitch,
@@ -447,6 +466,10 @@ export function SettingsPage() {
           codebuddyQuotaAlertThreshold: Number.isNaN(parsedCodebuddyQuotaAlertThreshold)
             ? 20
             : parsedCodebuddyQuotaAlertThreshold,
+          codebuddyCnQuotaAlertEnabled,
+          codebuddyCnQuotaAlertThreshold: Number.isNaN(parsedCodebuddyCnQuotaAlertThreshold)
+            ? 20
+            : parsedCodebuddyCnQuotaAlertThreshold,
           qoderQuotaAlertEnabled,
           qoderQuotaAlertThreshold: Number.isNaN(parsedQoderQuotaAlertThreshold)
             ? 20
@@ -500,8 +523,10 @@ export function SettingsPage() {
     kiroAppPath,
     cursorAppPath,
     codebuddyAppPath,
+    codebuddyCnAppPath,
     qoderAppPath,
     traeAppPath,
+    workbuddyAppPath,
     opencodeSyncOnSwitch,
     opencodeAuthOverwriteOnSwitch,
     codexLaunchOnSwitch,
@@ -518,8 +543,11 @@ export function SettingsPage() {
     kiroQuotaAlertEnabled,
     kiroQuotaAlertThreshold,
     codebuddyAutoRefresh,
+    codebuddyCnAutoRefresh,
     codebuddyQuotaAlertEnabled,
     codebuddyQuotaAlertThreshold,
+    codebuddyCnQuotaAlertEnabled,
+    codebuddyCnQuotaAlertThreshold,
     qoderQuotaAlertEnabled,
     qoderQuotaAlertThreshold,
     traeQuotaAlertEnabled,
@@ -695,6 +723,7 @@ export function SettingsPage() {
       setCursorAutoRefresh(String(config.cursor_auto_refresh_minutes ?? 10));
       setGeminiAutoRefresh(String(config.gemini_auto_refresh_minutes ?? 10));
       setCloseBehavior(config.close_behavior || 'ask');
+      setMinimizeBehavior(config.minimize_behavior || 'dock_and_tray');
       setHideDockIcon(Boolean(config.hide_dock_icon));
       setOpencodeAppPath(config.opencode_app_path || '');
       setAntigravityAppPath(config.antigravity_app_path || '');
@@ -704,13 +733,18 @@ export function SettingsPage() {
       setKiroAppPath(config.kiro_app_path || '');
       setCursorAppPath(config.cursor_app_path || '');
       setCodebuddyAppPath(config.codebuddy_app_path || '');
+      setCodebuddyCnAppPath(config.codebuddy_cn_app_path || '');
       setQoderAppPath(config.qoder_app_path || '');
       setTraeAppPath(config.trae_app_path || '');
+      setWorkbuddyAppPath(config.workbuddy_app_path || '');
       setCodebuddyAutoRefresh(String(config.codebuddy_auto_refresh_minutes ?? 10));
+      setCodebuddyCnAutoRefresh(String(config.codebuddy_cn_auto_refresh_minutes ?? 10));
       setQoderAutoRefresh(String(config.qoder_auto_refresh_minutes ?? 10));
       setTraeAutoRefresh(String(config.trae_auto_refresh_minutes ?? 10));
       setCodebuddyQuotaAlertEnabled(config.codebuddy_quota_alert_enabled ?? false);
       setCodebuddyQuotaAlertThreshold(String(config.codebuddy_quota_alert_threshold ?? 20));
+      setCodebuddyCnQuotaAlertEnabled(config.codebuddy_cn_quota_alert_enabled ?? false);
+      setCodebuddyCnQuotaAlertThreshold(String(config.codebuddy_cn_quota_alert_threshold ?? 20));
       setQoderQuotaAlertEnabled(config.qoder_quota_alert_enabled ?? false);
       setQoderQuotaAlertThreshold(String(config.qoder_quota_alert_threshold ?? 20));
       setTraeQuotaAlertEnabled(config.trae_quota_alert_enabled ?? false);
@@ -851,6 +885,9 @@ export function SettingsPage() {
     }
     if (target === 'trae') {
       return t('settings.general.traePathReset', '重置默认');
+    }
+    if (target === 'workbuddy') {
+      return t('settings.general.workbuddyPathReset', '重置默认');
     }
     if (target === 'opencode') {
       return t('settings.general.opencodePathReset', '重置默认');
@@ -2720,6 +2757,41 @@ export function SettingsPage() {
 
                   <div className="settings-row">
                     <div className="row-label">
+                      <div className="row-title">{t('settings.general.workbuddyAppPath', 'WorkBuddy 启动路径')}</div>
+                      <div className="row-desc">{t('settings.general.workbuddyAppPathDesc', '留空则使用默认路径')}</div>
+                    </div>
+                    <div className="row-control row-control--grow">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
+                        <input
+                          type="text"
+                          className="settings-input settings-input--path"
+                          value={workbuddyAppPath}
+                          placeholder={t('settings.general.workbuddyAppPathPlaceholder', '默认路径')}
+                          onChange={(e) => setWorkbuddyAppPath(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handlePickAppPath('workbuddy')}
+                          disabled={isAppPathResetDetecting('workbuddy')}
+                        >
+                          {t('settings.general.workbuddyPathSelect', '选择')}
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleResetAppPath('workbuddy')}
+                          disabled={isAppPathResetDetecting('workbuddy')}
+                        >
+                          <RefreshCw size={16} className={isAppPathResetDetecting('workbuddy') ? 'spin' : undefined} />
+                          {isAppPathResetDetecting('workbuddy')
+                            ? t('common.loading', '加载中...')
+                            : getResetLabelByTarget('workbuddy')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="row-label">
                       <div className="row-title">{t('quickSettings.quotaAlert.enable', '超额预警')}</div>
                       <div className="row-desc">{t('quickSettings.quotaAlert.hint', '当当前账号任意模型配额低于阈值时，发送原生通知并在页面提示快捷切号。')}</div>
                     </div>
@@ -2797,6 +2869,46 @@ export function SettingsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div style={{ order: platformSettingsOrder.workbuddy }}>
+                <div className="group-title">{t('quickSettings.workbuddy.title', 'WorkBuddy 设置')}</div>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="row-label">
+                      <div className="row-title">{t('settings.general.workbuddyAppPath', 'WorkBuddy 启动路径')}</div>
+                      <div className="row-desc">{t('settings.general.workbuddyAppPathDesc', '留空则使用默认路径')}</div>
+                    </div>
+                    <div className="row-control row-control--grow">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
+                        <input
+                          type="text"
+                          className="settings-input settings-input--path"
+                          value={workbuddyAppPath}
+                          placeholder={t('settings.general.workbuddyAppPathPlaceholder', '默认路径')}
+                          onChange={(e) => setWorkbuddyAppPath(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handlePickAppPath('workbuddy')}
+                          disabled={isAppPathResetDetecting('workbuddy')}
+                        >
+                          {t('settings.general.workbuddyPathSelect', '选择')}
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleResetAppPath('workbuddy')}
+                          disabled={isAppPathResetDetecting('workbuddy')}
+                        >
+                          <RefreshCw size={16} className={isAppPathResetDetecting('workbuddy') ? 'spin' : undefined} />
+                          {isAppPathResetDetecting('workbuddy')
+                            ? t('common.loading', '加载中...')
+                            : getResetLabelByTarget('workbuddy')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

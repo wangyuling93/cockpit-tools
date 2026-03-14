@@ -247,6 +247,7 @@ pub fn save_network_config(ws_enabled: bool, ws_port: u16) -> Result<bool, Strin
         codebuddy_cn_app_path: current.codebuddy_cn_app_path,
         qoder_app_path: current.qoder_app_path,
         trae_app_path: current.trae_app_path,
+        workbuddy_app_path: current.workbuddy_app_path,
         opencode_sync_on_switch: current.opencode_sync_on_switch,
         opencode_auth_overwrite_on_switch: current.opencode_auth_overwrite_on_switch,
         codex_launch_on_switch: current.codex_launch_on_switch,
@@ -274,6 +275,8 @@ pub fn save_network_config(ws_enabled: bool, ws_port: u16) -> Result<bool, Strin
         qoder_quota_alert_threshold: current.qoder_quota_alert_threshold,
         trae_quota_alert_enabled: current.trae_quota_alert_enabled,
         trae_quota_alert_threshold: current.trae_quota_alert_threshold,
+        workbuddy_quota_alert_enabled: current.workbuddy_quota_alert_enabled,
+        workbuddy_quota_alert_threshold: current.workbuddy_quota_alert_threshold,
     };
 
     config::save_user_config(&new_config)?;
@@ -387,6 +390,7 @@ pub fn save_general_config(
     codebuddy_cn_app_path: Option<String>,
     qoder_app_path: Option<String>,
     trae_app_path: Option<String>,
+    workbuddy_app_path: Option<String>,
     opencode_sync_on_switch: bool,
     opencode_auth_overwrite_on_switch: Option<bool>,
     codex_launch_on_switch: bool,
@@ -442,6 +446,9 @@ pub fn save_general_config(
     let normalized_trae_path = trae_app_path
         .map(|value| value.trim().to_string())
         .unwrap_or_else(|| current.trae_app_path.clone());
+    let normalized_workbuddy_path = workbuddy_app_path
+        .map(|value| value.trim().to_string())
+        .unwrap_or_else(|| current.workbuddy_app_path.clone());
     // 标准化语言代码为小写，确保与插件端格式一致
     let normalized_language = language.to_lowercase();
     let language_changed = current.language != normalized_language;
@@ -504,6 +511,7 @@ pub fn save_general_config(
         codebuddy_cn_app_path: normalized_codebuddy_cn_path,
         qoder_app_path: normalized_qoder_path,
         trae_app_path: normalized_trae_path,
+        workbuddy_app_path: normalized_workbuddy_path,
         opencode_sync_on_switch,
         opencode_auth_overwrite_on_switch: opencode_auth_overwrite_on_switch
             .unwrap_or(current.opencode_auth_overwrite_on_switch),
@@ -552,6 +560,8 @@ pub fn save_general_config(
             .unwrap_or(current.trae_quota_alert_enabled),
         trae_quota_alert_threshold: trae_quota_alert_threshold
             .unwrap_or(current.trae_quota_alert_threshold),
+        workbuddy_quota_alert_enabled: current.workbuddy_quota_alert_enabled,
+        workbuddy_quota_alert_threshold: current.workbuddy_quota_alert_threshold,
     };
 
     config::save_user_config(&new_config)?;
@@ -624,7 +634,7 @@ pub fn detect_app_path(app: String, force: Option<bool>) -> Result<Option<String
         )),
         "cursor" => Ok(modules::cursor_instance::detect_and_save_cursor_launch_path(force)),
         "antigravity" | "codex" | "vscode" | "codebuddy" | "codebuddy_cn" | "qoder" | "trae"
-        | "opencode" => Ok(modules::process::detect_and_save_app_path(
+        | "opencode" | "workbuddy" => Ok(modules::process::detect_and_save_app_path(
             app.as_str(),
             force,
         )),

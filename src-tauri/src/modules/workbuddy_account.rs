@@ -6,20 +6,20 @@ use std::sync::Mutex;
 use std::time::Instant;
 use tauri::Emitter;
 
-use crate::models::codebuddy::{
-    CodebuddyAccount, CodebuddyAccountIndex, CodebuddyOAuthCompletePayload,
+use crate::models::workbuddy::{
+    WorkbuddyAccount, WorkbuddyAccountIndex, WorkbuddyOAuthCompletePayload,
 };
-use crate::modules::{account, codebuddy_cn_oauth, logger};
+use crate::modules::{account, workbuddy_oauth, logger};
 
-const ACCOUNTS_INDEX_FILE: &str = "codebuddy_cn_accounts.json";
-const ACCOUNTS_DIR: &str = "codebuddy_cn_accounts";
-const CODEBUDDY_QUOTA_ALERT_COOLDOWN_SECONDS: i64 = 10 * 60;
-const CODEBUDDY_SECRET_EXTENSION_ID: &str = "tencent-cloud.coding-copilot";
-const CODEBUDDY_SECRET_KEY: &str = "planning-genie.new.accessTokencn";
+const ACCOUNTS_INDEX_FILE: &str = "workbuddy_accounts.json";
+const ACCOUNTS_DIR: &str = "workbuddy_accounts";
+const WORKBUDDY_QUOTA_ALERT_COOLDOWN_SECONDS: i64 = 10 * 60;
+const WORKBUDDY_SECRET_EXTENSION_ID: &str = "tencent-cloud.coding-copilot";
+const WORKBUDDY_SECRET_KEY: &str = "planning-genie.new.accessTokencn";
 
 lazy_static::lazy_static! {
-    static ref CODEBUDDY_ACCOUNT_INDEX_LOCK: Mutex<()> = Mutex::new(());
-    static ref CODEBUDDY_QUOTA_ALERT_LAST_SENT: Mutex<HashMap<String, i64>> = Mutex::new(HashMap::new());
+    static ref WORKBUDDY_ACCOUNT_INDEX_LOCK: Mutex<()> = Mutex::new(());
+    static ref WORKBUDDY_QUOTA_ALERT_LAST_SENT: Mutex<HashMap<String, i64>> = Mutex::new(HashMap::new());
 }
 
 fn now_ts() -> i64 {
@@ -34,7 +34,7 @@ fn get_accounts_dir() -> Result<PathBuf, String> {
     let base = get_data_dir()?;
     let dir = base.join(ACCOUNTS_DIR);
     if !dir.exists() {
-        fs::create_dir_all(&dir).map_err(|e| format!("创建 CodeBuddy 账号目录失败: {}", e))?;
+        fs::create_dir_all(&dir).map_err(|e| format!("创建 WorkBuddy 账号目录失败：{}", e))?;
     }
     Ok(dir)
 }
@@ -69,7 +69,7 @@ fn resolve_account_file_path(account_id: &str) -> Result<PathBuf, String> {
     Ok(get_accounts_dir()?.join(format!("{}.json", normalized)))
 }
 
-pub fn load_account(account_id: &str) -> Option<CodebuddyAccount> {
+pub fn load_account(account_id: &str) -> Option<WorkbuddyAccount> {
     let account_path = resolve_account_file_path(account_id).ok()?;
     if !account_path.exists() {
         return None;
@@ -78,45 +78,45 @@ pub fn load_account(account_id: &str) -> Option<CodebuddyAccount> {
     serde_json::from_str(&content).ok()
 }
 
-fn save_account_file(account: &CodebuddyAccount) -> Result<(), String> {
+fn save_account_file(account: &WorkbuddyAccount) -> Result<(), String> {
     let path = resolve_account_file_path(account.id.as_str())?;
     let content =
-        serde_json::to_string_pretty(account).map_err(|e| format!("序列化账号失败: {}", e))?;
-    fs::write(path, content).map_err(|e| format!("保存账号失败: {}", e))
+        serde_json::to_string_pretty(account).map_err(|e| format!("序列化账号失败：{}", e))?;
+    fs::write(path, content).map_err(|e| format!("保存账号失败：{}", e))
 }
 
 fn delete_account_file(account_id: &str) -> Result<(), String> {
     let path = resolve_account_file_path(account_id)?;
     if path.exists() {
-        fs::remove_file(path).map_err(|e| format!("删除账号文件失败: {}", e))?;
+        fs::remove_file(path).map_err(|e| format!("删除账号文件失败：{}", e))?;
     }
     Ok(())
 }
 
-fn load_account_index() -> CodebuddyAccountIndex {
+fn load_account_index() -> WorkbuddyAccountIndex {
     let path = match get_accounts_index_path() {
         Ok(p) => p,
-        Err(_) => return CodebuddyAccountIndex::new(),
+        Err(_) => return WorkbuddyAccountIndex::new(),
     };
     if !path.exists() {
-        return CodebuddyAccountIndex::new();
+        return WorkbuddyAccountIndex::new();
     }
     match fs::read_to_string(path) {
         Ok(content) => {
-            serde_json::from_str(&content).unwrap_or_else(|_| CodebuddyAccountIndex::new())
+            serde_json::from_str(&content).unwrap_or_else(|_| WorkbuddyAccountIndex::new())
         }
-        Err(_) => CodebuddyAccountIndex::new(),
+        Err(_) => WorkbuddyAccountIndex::new(),
     }
 }
 
-fn save_account_index(index: &CodebuddyAccountIndex) -> Result<(), String> {
+fn save_account_index(index: &WorkbuddyAccountIndex) -> Result<(), String> {
     let path = get_accounts_index_path()?;
     let content =
-        serde_json::to_string_pretty(index).map_err(|e| format!("序列化账号索引失败: {}", e))?;
-    fs::write(path, content).map_err(|e| format!("写入账号索引失败: {}", e))
+        serde_json::to_string_pretty(index).map_err(|e| format!("序列化账号索引失败：{}", e))?;
+    fs::write(path, content).map_err(|e| format!("写入账号索引失败：{}", e))
 }
 
-fn refresh_summary(index: &mut CodebuddyAccountIndex, account: &CodebuddyAccount) {
+fn refresh_summary(index: &mut WorkbuddyAccountIndex, account: &WorkbuddyAccount) {
     if let Some(summary) = index.accounts.iter_mut().find(|item| item.id == account.id) {
         *summary = account.summary();
         return;
@@ -124,10 +124,10 @@ fn refresh_summary(index: &mut CodebuddyAccountIndex, account: &CodebuddyAccount
     index.accounts.push(account.summary());
 }
 
-fn upsert_account_record(account: CodebuddyAccount) -> Result<CodebuddyAccount, String> {
-    let _lock = CODEBUDDY_ACCOUNT_INDEX_LOCK
+fn upsert_account_record(account: WorkbuddyAccount) -> Result<WorkbuddyAccount, String> {
+    let _lock = WORKBUDDY_ACCOUNT_INDEX_LOCK
         .lock()
-        .map_err(|_| "获取 CodeBuddy 账号锁失败".to_string())?;
+        .map_err(|_| "获取 WorkBuddy 账号锁失败".to_string())?;
     let mut index = load_account_index();
     save_account_file(&account)?;
     refresh_summary(&mut index, &account);
@@ -186,7 +186,7 @@ fn account_matches_payload_identity(
     false
 }
 
-fn accounts_are_duplicates(left: &CodebuddyAccount, right: &CodebuddyAccount) -> bool {
+fn accounts_are_duplicates(left: &WorkbuddyAccount, right: &WorkbuddyAccount) -> bool {
     let left_uid = normalize_identity(left.uid.as_deref());
     let right_uid = normalize_identity(right.uid.as_deref());
     let left_email = normalize_email_identity(Some(left.email.as_str()));
@@ -249,7 +249,7 @@ fn fill_if_none<T: Clone>(target: &mut Option<T>, source: &Option<T>) {
     }
 }
 
-fn merge_duplicate_account(primary: &mut CodebuddyAccount, dup: &CodebuddyAccount) {
+fn merge_duplicate_account(primary: &mut WorkbuddyAccount, dup: &WorkbuddyAccount) {
     if primary.email.trim().is_empty() && !dup.email.trim().is_empty() {
         primary.email = dup.email.clone();
     }
@@ -285,7 +285,7 @@ fn merge_duplicate_account(primary: &mut CodebuddyAccount, dup: &CodebuddyAccoun
     primary.last_used = primary.last_used.max(dup.last_used);
 }
 
-fn choose_primary_account_index(group: &[usize], accounts: &[CodebuddyAccount]) -> usize {
+fn choose_primary_account_index(group: &[usize], accounts: &[WorkbuddyAccount]) -> usize {
     group
         .iter()
         .copied()
@@ -298,7 +298,7 @@ fn choose_primary_account_index(group: &[usize], accounts: &[CodebuddyAccount]) 
         .unwrap_or(group[0])
 }
 
-fn normalize_account_index(index: &mut CodebuddyAccountIndex) -> Vec<CodebuddyAccount> {
+fn normalize_account_index(index: &mut WorkbuddyAccountIndex) -> Vec<WorkbuddyAccount> {
     let mut loaded = Vec::new();
     let mut seen = HashSet::new();
     for summary in &index.accounts {
@@ -382,7 +382,7 @@ fn normalize_account_index(index: &mut CodebuddyAccountIndex) -> Vec<CodebuddyAc
             let _ = delete_account_file(id);
         }
         logger::log_warn(&format!(
-            "[CodeBuddy Account] 检测到重复账号并已合并: removed_ids={}",
+            "[WorkBuddy Account] 检测到重复账号并已合并：removed_ids={}",
             removed_ids.join(",")
         ));
     }
@@ -391,16 +391,16 @@ fn normalize_account_index(index: &mut CodebuddyAccountIndex) -> Vec<CodebuddyAc
     normalized
 }
 
-pub fn list_accounts() -> Vec<CodebuddyAccount> {
+pub fn list_accounts() -> Vec<WorkbuddyAccount> {
     let mut index = load_account_index();
     let accounts = normalize_account_index(&mut index);
     if let Err(err) = save_account_index(&index) {
-        logger::log_warn(&format!("[CodeBuddy Account] 保存账号索引失败: {}", err));
+        logger::log_warn(&format!("[WorkBuddy Account] 保存账号索引失败：{}", err));
     }
     accounts
 }
 
-fn apply_payload(account: &mut CodebuddyAccount, payload: CodebuddyOAuthCompletePayload) {
+fn apply_payload(account: &mut WorkbuddyAccount, payload: WorkbuddyOAuthCompletePayload) {
     let incoming_email = payload.email.trim().to_string();
     if !incoming_email.is_empty() {
         account.email = incoming_email;
@@ -444,10 +444,10 @@ fn apply_payload(account: &mut CodebuddyAccount, payload: CodebuddyOAuthComplete
     account.last_used = now_ts();
 }
 
-pub fn upsert_account(payload: CodebuddyOAuthCompletePayload) -> Result<CodebuddyAccount, String> {
-    let _lock = CODEBUDDY_ACCOUNT_INDEX_LOCK
+pub fn upsert_account(payload: WorkbuddyOAuthCompletePayload) -> Result<WorkbuddyAccount, String> {
+    let _lock = WORKBUDDY_ACCOUNT_INDEX_LOCK
         .lock()
-        .map_err(|_| "获取 CodeBuddy 账号锁失败".to_string())?;
+        .map_err(|_| "获取 WorkBuddy 账号锁失败".to_string())?;
     let now = now_ts();
     let mut index = load_account_index();
 
@@ -457,9 +457,9 @@ pub fn upsert_account(payload: CodebuddyOAuthCompletePayload) -> Result<Codebudd
     let identity_seed = incoming_uid
         .clone()
         .or_else(|| incoming_email.clone())
-        .unwrap_or_else(|| "codebuddy_cn_user".to_string())
+        .unwrap_or_else(|| "workbuddy_user".to_string())
         .to_lowercase();
-    let generated_id = format!("codebuddy_cn_{:x}", md5::compute(identity_seed.as_bytes()));
+    let generated_id = format!("workbuddy_{:x}", md5::compute(identity_seed.as_bytes()));
 
     let account_id = index
         .accounts
@@ -482,7 +482,7 @@ pub fn upsert_account(payload: CodebuddyOAuthCompletePayload) -> Result<Codebudd
     let tags = existing.as_ref().and_then(|a| a.tags.clone());
     let created_at = existing.as_ref().map(|a| a.created_at).unwrap_or(now);
 
-    let mut account = existing.unwrap_or(CodebuddyAccount {
+    let mut account = existing.unwrap_or(WorkbuddyAccount {
         id: account_id.clone(),
         email: payload.email.clone(),
         uid: payload.uid.clone(),
@@ -522,21 +522,21 @@ pub fn upsert_account(payload: CodebuddyOAuthCompletePayload) -> Result<Codebudd
     save_account_index(&index)?;
 
     logger::log_info(&format!(
-        "CodeBuddy 账号已保存: id={}, email={}",
+        "WorkBuddy 账号已保存：id={}, email={}",
         account.id, account.email
     ));
     Ok(account)
 }
 
-pub async fn refresh_account_token(account_id: &str) -> Result<CodebuddyAccount, String> {
+pub async fn refresh_account_token(account_id: &str) -> Result<WorkbuddyAccount, String> {
     let started_at = Instant::now();
     let mut account = load_account(account_id).ok_or_else(|| "账号不存在".to_string())?;
     logger::log_info(&format!(
-        "[CodeBuddy Refresh] 开始刷新账号: id={}, email={}",
+        "[WorkBuddy Refresh] 开始刷新账号：id={}, email={}",
         account.id, account.email
     ));
 
-    let (payload, quota_refresh_error) = codebuddy_cn_oauth::refresh_payload_for_account(&account).await?;
+    let (payload, quota_refresh_error) = workbuddy_oauth::refresh_payload_for_account(&account).await?;
     let tags = account.tags.clone();
     let created_at = account.created_at;
     apply_payload(&mut account, payload);
@@ -554,7 +554,7 @@ pub async fn refresh_account_token(account_id: &str) -> Result<CodebuddyAccount,
     let updated = account.clone();
     upsert_account_record(account)?;
     logger::log_info(&format!(
-        "[CodeBuddy Refresh] 刷新完成: id={}, email={}, elapsed={}ms",
+        "[WorkBuddy Refresh] 刷新完成：id={}, email={}, elapsed={}ms",
         updated.id,
         updated.email,
         started_at.elapsed().as_millis()
@@ -562,7 +562,7 @@ pub async fn refresh_account_token(account_id: &str) -> Result<CodebuddyAccount,
     Ok(updated)
 }
 
-pub async fn refresh_all_tokens() -> Result<Vec<(String, Result<CodebuddyAccount, String>)>, String>
+pub async fn refresh_all_tokens() -> Result<Vec<(String, Result<WorkbuddyAccount, String>)>, String>
 {
     use futures::future::join_all;
     use std::sync::Arc;
@@ -580,9 +580,9 @@ pub async fn refresh_all_tokens() -> Result<Vec<(String, Result<CodebuddyAccount
                 let _permit = semaphore
                     .acquire_owned()
                     .await
-                    .map_err(|e| format!("获取并发许可失败: {}", e))?;
+                    .map_err(|e| format!("获取并发许可失败：{}", e))?;
                 let result = refresh_account_token(&id).await;
-                Ok::<(String, Result<CodebuddyAccount, String>), String>((id, result))
+                Ok::<(String, Result<WorkbuddyAccount, String>), String>((id, result))
             }
         })
         .collect();
@@ -598,9 +598,9 @@ pub async fn refresh_all_tokens() -> Result<Vec<(String, Result<CodebuddyAccount
 }
 
 pub fn remove_account(account_id: &str) -> Result<(), String> {
-    let _lock = CODEBUDDY_ACCOUNT_INDEX_LOCK
+    let _lock = WORKBUDDY_ACCOUNT_INDEX_LOCK
         .lock()
-        .map_err(|_| "获取 CodeBuddy 账号锁失败".to_string())?;
+        .map_err(|_| "获取 WorkBuddy 账号锁失败".to_string())?;
     let mut index = load_account_index();
     index.accounts.retain(|item| item.id != account_id);
     save_account_index(&index)?;
@@ -618,7 +618,7 @@ pub fn remove_accounts(account_ids: &[String]) -> Result<(), String> {
 pub fn update_account_tags(
     account_id: &str,
     tags: Vec<String>,
-) -> Result<CodebuddyAccount, String> {
+) -> Result<WorkbuddyAccount, String> {
     let mut account = load_account(account_id).ok_or_else(|| "账号不存在".to_string())?;
     account.tags = Some(tags);
     account.last_used = now_ts();
@@ -627,13 +627,13 @@ pub fn update_account_tags(
     Ok(updated)
 }
 
-pub fn import_from_json(json_content: &str) -> Result<Vec<CodebuddyAccount>, String> {
-    if let Ok(account) = serde_json::from_str::<CodebuddyAccount>(json_content) {
+pub fn import_from_json(json_content: &str) -> Result<Vec<WorkbuddyAccount>, String> {
+    if let Ok(account) = serde_json::from_str::<WorkbuddyAccount>(json_content) {
         let saved = upsert_account_record(account)?;
         return Ok(vec![saved]);
     }
 
-    if let Ok(accounts) = serde_json::from_str::<Vec<CodebuddyAccount>>(json_content) {
+    if let Ok(accounts) = serde_json::from_str::<Vec<WorkbuddyAccount>>(json_content) {
         let mut result = Vec::new();
         for account in accounts {
             let saved = upsert_account_record(account)?;
@@ -646,10 +646,10 @@ pub fn import_from_json(json_content: &str) -> Result<Vec<CodebuddyAccount>, Str
         return import_from_json_value(value);
     }
 
-    Err("无法解析 CodeBuddy JSON 导入内容".to_string())
+    Err("无法解析 WorkBuddy JSON 导入内容".to_string())
 }
 
-fn import_from_json_value(value: Value) -> Result<Vec<CodebuddyAccount>, String> {
+fn import_from_json_value(value: Value) -> Result<Vec<WorkbuddyAccount>, String> {
     match value {
         Value::Array(items) => {
             if items.is_empty() {
@@ -658,7 +658,7 @@ fn import_from_json_value(value: Value) -> Result<Vec<CodebuddyAccount>, String>
             let mut results = Vec::new();
             for (idx, item) in items.into_iter().enumerate() {
                 let payload = payload_from_import_value(item)
-                    .map_err(|e| format!("第 {} 条记录解析失败: {}", idx + 1, e))?;
+                    .map_err(|e| format!("第 {} 条记录解析失败：{}", idx + 1, e))?;
                 let account = upsert_account_record_from_payload(payload)?;
                 results.push(account);
             }
@@ -682,25 +682,24 @@ fn import_from_json_value(value: Value) -> Result<Vec<CodebuddyAccount>, String>
                 let mut results = Vec::new();
                 for (idx, item) in accounts.into_iter().enumerate() {
                     let payload = payload_from_import_value(item)
-                        .map_err(|e| format!("第 {} 条记录解析失败: {}", idx + 1, e))?;
+                        .map_err(|e| format!("第 {} 条记录解析失败：{}", idx + 1, e))?;
                     let account = upsert_account_record_from_payload(payload)?;
                     results.push(account);
                 }
                 return Ok(results);
             }
 
-            Err("无法解析 CodeBuddy 导入对象".to_string())
+            Err("无法解析 WorkBuddy 导入对象".to_string())
         }
-        _ => Err("CodeBuddy 导入 JSON 必须是对象或数组".to_string()),
+        _ => Err("WorkBuddy 导入 JSON 必须是对象或数组".to_string()),
     }
 }
 
 fn upsert_account_record_from_payload(
-    payload: CodebuddyOAuthCompletePayload,
-) -> Result<CodebuddyAccount, String> {
-    // Release lock pattern: upsert_account already takes lock internally
+    payload: WorkbuddyOAuthCompletePayload,
+) -> Result<WorkbuddyAccount, String> {
     drop(
-        CODEBUDDY_ACCOUNT_INDEX_LOCK
+        WORKBUDDY_ACCOUNT_INDEX_LOCK
             .lock()
             .map_err(|_| "获取锁失败".to_string())?,
     );
@@ -709,10 +708,10 @@ fn upsert_account_record_from_payload(
     let incoming_email = normalize_email_identity(Some(payload.email.as_str()));
     let identity_seed = incoming_uid
         .or_else(|| incoming_email)
-        .unwrap_or_else(|| "codebuddy_cn_user".to_string());
-    let generated_id = format!("codebuddy_cn_{:x}", md5::compute(identity_seed.as_bytes()));
+        .unwrap_or_else(|| "workbuddy_user".to_string());
+    let generated_id = format!("workbuddy_{:x}", md5::compute(identity_seed.as_bytes()));
 
-    let account = CodebuddyAccount {
+    let account = WorkbuddyAccount {
         id: generated_id,
         email: payload.email,
         uid: payload.uid,
@@ -744,7 +743,7 @@ fn upsert_account_record_from_payload(
     upsert_account_record(account)
 }
 
-fn payload_from_import_value(raw: Value) -> Result<CodebuddyOAuthCompletePayload, String> {
+fn payload_from_import_value(raw: Value) -> Result<WorkbuddyOAuthCompletePayload, String> {
     let obj = raw
         .as_object()
         .ok_or_else(|| "导入条目必须是对象".to_string())?;
@@ -800,7 +799,7 @@ fn payload_from_import_value(raw: Value) -> Result<CodebuddyOAuthCompletePayload
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    Ok(CodebuddyOAuthCompletePayload {
+    Ok(WorkbuddyOAuthCompletePayload {
         email,
         uid,
         nickname,
@@ -826,33 +825,33 @@ fn payload_from_import_value(raw: Value) -> Result<CodebuddyOAuthCompletePayload
 }
 
 pub fn export_accounts(account_ids: &[String]) -> Result<String, String> {
-    let accounts: Vec<CodebuddyAccount> = account_ids
+    let accounts: Vec<WorkbuddyAccount> = account_ids
         .iter()
         .filter_map(|id| load_account(id))
         .collect();
-    serde_json::to_string_pretty(&accounts).map_err(|e| format!("导出失败: {}", e))
+    serde_json::to_string_pretty(&accounts).map_err(|e| format!("导出失败：{}", e))
 }
 
-pub fn get_default_codebuddy_cn_data_dir() -> Option<PathBuf> {
+pub fn get_default_workbuddy_data_dir() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let home = dirs::home_dir()?;
-        Some(home.join("Library/Application Support/CodeBuddy CN"))
+        Some(home.join("Library/Application Support/WorkBuddy"))
     }
 
     #[cfg(target_os = "windows")]
     {
-        dirs::data_dir().map(|d| d.join("CodeBuddy CN"))
+        dirs::data_dir().map(|d| d.join("WorkBuddy"))
     }
 
     #[cfg(target_os = "linux")]
     {
-        dirs::config_dir().map(|d| d.join("CodeBuddy CN"))
+        dirs::config_dir().map(|d| d.join("WorkBuddy"))
     }
 }
 
-pub fn get_default_codebuddy_cn_state_db_path() -> Option<PathBuf> {
-    get_default_codebuddy_cn_data_dir()
+pub fn get_default_workbuddy_state_db_path() -> Option<PathBuf> {
+    get_default_workbuddy_data_dir()
         .map(|d| d.join("User").join("globalStorage").join("state.vscdb"))
 }
 
@@ -907,7 +906,7 @@ fn parse_local_access_token(value: &Value) -> Option<String> {
     }
 }
 
-fn normalize_local_codebuddy_cn_token(token: &str) -> Option<String> {
+fn normalize_local_workbuddy_token(token: &str) -> Option<String> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
         return None;
@@ -921,7 +920,7 @@ fn normalize_local_codebuddy_cn_token(token: &str) -> Option<String> {
     Some(trimmed.to_string())
 }
 
-fn extract_local_codebuddy_cn_token_parts(token: &str) -> Option<(Option<String>, String)> {
+fn extract_local_workbuddy_token_parts(token: &str) -> Option<(Option<String>, String)> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
         return None;
@@ -982,7 +981,7 @@ fn build_local_import_payload(
     access_token: String,
     parsed_json: Option<Value>,
     uid_from_token: Option<String>,
-) -> CodebuddyOAuthCompletePayload {
+) -> WorkbuddyOAuthCompletePayload {
     let root_obj = parsed_json.as_ref().and_then(|v| v.as_object());
     let account_obj = root_obj.and_then(|obj| obj.get("account").and_then(|v| v.as_object()));
     let auth_obj = root_obj.and_then(|obj| obj.get("auth").and_then(|v| v.as_object()));
@@ -1041,7 +1040,7 @@ fn build_local_import_payload(
             auth_obj.and_then(|obj| json_object_i64_field(obj, &["expiresAt", "expires_at"]))
         });
 
-    CodebuddyOAuthCompletePayload {
+    WorkbuddyOAuthCompletePayload {
         email,
         uid,
         nickname,
@@ -1066,13 +1065,13 @@ fn build_local_import_payload(
     }
 }
 
-pub fn import_payload_from_local() -> Result<Option<CodebuddyOAuthCompletePayload>, String> {
-    let data_root = match get_default_codebuddy_cn_data_dir() {
+pub fn import_payload_from_local() -> Result<Option<WorkbuddyOAuthCompletePayload>, String> {
+    let data_root = match get_default_workbuddy_data_dir() {
         Some(path) => path,
         None => return Ok(None),
     };
 
-    let state_db = match get_default_codebuddy_cn_state_db_path() {
+    let state_db = match get_default_workbuddy_state_db_path() {
         Some(path) => path,
         None => return Ok(None),
     };
@@ -1080,9 +1079,9 @@ pub fn import_payload_from_local() -> Result<Option<CodebuddyOAuthCompletePayloa
         return Ok(None);
     }
 
-    let raw_secret = crate::modules::vscode_inject::read_codebuddy_cn_secret_storage_value(
-        CODEBUDDY_SECRET_EXTENSION_ID,
-        CODEBUDDY_SECRET_KEY,
+    let raw_secret = crate::modules::vscode_inject::read_workbuddy_secret_storage_value(
+        WORKBUDDY_SECRET_EXTENSION_ID,
+        WORKBUDDY_SECRET_KEY,
         Some(data_root.to_string_lossy().as_ref()),
     )?;
 
@@ -1104,16 +1103,16 @@ pub fn import_payload_from_local() -> Result<Option<CodebuddyOAuthCompletePayloa
         });
 
     let Some(raw_token) = token_candidate else {
-        return Err("本地 CodeBuddy 登录信息解析失败：未找到 access token".to_string());
+        return Err("本地 WorkBuddy 登录信息解析失败：未找到 access token".to_string());
     };
 
     let Some((uid_from_token, normalized_token)) =
-        extract_local_codebuddy_cn_token_parts(&raw_token)
+        extract_local_workbuddy_token_parts(&raw_token)
     else {
-        return Err("本地 CodeBuddy 登录信息解析失败：access token 无效".to_string());
+        return Err("本地 WorkBuddy 登录信息解析失败：access token 无效".to_string());
     };
-    let Some(access_token) = normalize_local_codebuddy_cn_token(&normalized_token) else {
-        return Err("本地 CodeBuddy 登录信息解析失败：access token 为空".to_string());
+    let Some(access_token) = normalize_local_workbuddy_token(&normalized_token) else {
+        return Err("本地 WorkBuddy 登录信息解析失败：access token 为空".to_string());
     };
 
     let payload = build_local_import_payload(access_token, parsed_json, uid_from_token);
@@ -1122,24 +1121,24 @@ pub fn import_payload_from_local() -> Result<Option<CodebuddyOAuthCompletePayloa
 
 pub fn run_quota_alert_if_needed() -> Result<(), String> {
     let config = crate::modules::config::get_user_config();
-    if !config.codebuddy_cn_quota_alert_enabled {
+    if !config.workbuddy_quota_alert_enabled {
         return Ok(());
     }
-    let threshold = config.codebuddy_cn_quota_alert_threshold;
+    let threshold = config.workbuddy_quota_alert_threshold;
     if threshold <= 0 {
         return Ok(());
     }
 
     let accounts = list_accounts();
     let now = now_ts();
-    let mut last_sent = CODEBUDDY_QUOTA_ALERT_LAST_SENT
+    let mut last_sent = WORKBUDDY_QUOTA_ALERT_LAST_SENT
         .lock()
         .map_err(|_| "获取预警锁失败".to_string())?;
 
     for account in &accounts {
         let cooldown_key = account.id.clone();
         if let Some(last) = last_sent.get(&cooldown_key) {
-            if now - last < CODEBUDDY_QUOTA_ALERT_COOLDOWN_SECONDS {
+            if now - last < WORKBUDDY_QUOTA_ALERT_COOLDOWN_SECONDS {
                 continue;
             }
         }
@@ -1161,7 +1160,7 @@ pub fn run_quota_alert_if_needed() -> Result<(), String> {
                 let _ = app.emit(
                     "quota:alert",
                     serde_json::json!({
-                        "platform": "codebuddy_cn",
+                        "platform": "workbuddy",
                         "accountId": account.id,
                         "email": account.email,
                         "message": msg,
@@ -1172,120 +1171,4 @@ pub fn run_quota_alert_if_needed() -> Result<(), String> {
     }
 
     Ok(())
-}
-
-/// 将 CodeBuddy CN 账号同步到 WorkBuddy
-pub fn sync_accounts_to_workbuddy() -> Result<usize, String> {
-    use crate::models::workbuddy::WorkbuddyOAuthCompletePayload;
-    use crate::modules::workbuddy_account;
-
-    let codebuddy_accounts = list_accounts();
-    if codebuddy_accounts.is_empty() {
-        return Ok(0);
-    }
-
-    let mut synced_count = 0;
-    for cn_account in codebuddy_accounts {
-        // 将 CodeBuddy CN 账号转换为 WorkBuddy payload
-        let payload = WorkbuddyOAuthCompletePayload {
-            email: cn_account.email.clone(),
-            uid: cn_account.uid.clone(),
-            nickname: cn_account.nickname.clone(),
-            enterprise_id: cn_account.enterprise_id.clone(),
-            enterprise_name: cn_account.enterprise_name.clone(),
-            access_token: cn_account.access_token.clone(),
-            refresh_token: cn_account.refresh_token.clone(),
-            token_type: cn_account.token_type.clone(),
-            expires_at: cn_account.expires_at,
-            domain: cn_account.domain.clone(),
-            plan_type: cn_account.plan_type.clone(),
-            dosage_notify_code: cn_account.dosage_notify_code.clone(),
-            dosage_notify_zh: cn_account.dosage_notify_zh.clone(),
-            dosage_notify_en: cn_account.dosage_notify_en.clone(),
-            payment_type: cn_account.payment_type.clone(),
-            quota_raw: cn_account.quota_raw.clone(),
-            auth_raw: cn_account.auth_raw.clone(),
-            profile_raw: cn_account.profile_raw.clone(),
-            usage_raw: cn_account.usage_raw.clone(),
-            status: cn_account.status.clone(),
-            status_reason: cn_account.status_reason.clone(),
-        };
-
-        // 使用 WorkBuddy 的 upsert 函数保存账号
-        match workbuddy_account::upsert_account(payload) {
-            Ok(_) => {
-                synced_count += 1;
-                logger::log_info(&format!(
-                    "[CodeBuddy CN -> WorkBuddy] 同步账号成功: email={}",
-                    cn_account.email
-                ));
-            }
-            Err(e) => {
-                logger::log_warn(&format!(
-                    "[CodeBuddy CN -> WorkBuddy] 同步账号失败: email={}, error={}",
-                    cn_account.email, e
-                ));
-            }
-        }
-    }
-
-    Ok(synced_count)
-}
-
-/// 从 WorkBuddy 同步账号到 CodeBuddy CN
-pub fn sync_accounts_from_workbuddy() -> Result<usize, String> {
-    use crate::models::codebuddy::CodebuddyOAuthCompletePayload;
-    use crate::modules::workbuddy_account;
-
-    let workbuddy_accounts = workbuddy_account::list_accounts();
-    if workbuddy_accounts.is_empty() {
-        return Ok(0);
-    }
-
-    let mut synced_count = 0;
-    for wb_account in workbuddy_accounts {
-        // 将 WorkBuddy 账号转换为 CodeBuddy CN payload
-        let payload = CodebuddyOAuthCompletePayload {
-            email: wb_account.email.clone(),
-            uid: wb_account.uid.clone(),
-            nickname: wb_account.nickname.clone(),
-            enterprise_id: wb_account.enterprise_id.clone(),
-            enterprise_name: wb_account.enterprise_name.clone(),
-            access_token: wb_account.access_token.clone(),
-            refresh_token: wb_account.refresh_token.clone(),
-            token_type: wb_account.token_type.clone(),
-            expires_at: wb_account.expires_at,
-            domain: wb_account.domain.clone(),
-            plan_type: wb_account.plan_type.clone(),
-            dosage_notify_code: wb_account.dosage_notify_code.clone(),
-            dosage_notify_zh: wb_account.dosage_notify_zh.clone(),
-            dosage_notify_en: wb_account.dosage_notify_en.clone(),
-            payment_type: wb_account.payment_type.clone(),
-            quota_raw: wb_account.quota_raw.clone(),
-            auth_raw: wb_account.auth_raw.clone(),
-            profile_raw: wb_account.profile_raw.clone(),
-            usage_raw: wb_account.usage_raw.clone(),
-            status: wb_account.status.clone(),
-            status_reason: wb_account.status_reason.clone(),
-        };
-
-        // 使用 CodeBuddy CN 的 upsert 函数保存账号
-        match upsert_account(payload) {
-            Ok(_) => {
-                synced_count += 1;
-                logger::log_info(&format!(
-                    "[WorkBuddy -> CodeBuddy CN] 同步账号成功: email={}",
-                    wb_account.email
-                ));
-            }
-            Err(e) => {
-                logger::log_warn(&format!(
-                    "[WorkBuddy -> CodeBuddy CN] 同步账号失败: email={}, error={}",
-                    wb_account.email, e
-                ));
-            }
-        }
-    }
-
-    Ok(synced_count)
 }

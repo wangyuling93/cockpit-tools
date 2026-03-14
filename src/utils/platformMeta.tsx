@@ -11,6 +11,7 @@ import { GeminiIcon } from '../components/icons/GeminiIcon';
 import { CodebuddyIcon } from '../components/icons/CodebuddyIcon';
 import { QoderIcon } from '../components/icons/QoderIcon';
 import { TraeIcon } from '../components/icons/TraeIcon';
+import { WorkbuddyIcon } from '../components/icons/WorkbuddyIcon';
 
 export function getPlatformLabel(platformId: PlatformId, _t: TFunction): string {
   switch (platformId) {
@@ -36,6 +37,8 @@ export function getPlatformLabel(platformId: PlatformId, _t: TFunction): string 
       return _t('nav.qoder', 'Qoder');
     case 'trae':
       return _t('nav.trae', 'Trae');
+    case 'workbuddy':
+      return 'WorkBuddy';
     default:
       return platformId;
   }
@@ -65,6 +68,8 @@ export function renderPlatformIcon(platformId: PlatformId, size = 20): ReactNode
       return <QoderIcon style={{ width: size, height: size }} />;
     case 'trae':
       return <TraeIcon style={{ width: size, height: size }} />;
+    case 'workbuddy':
+      return <WorkbuddyIcon style={{ width: size, height: size }} />;
     default:
       return null;
   }

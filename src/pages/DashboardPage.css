@@ -351,7 +351,108 @@
   flex-direction: column;
   gap: 8px;
   margin-top: 0px; /* Fixed spacing from top elements instead of auto */
-  margin-bottom: 0px; 
+  margin-bottom: 0px;
+}
+
+/* 配额滑动窗口容器 */
+.account-mini-quotas.quota-scroll-container {
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.account-mini-quotas.quota-scroll-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.account-mini-quotas.quota-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.account-mini-quotas.quota-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 2px;
+}
+
+.account-mini-quotas.quota-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* 配额项行 */
+.quota-item-row {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.quota-item-row:last-child {
+  border-bottom: none;
+}
+
+.quota-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.quota-package-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quota-usage-text {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.quota-item-bar-track {
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.quota-item-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.quota-item-bar.high {
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+}
+
+.quota-item-bar.medium {
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+
+.quota-item-bar.low {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+.quota-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.quota-remain-text {
+  font-family: var(--font-mono);
+}
+
+.quota-refresh-time {
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
 }
 
 /* Mini Action Buttons Row */

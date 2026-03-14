@@ -21,7 +21,8 @@ type InstancesAppType =
   | 'codebuddy'
   | 'codebuddy_cn'
   | 'qoder'
-  | 'trae';
+  | 'trae'
+  | 'workbuddy';
 
 interface PlatformInstancesContentProps<TAccount extends AccountLike> {
   instanceStore: InstanceStoreState;

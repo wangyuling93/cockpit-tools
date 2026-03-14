@@ -401,3 +401,39 @@ pub async fn inject_codebuddy_cn_to_vscode(
         Ok(format!("切换完成: {}", account.email))
     }
 }
+
+#[tauri::command]
+pub async fn sync_codebuddy_cn_to_workbuddy(app: AppHandle) -> Result<i32, String> {
+    let started_at = Instant::now();
+    logger::log_info("[CodeBuddy CN -> WorkBuddy] 开始同步账号");
+
+    let synced_count = codebuddy_cn_account::sync_accounts_to_workbuddy()?;
+
+    let _ = crate::modules::tray::update_tray_menu(&app);
+
+    logger::log_info(&format!(
+        "[CodeBuddy CN -> WorkBuddy] 同步完成: count={}, elapsed={}ms",
+        synced_count,
+        started_at.elapsed().as_millis()
+    ));
+
+    Ok(synced_count as i32)
+}
+
+#[tauri::command]
+pub async fn sync_workbuddy_to_codebuddy_cn(app: AppHandle) -> Result<i32, String> {
+    let started_at = Instant::now();
+    logger::log_info("[WorkBuddy -> CodeBuddy CN] 开始同步账号");
+
+    let synced_count = codebuddy_cn_account::sync_accounts_from_workbuddy()?;
+
+    let _ = crate::modules::tray::update_tray_menu(&app);
+
+    logger::log_info(&format!(
+        "[WorkBuddy -> CodeBuddy CN] 同步完成: count={}, elapsed={}ms",
+        synced_count,
+        started_at.elapsed().as_millis()
+    ));
+
+    Ok(synced_count as i32)
+}

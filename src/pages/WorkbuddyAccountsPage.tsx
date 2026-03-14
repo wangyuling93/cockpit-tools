@@ -4,27 +4,28 @@ import {
   Copy, Check, RotateCw, LayoutGrid, List, Search,
   Tag, Play, Eye, EyeOff, CircleAlert, ChevronDown, ArrowRightLeft,
 } from 'lucide-react';
-import { useCodebuddyCnAccountStore } from '../stores/useCodebuddyCnAccountStore';
-import * as codebuddyCnService from '../services/codebuddyCnService';
+import { useWorkbuddyAccountStore } from '../stores/useWorkbuddyAccountStore';
+import * as workbuddyService from '../services/workbuddyService';
+import { syncWorkbuddyToCodebuddyCn } from '../services/codebuddyCnService';
 import { TagEditModal } from '../components/TagEditModal';
 import { ExportJsonModal } from '../components/ExportJsonModal';
 import {
-  CB_PACKAGE_CODE,
-  CodebuddyAccount,
-  CodebuddyOfficialQuotaResource,
-  getCodebuddyAccountDisplayEmail,
-  getCodebuddyOfficialQuotaModel,
-  getCodebuddyPlanBadge,
-  getCodebuddyUsage,
-} from '../types/codebuddy';
+  WorkbuddyAccount,
+  WorkbuddyOfficialQuotaResource,
+  WORKBUDDY_PACKAGE_CODE,
+  getWorkbuddyAccountDisplayEmail,
+  getWorkbuddyPlanBadge,
+  getWorkbuddyUsage,
+  getWorkbuddyOfficialQuotaModel,
+} from '../types/workbuddy';
 import { QuickSettingsPopover } from '../components/QuickSettingsPopover';
 import { useProviderAccountsPage } from '../hooks/useProviderAccountsPage';
 import { PlatformOverviewTabsHeader, PlatformOverviewTab } from '../components/platform/PlatformOverviewTabsHeader';
-import { CodebuddyCnInstancesContent } from './CodebuddyCnInstancesPage';
+import { WorkbuddyInstancesContent } from './WorkbuddyInstancesPage';
 
-const CB_FLOW_NOTICE_COLLAPSED_KEY = 'agtools.codebuddycn.flow_notice_collapsed';
-const CB_CURRENT_ACCOUNT_ID_KEY = 'agtools.codebuddycn.current_account_id';
-const CB_KNOWN_PLAN_FILTERS = ['FREE', 'TRIAL', 'PRO', 'ENTERPRISE'] as const;
+const WORKBUDDY_FLOW_NOTICE_COLLAPSED_KEY = 'agtools.workbuddy.flow_notice_collapsed';
+const WORKBUDDY_CURRENT_ACCOUNT_ID_KEY = 'agtools.workbuddy.current_account_id';
+const WORKBUDDY_KNOWN_PLAN_FILTERS = ['FREE', 'TRIAL', 'PRO', 'ENTERPRISE'] as const;
 
 const QUOTA_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
@@ -48,17 +49,17 @@ function getQuotaClassByRemainPercent(remainPercent: number | null): string {
   return 'high';
 }
 
-export function CodebuddyCnAccountsPage() {
+export function WorkbuddyAccountsPage() {
   const [activeTab, setActiveTab] = useState<PlatformOverviewTab>('overview');
   const untaggedKey = '__untagged__';
-  const store = useCodebuddyCnAccountStore();
+  const store = useWorkbuddyAccountStore();
 
-  const page = useProviderAccountsPage<CodebuddyAccount>({
-    platformKey: 'CodeBuddy CN',
-    oauthLogPrefix: 'CodebuddyCnOAuth',
-    flowNoticeCollapsedKey: CB_FLOW_NOTICE_COLLAPSED_KEY,
-    currentAccountIdKey: CB_CURRENT_ACCOUNT_ID_KEY,
-    exportFilePrefix: 'codebuddy_cn_accounts',
+  const page = useProviderAccountsPage<WorkbuddyAccount>({
+    platformKey: 'WorkBuddy',
+    oauthLogPrefix: 'WorkbuddyOAuth',
+    flowNoticeCollapsedKey: WORKBUDDY_FLOW_NOTICE_COLLAPSED_KEY,
+    currentAccountIdKey: WORKBUDDY_CURRENT_ACCOUNT_ID_KEY,
+    exportFilePrefix: 'workbuddy_accounts',
     oauthTabKeys: ['oauth'],
     store: {
       accounts: store.accounts,
@@ -70,18 +71,18 @@ export function CodebuddyCnAccountsPage() {
       updateAccountTags: store.updateAccountTags,
     },
     oauthService: {
-      startLogin: codebuddyCnService.startCodebuddyCnOAuthLogin,
-      completeLogin: codebuddyCnService.completeCodebuddyCnOAuthLogin,
-      cancelLogin: codebuddyCnService.cancelCodebuddyCnOAuthLogin,
+      startLogin: workbuddyService.startWorkbuddyOAuthLogin,
+      completeLogin: workbuddyService.completeWorkbuddyOAuthLogin,
+      cancelLogin: workbuddyService.cancelWorkbuddyOAuthLogin,
     },
     dataService: {
-      importFromJson: codebuddyCnService.importCodebuddyCnFromJson,
-      importFromLocal: codebuddyCnService.importCodebuddyCnFromLocal,
-      addWithToken: codebuddyCnService.addCodebuddyCnAccountWithToken,
-      exportAccounts: codebuddyCnService.exportCodebuddyCnAccounts,
-      injectToVSCode: codebuddyCnService.injectCodebuddyCnToVSCode,
+      importFromJson: workbuddyService.importWorkbuddyFromJson,
+      importFromLocal: workbuddyService.importWorkbuddyFromLocal,
+      addWithToken: workbuddyService.addWorkbuddyAccountWithToken,
+      exportAccounts: workbuddyService.exportWorkbuddyAccounts,
+      injectToVSCode: workbuddyService.injectWorkbuddyToVSCode,
     },
-    getDisplayEmail: (account) => getCodebuddyAccountDisplayEmail(account),
+    getDisplayEmail: (account) => getWorkbuddyAccountDisplayEmail(account),
   });
 
   const {
@@ -118,25 +119,26 @@ export function CodebuddyCnAccountsPage() {
   const accounts = store.accounts;
   const loading = store.loading;
 
+  // 同步到 CodeBuddy CN 的状态
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  const handleSyncToWorkbuddy = useCallback(async () => {
+  const handleSyncToCodebuddyCn = useCallback(async () => {
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const count = await codebuddyCnService.syncCodebuddyCnToWorkbuddy();
-      setSyncMessage(t('codebuddyCn.syncSuccess', '成功同步 {{count}} 个账号到 WorkBuddy', { count }));
+      const count = await syncWorkbuddyToCodebuddyCn();
+      setSyncMessage(t('workbuddy.syncSuccess', '成功同步 {{count}} 个账号到 CodeBuddy CN', { count }));
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (err) {
-      setSyncMessage(t('codebuddyCn.syncFailed', '同步失败: {{error}}', { error: String(err) }));
+      setSyncMessage(t('workbuddy.syncFailed', '同步失败: {{error}}', { error: String(err) }));
     } finally {
       setSyncing(false);
     }
   }, [t]);
 
   const resolvePlanKey = useCallback(
-    (account: CodebuddyAccount) => getCodebuddyPlanBadge(account),
+    (account: WorkbuddyAccount) => getWorkbuddyPlanBadge(account),
     [],
   );
 
@@ -162,7 +164,7 @@ export function CodebuddyCnAccountsPage() {
       dynamicCounts.set(tier, (dynamicCounts.get(tier) ?? 0) + 1);
     });
     const extraKeys = Array.from(dynamicCounts.keys())
-      .filter((tier) => !(CB_KNOWN_PLAN_FILTERS as readonly string[]).includes(tier))
+      .filter((tier) => !(WORKBUDDY_KNOWN_PLAN_FILTERS as readonly string[]).includes(tier))
       .sort((a, b) => a.localeCompare(b));
     return { all: accounts.length, dynamicCounts, extraKeys };
   }, [accounts, resolvePlanKey]);
@@ -240,57 +242,57 @@ export function CodebuddyCnAccountsPage() {
     });
   }, [locale]);
 
-  const resolveResourceTimeText = useCallback((resource: CodebuddyOfficialQuotaResource, isExtra: boolean) => {
+  const resolveResourceTimeText = useCallback((resource: WorkbuddyOfficialQuotaResource, isExtra: boolean) => {
     if (isExtra) return null;
     const isBase = resource.isBasePackage;
     const primaryTimeText = formatQuotaDateTime(isBase ? resource.refreshAt : resource.expireAt);
     if (primaryTimeText) {
       return isBase
-        ? t('codebuddy.quotaQuery.updatedAt', '下次刷新时间：{{time}}', { time: primaryTimeText })
-        : t('codebuddy.quotaQuery.expireAt', '到期时间：{{time}}', { time: primaryTimeText });
+        ? t('workbuddy.quotaQuery.updatedAt', '下次刷新时间：{{time}}', { time: primaryTimeText })
+        : t('workbuddy.quotaQuery.expireAt', '到期时间：{{time}}', { time: primaryTimeText });
     }
     const fallbackTimeText = formatQuotaDateTime(isBase ? resource.expireAt : resource.refreshAt);
     if (fallbackTimeText) {
       return isBase
-        ? t('codebuddy.quotaQuery.expireAt', '到期时间：{{time}}', { time: fallbackTimeText })
-        : t('codebuddy.quotaQuery.updatedAt', '下次刷新时间：{{time}}', { time: fallbackTimeText });
+        ? t('workbuddy.quotaQuery.expireAt', '到期时间：{{time}}', { time: fallbackTimeText })
+        : t('workbuddy.quotaQuery.updatedAt', '下次刷新时间：{{time}}', { time: fallbackTimeText });
     }
     return null;
   }, [formatQuotaDateTime, t]);
 
-  const resolveResourcePackageTitle = useCallback((resource: CodebuddyOfficialQuotaResource, isExtra: boolean) => {
-    if (isExtra || resource.packageCode === CB_PACKAGE_CODE.extra) {
-      return t('codebuddy.extraCredit.title', '加量包');
+  const resolveResourcePackageTitle = useCallback((resource: WorkbuddyOfficialQuotaResource, isExtra: boolean) => {
+    if (isExtra || resource.packageCode === WORKBUDDY_PACKAGE_CODE.extra) {
+      return t('workbuddy.extraCredit.title', '加量包');
     }
-    if (resource.packageCode === CB_PACKAGE_CODE.activity) {
-      return t('codebuddy.quotaQuery.packageTitle.activity', '活动赠送包');
-    }
-    if (
-      resource.packageCode === CB_PACKAGE_CODE.free ||
-      resource.packageCode === CB_PACKAGE_CODE.gift ||
-      resource.packageCode === CB_PACKAGE_CODE.freeMon
-    ) {
-      return t('codebuddy.quotaQuery.packageTitle.base', '基础体验包');
+    if (resource.packageCode === WORKBUDDY_PACKAGE_CODE.activity) {
+      return t('workbuddy.quotaQuery.packageTitle.activity', '活动赠送包');
     }
     if (
-      resource.packageCode === CB_PACKAGE_CODE.proMon ||
-      resource.packageCode === CB_PACKAGE_CODE.proYear
+      resource.packageCode === WORKBUDDY_PACKAGE_CODE.free ||
+      resource.packageCode === WORKBUDDY_PACKAGE_CODE.gift ||
+      resource.packageCode === WORKBUDDY_PACKAGE_CODE.freeMon
     ) {
-      return t('codebuddy.quotaQuery.packageTitle.pro', '专业版订阅');
+      return t('workbuddy.quotaQuery.packageTitle.base', '基础体验包');
     }
-    return resource.packageName || t('codebuddy.quotaQuery.packageUnknown', '套餐信息未知');
+    if (
+      resource.packageCode === WORKBUDDY_PACKAGE_CODE.proMon ||
+      resource.packageCode === WORKBUDDY_PACKAGE_CODE.proYear
+    ) {
+      return t('workbuddy.quotaQuery.packageTitle.pro', '专业版订阅');
+    }
+    return resource.packageName || t('workbuddy.quotaQuery.packageUnknown', '套餐信息未知');
   }, [t]);
 
-  const renderResourceQuotaItems = useCallback((account: CodebuddyAccount, variant: 'card' | 'table') => {
-    const model = getCodebuddyOfficialQuotaModel(account);
-    const extraResource: CodebuddyOfficialQuotaResource = {
+  const renderResourceQuotaItems = useCallback((account: WorkbuddyAccount, variant: 'card' | 'table') => {
+    const model = getWorkbuddyOfficialQuotaModel(account);
+    const extraResource: WorkbuddyOfficialQuotaResource = {
       ...model.extra,
-      packageName: t('codebuddy.extraCredit.title', '加量包'),
+      packageName: t('workbuddy.extraCredit.title', '加量包'),
     };
     const allResources = [...model.resources, extraResource];
 
     return (
-      <div className="codebuddy-official-quota-list">
+      <div className="workbuddy-official-quota-list">
         {allResources.map((resource, idx) => {
           const isExtra = idx === allResources.length - 1;
           const quotaClass = getQuotaClassByRemainPercent(resource.remainPercent);
@@ -300,7 +302,7 @@ export function CodebuddyCnAccountsPage() {
           const packageName = resolveResourcePackageTitle(resource, isExtra);
 
           return (
-            <div key={`${account.id}-${resource.packageCode || 'pkg'}-${idx}`} className="codebuddy-official-quota-row">
+            <div key={`${account.id}-${resource.packageCode || 'pkg'}-${idx}`} className="workbuddy-official-quota-row">
               <div className="quota-header">
                 <span className="quota-label" title={packageName}>{packageName}</span>
                 <span className={`quota-pct ${quotaClass}`}>{quotaValueText}</span>
@@ -315,8 +317,8 @@ export function CodebuddyCnAccountsPage() {
                 </div>
               )}
               {timeText ? (
-                <div className="codebuddy-official-quota-meta-wrap">
-                  <span className="codebuddy-official-quota-meta">{timeText}</span>
+                <div className="workbuddy-official-quota-meta-wrap">
+                  <span className="workbuddy-official-quota-meta">{timeText}</span>
                 </div>
               ) : null}
             </div>
@@ -326,36 +328,35 @@ export function CodebuddyCnAccountsPage() {
     );
   }, [resolveResourcePackageTitle, resolveResourceTimeText, t]);
 
-  const renderUsageInfo = useCallback((account: CodebuddyAccount) => {
-    const usage = getCodebuddyUsage(account);
+  const renderUsageInfo = useCallback((account: WorkbuddyAccount) => {
+    const usage = getWorkbuddyUsage(account);
     if (!usage.dosageNotifyCode) return <span className="quota-empty">--</span>;
-    if (usage.isNormal) return <span className="quota-value high">{t('codebuddy.usageNormal', '正常')}</span>;
+    if (usage.isNormal) return <span className="quota-value high">{t('workbuddy.usageNormal', '正常')}</span>;
     const msg = locale.startsWith('zh')
       ? (usage.dosageNotifyZh || usage.dosageNotifyCode)
       : (usage.dosageNotifyEn || usage.dosageNotifyCode);
     return <span className="quota-value critical" title={msg}>{msg}</span>;
   }, [locale, t]);
 
-  const renderQuotaQuerySection = useCallback((account: CodebuddyAccount, variant: 'card' | 'table') => {
-    const model = getCodebuddyOfficialQuotaModel(account);
-    const hasQuotaData =
-      model.resources.length > 0 || model.extra.total > 0 || model.extra.remain > 0 || model.extra.used > 0;
+  const renderQuotaQuerySection = useCallback((account: WorkbuddyAccount, variant: 'card' | 'table') => {
+    const model = getWorkbuddyOfficialQuotaModel(account);
+    const hasQuotaData = model.resources.length > 0 || model.extra.total > 0 || model.extra.remain > 0 || model.extra.used > 0;
     const refreshFailed = !!account.quota_query_last_error?.trim();
     const shouldShowQuota = hasQuotaData && !refreshFailed;
     const statusText = refreshFailed
-      ? t('codebuddy.quotaQuery.failedRefreshCompact', '配额查询失败')
-      : t('codebuddy.quotaQuery.empty', '暂无可用配额数据');
+      ? t('workbuddy.quotaQuery.failedRefreshCompact', '配额查询失败')
+      : t('workbuddy.quotaQuery.empty', '暂无可用配额数据');
     return (
       <>
         <div className="quota-item">
           <div className="quota-header">
-            <span className="quota-name">{t('codebuddy.usage', '用量状态')}</span>
+            <span className="quota-name">{t('workbuddy.usage', '用量状态')}</span>
             {renderUsageInfo(account)}
           </div>
         </div>
-        <div className="quota-item codebuddy-quota-item">
-          <div className="quota-header codebuddy-quota-header">
-            <span className="quota-name">{t('codebuddy.quotaQuery.sectionTitle', '配额查询')}</span>
+        <div className="quota-item workbuddy-quota-item">
+          <div className="quota-header workbuddy-quota-header">
+            <span className="quota-name">{t('workbuddy.quotaQuery.sectionTitle', '配额查询')}</span>
           </div>
           {shouldShowQuota ? (
             renderResourceQuotaItems(account, variant)
@@ -371,7 +372,7 @@ export function CodebuddyCnAccountsPage() {
 
   const renderGridCards = (items: typeof filteredAccounts, groupKey?: string) =>
     items.map((account) => {
-      const displayEmail = getCodebuddyAccountDisplayEmail(account);
+      const displayEmail = getWorkbuddyAccountDisplayEmail(account);
       const planBadge = resolvePlanKey(account);
       const tierBadgeClass = resolveTierBadgeClass(planBadge);
       const accountTags = (account.tags || []).map((tag) => tag.trim()).filter(Boolean);
@@ -420,7 +421,7 @@ export function CodebuddyCnAccountsPage() {
 
   const renderTableRows = (items: typeof filteredAccounts, _groupKey?: string) =>
     items.map((account) => {
-      const displayEmail = getCodebuddyAccountDisplayEmail(account);
+      const displayEmail = getWorkbuddyAccountDisplayEmail(account);
       const planBadge = resolvePlanKey(account);
       const tierBadgeClass = resolveTierBadgeClass(planBadge);
       const isSelected = selected.has(account.id);
@@ -434,7 +435,7 @@ export function CodebuddyCnAccountsPage() {
           </td>
           <td><span className={`tier-badge ${tierBadgeClass}`}>{planBadge}</span></td>
           <td>
-            <div className="codebuddy-table-usage">
+            <div className="workbuddy-table-usage">
               {renderQuotaQuerySection(account, 'table')}
             </div>
           </td>
@@ -452,32 +453,32 @@ export function CodebuddyCnAccountsPage() {
     });
 
   return (
-    <div className="ghcp-accounts-page codebuddy-accounts-page">
+    <div className="ghcp-accounts-page workbuddy-accounts-page">
       <PlatformOverviewTabsHeader
-        platform="codebuddy_cn"
+        platform="workbuddy"
         active={activeTab}
         onTabChange={setActiveTab}
       />
       {activeTab === 'instances' ? (
-        <CodebuddyCnInstancesContent accountsForSelect={filteredAccounts} />
+        <WorkbuddyInstancesContent accountsForSelect={filteredAccounts} />
       ) : (
         <>
       <div className={`ghcp-flow-notice ${isFlowNoticeCollapsed ? 'collapsed' : ''}`} role="note">
         <button type="button" className="ghcp-flow-notice-toggle" onClick={() => setIsFlowNoticeCollapsed((prev) => !prev)}>
           <div className="ghcp-flow-notice-title">
             <CircleAlert size={16} />
-            <span>{t('codebuddyCn.flowNotice.title', 'CodeBuddy CN 账号管理说明（点击展开/收起）')}</span>
+            <span>{t('workbuddy.flowNotice.title', 'WorkBuddy 账号管理说明（点击展开/收起）')}</span>
           </div>
           <ChevronDown size={16} className={`ghcp-flow-notice-arrow ${isFlowNoticeCollapsed ? 'collapsed' : ''}`} />
         </button>
         {!isFlowNoticeCollapsed && (
           <div className="ghcp-flow-notice-body">
             <div className="ghcp-flow-notice-desc">
-              {t('codebuddyCn.flowNotice.desc', '切换账号需读取 CodeBuddy CN 本地认证存储并调用系统凭据服务进行加解密，数据仅在本地处理。')}
+              {t('workbuddy.flowNotice.desc', '切换账号需读取 WorkBuddy 本地认证存储并调用系统凭据服务进行加解密，数据仅在本地处理。')}
             </div>
             <ul className="ghcp-flow-notice-list">
-              <li>{t('codebuddyCn.flowNotice.permission', '权限范围：读取 CodeBuddy CN 认证数据库 (state.vscdb)，调用系统凭据能力（macOS Keychain / Windows DPAPI / Linux Secret Service）进行解密/回写。')}</li>
-              <li>{t('codebuddyCn.flowNotice.network', '网络范围：OAuth 授权登录与 Token 刷新需联网请求 codebuddy.cn 与 copilot.tencent.com；资源包配额刷新需调用计费 API。不上传本地密钥或凭证。')}</li>
+              <li>{t('workbuddy.flowNotice.permission', '权限范围：读取 WorkBuddy 认证数据库，调用系统凭据能力（macOS Keychain / Windows DPAPI / Linux Secret Service）进行解密/回写。')}</li>
+              <li>{t('workbuddy.flowNotice.network', '网络范围：OAuth 授权登录与 Token 刷新需联网请求 WorkBuddy 服务。不上传本地密钥或凭证。')}</li>
             </ul>
           </div>
         )}
@@ -501,7 +502,7 @@ export function CodebuddyCnAccountsPage() {
         <div className="toolbar-left">
           <div className="search-box">
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder={t('codebuddyCn.search', '搜索 CodeBuddy CN 账号...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="text" placeholder={t('workbuddy.search', '搜索 WorkBuddy 账号...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <div className="view-switcher">
             <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title={t('common.shared.view.list', '列表视图')}><List size={16} /></button>
@@ -510,7 +511,7 @@ export function CodebuddyCnAccountsPage() {
           <div className="filter-select">
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
               <option value="all">{`ALL (${tierSummary.all})`}</option>
-              {CB_KNOWN_PLAN_FILTERS.map((plan) => {
+              {WORKBUDDY_KNOWN_PLAN_FILTERS.map((plan) => {
                 const count = tierSummary.dynamicCounts.get(plan) ?? 0;
                 if (count === 0) return null;
                 return <option key={plan} value={plan}>{`${plan} (${count})`}</option>;
@@ -549,7 +550,7 @@ export function CodebuddyCnAccountsPage() {
         </div>
         <div className="toolbar-right">
           <button className="btn btn-primary icon-only" onClick={() => openAddModal('oauth')} title={t('common.shared.addAccount', '添加账号')}><Plus size={14} /></button>
-          <button className="btn btn-secondary icon-only" onClick={handleSyncToWorkbuddy} disabled={syncing || accounts.length === 0} title={t('codebuddyCn.syncToWorkbuddy', '同步到 WorkBuddy')}>
+          <button className="btn btn-secondary icon-only" onClick={handleSyncToCodebuddyCn} disabled={syncing || accounts.length === 0} title={t('workbuddy.syncToCodebuddyCn', '同步到 CodeBuddy CN')}>
             {syncing ? <RefreshCw size={14} className="loading-spinner" /> : <ArrowRightLeft size={14} />}
           </button>
           <button className="btn btn-secondary icon-only" onClick={handleRefreshAll} disabled={refreshingAll || accounts.length === 0} title={t('common.shared.refreshAll', '刷新全部')}>
@@ -567,7 +568,7 @@ export function CodebuddyCnAccountsPage() {
           {selected.size > 0 && (
             <button className="btn btn-danger icon-only" onClick={handleBatchDelete} title={`${t('common.delete', '删除')} (${selected.size})`}><Trash2 size={14} /></button>
           )}
-          <QuickSettingsPopover type="codebuddy_cn" />
+          <QuickSettingsPopover type="workbuddy" />
         </div>
       </div>
 
@@ -577,7 +578,7 @@ export function CodebuddyCnAccountsPage() {
         <div className="empty-state">
           <Globe size={48} />
           <h3>{t('common.shared.empty.title', '暂无账号')}</h3>
-          <p>{t('codebuddyCn.noAccounts', '暂无 CodeBuddy CN 账号')}</p>
+          <p>{t('workbuddy.noAccounts', '暂无 WorkBuddy 账号')}</p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
             <button className="btn btn-primary" onClick={() => openAddModal('oauth')}>
               <Plus size={16} /> {t('common.shared.addAccount', '添加账号')}
@@ -648,7 +649,7 @@ export function CodebuddyCnAccountsPage() {
         <div className="modal-overlay" onClick={closeAddModal}>
             <div className="modal-content ghcp-add-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{t('codebuddyCn.addAccount', '添加 CodeBuddy CN 账号')}</h2>
+              <h2>{t('workbuddy.addAccount', '添加 WorkBuddy 账号')}</h2>
               <button className="modal-close" onClick={closeAddModal}><X size={18} /></button>
             </div>
             <div className="modal-tabs">
@@ -660,16 +661,16 @@ export function CodebuddyCnAccountsPage() {
               {addTab === 'oauth' && (
                 <div className="add-section oauth-section">
                   <p className="section-desc">
-                    {t('codebuddyCn.oauthDesc', '点击下方按钮将在浏览器中打开 CodeBuddy CN 授权页面。')}
+                    {t('workbuddy.oauthDesc', '点击下方按钮将在浏览器中打开 WorkBuddy 授权页面。')}
                   </p>
-                  <div className="codebuddy-oauth-feature-card oauth">
+                  <div className="workbuddy-oauth-feature-card oauth">
                     <p className="feature-title">
-                      {t('codebuddy.oauthFeature.oauth.title', '仅授权 IDE 登录信息')}
+                      {t('workbuddy.oauthFeature.oauth.title', '仅授权 IDE 登录信息')}
                     </p>
                     <ul className="feature-list">
-                      <li>{t('codebuddy.oauthFeature.oauth.item1', '在浏览器完成 OAuth 后即可添加账号并用于 IDE 切换。')}</li>
-                      <li>{t('codebuddy.oauthFeature.oauth.item2', '授权完成后会自动刷新资源包配额数据。')}</li>
-                      <li>{t('codebuddy.oauthFeature.oauth.item3', '账号卡片将按资源包展示额度、进度和刷新/到期时间。')}</li>
+                      <li>{t('workbuddy.oauthFeature.oauth.item1', '在浏览器完成 OAuth 后即可添加账号并用于 IDE 切换。')}</li>
+                      <li>{t('workbuddy.oauthFeature.oauth.item2', '授权完成后会自动刷新资源包配额数据。')}</li>
+                      <li>{t('workbuddy.oauthFeature.oauth.item3', '账号卡片将按资源包展示额度、进度和刷新/到期时间。')}</li>
                     </ul>
                   </div>
                   {oauthPrepareError ? (
@@ -687,7 +688,7 @@ export function CodebuddyCnAccountsPage() {
                           type="text"
                           value={oauthUrl}
                           readOnly
-                          placeholder={t('codebuddy.oauthUrlInputPlaceholder', '可手动输入授权地址')}
+                          placeholder={t('workbuddy.oauthUrlInputPlaceholder', '可手动输入授权地址')}
                         />
                         <button onClick={handleCopyOauthUrl}>
                           {oauthUrlCopied ? <Check size={16} /> : <Copy size={16} />}
@@ -719,7 +720,7 @@ export function CodebuddyCnAccountsPage() {
                       {oauthPolling && (
                         <div className="add-status loading">
                           <RefreshCw size={16} className="loading-spinner" />
-                          <span>{t('codebuddy.oauthWaiting', '等待授权完成...')}</span>
+                          <span>{t('workbuddy.oauthWaiting', '等待授权完成...')}</span>
                         </div>
                       )}
                       {oauthCompleteError && (
@@ -747,7 +748,7 @@ export function CodebuddyCnAccountsPage() {
               )}
               {addTab === 'token' && (
                 <div className="add-section token-section">
-                  <p className="section-desc">{t('codebuddyCn.tokenDesc', '粘贴 CodeBuddy CN 的 access token：')}</p>
+                  <p className="section-desc">{t('workbuddy.tokenDesc', '粘贴 WorkBuddy 的 access token：')}</p>
                   <textarea className="token-input" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder={t('common.shared.token.placeholder', '粘贴 Token 或 JSON...')} />
                   <button className="btn btn-primary btn-full" onClick={handleTokenImport} disabled={importing || !tokenInput.trim()}>
                     {importing ? <RefreshCw size={16} className="loading-spinner" /> : <Download size={16} />}
@@ -757,10 +758,10 @@ export function CodebuddyCnAccountsPage() {
               )}
               {addTab === 'json' && (
                 <div className="add-section json-section">
-                  <p className="section-desc">{t('codebuddyCn.import.localDesc', '支持从本机 CodeBuddy CN 客户端或 JSON 文件导入账号数据。')}</p>
+                  <p className="section-desc">{t('workbuddy.import.localDesc', '支持从本机 WorkBuddy 客户端或 JSON 文件导入账号数据。')}</p>
                   <button className="btn btn-secondary btn-full" onClick={() => handleImportFromLocal?.()} disabled={importing}>
                     {importing ? <RefreshCw size={16} className="loading-spinner" /> : <Database size={16} />}
-                    {t('codebuddyCn.import.localClient', '从本机 CodeBuddy CN 导入')}
+                    {t('workbuddy.import.localClient', '从本机 WorkBuddy 导入')}
                   </button>
                   <div className="oauth-hint" style={{ margin: '8px 0 4px' }}>{t('common.shared.import.orJson', '或从 JSON 文件导入')}</div>
                   <input ref={importFileInputRef} type="file" accept="application/json" style={{ display: 'none' }}

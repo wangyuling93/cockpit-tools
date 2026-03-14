@@ -128,6 +128,9 @@ pub struct UserConfig {
     /// Trae 启动路径（为空则使用默认路径）
     #[serde(default = "default_trae_app_path")]
     pub trae_app_path: String,
+    /// WorkBuddy 启动路径（为空则使用默认路径）
+    #[serde(default = "default_workbuddy_app_path")]
+    pub workbuddy_app_path: String,
     /// 切换 Codex 时是否自动重启 OpenCode
     #[serde(default = "default_opencode_sync_on_switch")]
     pub opencode_sync_on_switch: bool,
@@ -209,6 +212,12 @@ pub struct UserConfig {
     /// Trae 配额预警阈值（百分比）
     #[serde(default = "default_trae_quota_alert_threshold")]
     pub trae_quota_alert_threshold: i32,
+    /// 是否启用 WorkBuddy 配额预警通知
+    #[serde(default = "default_workbuddy_quota_alert_enabled")]
+    pub workbuddy_quota_alert_enabled: bool,
+    /// WorkBuddy 配额预警阈值（百分比）
+    #[serde(default = "default_workbuddy_quota_alert_threshold")]
+    pub workbuddy_quota_alert_threshold: i32,
 }
 
 /// 窗口关闭行为
@@ -335,6 +344,9 @@ fn default_qoder_app_path() -> String {
 fn default_trae_app_path() -> String {
     String::new()
 }
+fn default_workbuddy_app_path() -> String {
+    String::new()
+}
 fn default_opencode_sync_on_switch() -> bool {
     true
 }
@@ -416,6 +428,12 @@ fn default_trae_quota_alert_enabled() -> bool {
 fn default_trae_quota_alert_threshold() -> i32 {
     20
 }
+fn default_workbuddy_quota_alert_enabled() -> bool {
+    false
+}
+fn default_workbuddy_quota_alert_threshold() -> i32 {
+    20
+}
 
 impl Default for UserConfig {
     fn default() -> Self {
@@ -450,6 +468,7 @@ impl Default for UserConfig {
             codebuddy_cn_app_path: default_codebuddy_cn_app_path(),
             qoder_app_path: default_qoder_app_path(),
             trae_app_path: default_trae_app_path(),
+            workbuddy_app_path: default_workbuddy_app_path(),
             opencode_sync_on_switch: default_opencode_sync_on_switch(),
             opencode_auth_overwrite_on_switch: default_opencode_auth_overwrite_on_switch(),
             codex_launch_on_switch: default_codex_launch_on_switch(),
@@ -477,6 +496,8 @@ impl Default for UserConfig {
             qoder_quota_alert_threshold: default_qoder_quota_alert_threshold(),
             trae_quota_alert_enabled: default_trae_quota_alert_enabled(),
             trae_quota_alert_threshold: default_trae_quota_alert_threshold(),
+            workbuddy_quota_alert_enabled: default_workbuddy_quota_alert_enabled(),
+            workbuddy_quota_alert_threshold: default_workbuddy_quota_alert_threshold(),
         }
     }
 }
@@ -761,6 +782,18 @@ pub fn load_user_config() -> Result<UserConfig, String> {
         if !obj.contains_key("trae_quota_alert_threshold") {
             obj.insert(
                 "trae_quota_alert_threshold".to_string(),
+                json!(legacy_threshold),
+            );
+        }
+        if !obj.contains_key("workbuddy_quota_alert_enabled") {
+            obj.insert(
+                "workbuddy_quota_alert_enabled".to_string(),
+                json!(legacy_enabled),
+            );
+        }
+        if !obj.contains_key("workbuddy_quota_alert_threshold") {
+            obj.insert(
+                "workbuddy_quota_alert_threshold".to_string(),
                 json!(legacy_threshold),
             );
         }

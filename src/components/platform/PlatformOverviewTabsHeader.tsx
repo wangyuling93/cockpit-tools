@@ -8,6 +8,7 @@ import { CursorIcon } from '../icons/CursorIcon';
 import { GeminiIcon } from '../icons/GeminiIcon';
 import { CodebuddyIcon } from '../icons/CodebuddyIcon';
 import { QoderIcon } from '../icons/QoderIcon';
+import { WorkbuddyIcon } from '../icons/WorkbuddyIcon';
 
 export type PlatformOverviewTab = 'overview' | 'instances';
 export type PlatformOverviewHeaderId =
@@ -20,7 +21,8 @@ export type PlatformOverviewHeaderId =
   | 'codebuddy'
   | 'codebuddy_cn'
   | 'qoder'
-  | 'trae';
+  | 'trae'
+  | 'workbuddy';
 
 interface PlatformOverviewTabsHeaderProps {
   platform: PlatformOverviewHeaderId;
@@ -79,6 +81,10 @@ const CONFIGS: Record<PlatformOverviewHeaderId, PlatformOverviewConfig> = {
   trae: {
     platformLabel: 'Trae',
     overviewIcon: <Bot className="tab-icon" />,
+  },
+  workbuddy: {
+    platformLabel: 'WorkBuddy',
+    overviewIcon: <WorkbuddyIcon className="tab-icon" />,
   },
 };
 

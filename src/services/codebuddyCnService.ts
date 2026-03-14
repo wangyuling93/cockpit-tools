@@ -68,3 +68,11 @@ export async function getCodebuddyCnAccountsIndexPath(): Promise<string> {
 export async function injectCodebuddyCnToVSCode(accountId: string): Promise<string> {
   return await invoke('inject_codebuddy_cn_to_vscode', { accountId });
 }
+
+export async function syncCodebuddyCnToWorkbuddy(): Promise<number> {
+  return await invoke('sync_codebuddy_cn_to_workbuddy');
+}
+
+export async function syncWorkbuddyToCodebuddyCn(): Promise<number> {
+  return await invoke('sync_workbuddy_to_codebuddy_cn');
+}

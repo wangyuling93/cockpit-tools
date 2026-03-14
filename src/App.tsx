@@ -26,6 +26,7 @@ import { useCodebuddyAccountStore } from './stores/useCodebuddyAccountStore';
 import { useCodebuddyCnAccountStore } from './stores/useCodebuddyCnAccountStore';
 import { useQoderAccountStore } from './stores/useQoderAccountStore';
 import { useTraeAccountStore } from './stores/useTraeAccountStore';
+import { useWorkbuddyAccountStore } from './stores/useWorkbuddyAccountStore';
 import type { UpdateCheckResult } from './components/UpdateNotification';
 import type { Update as UpdaterUpdate } from '@tauri-apps/plugin-updater';
 import { parseUpdaterReleaseNotes } from './utils/updaterReleaseNotes';
@@ -76,6 +77,9 @@ const QoderAccountsPage = lazy(() =>
 );
 const TraeAccountsPage = lazy(() =>
   import('./pages/TraeAccountsPage').then((module) => ({ default: module.TraeAccountsPage })),
+);
+const WorkbuddyAccountsPage = lazy(() =>
+  import('./pages/WorkbuddyAccountsPage').then((module) => ({ default: module.WorkbuddyAccountsPage })),
 );
 const FingerprintsPage = lazy(() =>
   import('./pages/FingerprintsPage').then((module) => ({ default: module.FingerprintsPage })),
@@ -199,7 +203,8 @@ type QuotaAlertPlatform =
   | 'codebuddy'
   | 'codebuddy_cn'
   | 'qoder'
-  | 'trae';
+  | 'trae'
+  | 'workbuddy';
 type UpdateCheckSource = 'auto' | 'manual';
 type UpdateActionState = 'hidden' | 'available' | 'downloading' | 'installing' | 'ready';
 
@@ -310,6 +315,8 @@ function getQuotaAlertTargetPage(platform: QuotaAlertPlatform): Page {
       return 'qoder';
     case 'trae':
       return 'trae';
+    case 'workbuddy':
+      return 'workbuddy';
     default:
       return 'overview';
   }
@@ -337,6 +344,8 @@ function getQuotaAlertQuickSettingsType(platform: QuotaAlertPlatform): QuickSett
       return 'qoder';
     case 'trae':
       return 'trae';
+    case 'workbuddy':
+      return 'workbuddy';
     default:
       return 'antigravity';
   }
@@ -1425,6 +1434,9 @@ function App() {
                     } else if (platform === 'trae') {
                       await useTraeAccountStore.getState().switchAccount(targetAccountId);
                       setPage('trae');
+                    } else if (platform === 'workbuddy') {
+                      await useWorkbuddyAccountStore.getState().switchAccount(targetAccountId);
+                      setPage('workbuddy');
                     } else {
                       await useAccountStore.getState().switchAccount(targetAccountId);
                       setPage('overview');
@@ -1934,6 +1946,7 @@ function App() {
             case 'codebuddy-cn':
             case 'qoder':
             case 'trae':
+            case 'workbuddy':
             case 'manual':
             case 'settings':
               setPage(target as Page);
@@ -2267,6 +2280,7 @@ function App() {
           {page === 'codebuddy-cn' && <CodebuddyCnAccountsPage />}
           {page === 'qoder' && <QoderAccountsPage />}
           {page === 'trae' && <TraeAccountsPage />}
+          {page === 'workbuddy' && <WorkbuddyAccountsPage />}
           {page === 'instances' && <InstancesPage onNavigate={setPage} />}
           {page === 'fingerprints' && <FingerprintsPage onNavigate={setPage} />}
           {page === 'wakeup' && <WakeupTasksPage onNavigate={setPage} />}

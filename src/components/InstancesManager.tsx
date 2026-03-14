@@ -52,7 +52,8 @@ interface InstancesManagerProps<TAccount extends AccountLike> {
     | 'codebuddy'
     | 'codebuddy_cn'
     | 'qoder'
-    | 'trae';
+    | 'trae'
+    | 'workbuddy';
   onInstanceStarted?: (instance: InstanceProfile) => void | Promise<void>;
   resolveStartSuccessMessage?: (instance: InstanceProfile) => string;
 }

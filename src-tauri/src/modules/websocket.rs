@@ -787,6 +787,7 @@ fn handle_set_language(language: &str, source: Option<&str>) -> Result<String, S
         codebuddy_cn_app_path: current.codebuddy_cn_app_path,
         qoder_app_path: current.qoder_app_path,
         trae_app_path: current.trae_app_path,
+        workbuddy_app_path: current.workbuddy_app_path,
         opencode_sync_on_switch: current.opencode_sync_on_switch,
         opencode_auth_overwrite_on_switch: current.opencode_auth_overwrite_on_switch,
         codex_launch_on_switch: current.codex_launch_on_switch,
@@ -814,6 +815,8 @@ fn handle_set_language(language: &str, source: Option<&str>) -> Result<String, S
         qoder_quota_alert_threshold: current.qoder_quota_alert_threshold,
         trae_quota_alert_enabled: current.trae_quota_alert_enabled,
         trae_quota_alert_threshold: current.trae_quota_alert_threshold,
+        workbuddy_quota_alert_enabled: current.workbuddy_quota_alert_enabled,
+        workbuddy_quota_alert_threshold: current.workbuddy_quota_alert_threshold,
     };
 
     config::save_user_config(&new_config)?;
