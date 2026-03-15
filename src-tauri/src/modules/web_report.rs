@@ -4,9 +4,11 @@
 use crate::models::codebuddy::CodebuddyAccount;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::{timeout, Duration};
 use url::Url;
 
@@ -14,8 +16,11 @@ use super::config::PORT_RANGE;
 
 const MAX_HTTP_REQUEST_BYTES: usize = 32 * 1024;
 const REQUEST_READ_TIMEOUT: Duration = Duration::from_secs(5);
+const AUTH_REFRESH_STALE_THRESHOLD_SECONDS: i64 = 10 * 60;
 
 static ACTUAL_REPORT_PORT: OnceLock<RwLock<Option<u16>>> = OnceLock::new();
+static REPORT_REFRESH_STATE: OnceLock<RwLock<ReportRefreshState>> = OnceLock::new();
+static REPORT_REFRESH_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy)]
 enum ReportFormat {
@@ -35,8 +40,37 @@ struct ReportRow {
     note: String,
 }
 
+#[derive(Debug, Clone)]
+struct ReportMeta {
+    generated_at: String,
+    data_collected_at: String,
+    data_delayed: String,
+    next_auth_refresh_trigger_time: String,
+}
+
+#[derive(Debug, Default, Clone)]
+struct ReportRefreshState {
+    data_collected_at: Option<chrono::DateTime<chrono::Utc>>,
+    last_auth_trigger_at: Option<chrono::DateTime<chrono::Utc>>,
+    service_last_refreshed_at: HashMap<String, chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ServiceRefreshPolicy {
+    key: &'static str,
+    interval_minutes: i32,
+}
+
 fn report_port_state() -> &'static RwLock<Option<u16>> {
     ACTUAL_REPORT_PORT.get_or_init(|| RwLock::new(None))
+}
+
+fn report_refresh_state() -> &'static RwLock<ReportRefreshState> {
+    REPORT_REFRESH_STATE.get_or_init(|| RwLock::new(ReportRefreshState::default()))
+}
+
+fn report_refresh_lock() -> &'static AsyncMutex<()> {
+    REPORT_REFRESH_LOCK.get_or_init(|| AsyncMutex::new(()))
 }
 
 fn set_actual_port(port: Option<u16>) {
@@ -47,6 +81,204 @@ fn set_actual_port(port: Option<u16>) {
 
 pub fn get_actual_port() -> Option<u16> {
     report_port_state().read().ok().and_then(|guard| *guard)
+}
+
+fn build_service_refresh_policies(cfg: &super::config::UserConfig) -> Vec<ServiceRefreshPolicy> {
+    vec![
+        ServiceRefreshPolicy {
+            key: "antigravity",
+            interval_minutes: cfg.auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "codex",
+            interval_minutes: cfg.codex_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "ghcp",
+            interval_minutes: cfg.ghcp_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "windsurf",
+            interval_minutes: cfg.windsurf_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "kiro",
+            interval_minutes: cfg.kiro_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "cursor",
+            interval_minutes: cfg.cursor_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "gemini",
+            interval_minutes: cfg.gemini_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "codebuddy",
+            interval_minutes: cfg.codebuddy_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "codebuddy_cn",
+            interval_minutes: cfg.codebuddy_cn_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "qoder",
+            interval_minutes: cfg.qoder_auto_refresh_minutes,
+        },
+        ServiceRefreshPolicy {
+            key: "trae",
+            interval_minutes: cfg.trae_auto_refresh_minutes,
+        },
+    ]
+}
+
+fn needs_auth_refresh_trigger(now: chrono::DateTime<chrono::Utc>) -> bool {
+    let Ok(state) = report_refresh_state().read() else {
+        return true;
+    };
+
+    let Some(collected_at) = state.data_collected_at else {
+        return true;
+    };
+
+    now.signed_duration_since(collected_at).num_seconds() > AUTH_REFRESH_STALE_THRESHOLD_SECONDS
+}
+
+fn collect_due_refresh_services(
+    now: chrono::DateTime<chrono::Utc>,
+    policies: &[ServiceRefreshPolicy],
+) -> Vec<ServiceRefreshPolicy> {
+    let state = report_refresh_state().read().ok();
+    let Some(state_guard) = state else {
+        return policies
+            .iter()
+            .copied()
+            .filter(|policy| policy.interval_minutes > 0)
+            .collect();
+    };
+
+    policies
+        .iter()
+        .copied()
+        .filter(|policy| {
+            if policy.interval_minutes <= 0 {
+                return false;
+            }
+
+            match state_guard.service_last_refreshed_at.get(policy.key) {
+                Some(last_refreshed_at) => {
+                    now.signed_duration_since(last_refreshed_at.clone())
+                        .num_seconds()
+                        >= (policy.interval_minutes as i64) * 60
+                }
+                None => true,
+            }
+        })
+        .collect()
+}
+
+async fn run_refresh_for_service(policy: ServiceRefreshPolicy) -> Result<(), String> {
+    match policy.key {
+        "antigravity" => super::account::refresh_all_quotas_logic()
+            .await
+            .map(|_| ()),
+        "codex" => super::codex_quota::refresh_all_quotas().await.map(|_| ()),
+        "ghcp" => super::github_copilot_account::refresh_all_tokens()
+            .await
+            .map(|_| ()),
+        "windsurf" => super::windsurf_account::refresh_all_tokens()
+            .await
+            .map(|_| ()),
+        "kiro" => super::kiro_account::refresh_all_tokens().await.map(|_| ()),
+        "cursor" => super::cursor_account::refresh_all_tokens().await.map(|_| ()),
+        "gemini" => super::gemini_account::refresh_all_tokens().await.map(|_| ()),
+        "codebuddy" => super::codebuddy_account::refresh_all_tokens().await.map(|_| ()),
+        "codebuddy_cn" => super::codebuddy_cn_account::refresh_all_tokens()
+            .await
+            .map(|_| ()),
+        "qoder" => super::qoder_oauth::refresh_all_accounts_from_openapi()
+            .await
+            .map(|_| ()),
+        "trae" => super::trae_account::refresh_all_tokens().await.map(|_| ()),
+        _ => Err(format!("未知服务: {}", policy.key)),
+    }
+}
+
+async fn maybe_trigger_auth_refresh_check() {
+    let now = chrono::Utc::now();
+    if !needs_auth_refresh_trigger(now) {
+        return;
+    }
+
+    let _lock = report_refresh_lock().lock().await;
+    let check_started_at = chrono::Utc::now();
+    if !needs_auth_refresh_trigger(check_started_at) {
+        return;
+    }
+
+    let cfg = super::config::get_user_config();
+    let policies = build_service_refresh_policies(&cfg);
+    let due_services = collect_due_refresh_services(check_started_at, &policies);
+
+    if let Ok(mut state) = report_refresh_state().write() {
+        state.last_auth_trigger_at = Some(check_started_at);
+    }
+
+    let mut refreshed_keys: Vec<&'static str> = Vec::new();
+    for policy in due_services {
+        match run_refresh_for_service(policy).await {
+            Ok(()) => refreshed_keys.push(policy.key),
+            Err(err) => super::logger::log_warn(&format!(
+                "[WebReport] AuthRefresh check 刷新失败: service={}, error={}",
+                policy.key, err
+            )),
+        }
+    }
+
+    let finished_at = chrono::Utc::now();
+    if let Ok(mut state) = report_refresh_state().write() {
+        state.data_collected_at = Some(finished_at);
+        for key in refreshed_keys {
+            state
+                .service_last_refreshed_at
+                .insert(key.to_string(), finished_at);
+        }
+    }
+}
+
+fn format_elapsed_hours_minutes(seconds: i64) -> String {
+    let total_minutes = (seconds.max(0)) / 60;
+    let hours = total_minutes / 60;
+    let minutes = total_minutes % 60;
+    format!("{}h{}m", hours, minutes)
+}
+
+fn format_next_auth_refresh_trigger_time(delayed_seconds: i64) -> String {
+    let remaining = AUTH_REFRESH_STALE_THRESHOLD_SECONDS - delayed_seconds.max(0);
+    if remaining <= 0 {
+        return "0m".to_string();
+    }
+    let remaining_minutes = (remaining + 59) / 60;
+    format!("{}m", remaining_minutes)
+}
+
+fn build_report_meta(generated_at: chrono::DateTime<chrono::Utc>) -> ReportMeta {
+    let state = report_refresh_state().read().ok();
+    let collected_at = state
+        .as_ref()
+        .and_then(|guard| guard.data_collected_at.clone())
+        .unwrap_or(generated_at);
+    let delayed_seconds = generated_at
+        .signed_duration_since(collected_at)
+        .num_seconds()
+        .max(0);
+
+    ReportMeta {
+        generated_at: generated_at.to_rfc3339(),
+        data_collected_at: collected_at.to_rfc3339(),
+        data_delayed: format_elapsed_hours_minutes(delayed_seconds),
+        next_auth_refresh_trigger_time: format_next_auth_refresh_trigger_time(delayed_seconds),
+    }
 }
 
 pub async fn start_server() {
@@ -190,7 +422,9 @@ async fn handle_connection(mut stream: TcpStream, port: u16) -> Result<(), Strin
         ReportFormat::Markdown
     };
 
-    let now = chrono::Utc::now().to_rfc3339();
+    maybe_trigger_auth_refresh_check().await;
+    let generated_at = chrono::Utc::now();
+    let meta = build_report_meta(generated_at);
     let mut rows = build_report_rows();
     rows.sort_by(|left, right| {
         left.service
@@ -200,13 +434,15 @@ async fn handle_connection(mut stream: TcpStream, port: u16) -> Result<(), Strin
     });
 
     let (content_type, body) = if render {
-        ("text/html; charset=utf-8", render_html(&now, &rows))
+        ("text/html; charset=utf-8", render_html(&meta, &rows))
     } else {
         match report_format {
-            ReportFormat::Markdown => ("text/markdown; charset=utf-8", render_markdown(&now, &rows)),
+            ReportFormat::Markdown => {
+                ("text/markdown; charset=utf-8", render_markdown(&meta, &rows))
+            }
             ReportFormat::Yaml => (
                 "application/x-yaml; charset=utf-8",
-                render_yaml(&now, &rows),
+                render_yaml(&meta, &rows),
             ),
         }
     };
@@ -1346,13 +1582,25 @@ fn format_unix_timestamp(value: Option<i64>) -> String {
     dt.to_rfc3339()
 }
 
-fn render_markdown(generated_at: &str, rows: &[ReportRow]) -> String {
+fn render_markdown(meta: &ReportMeta, rows: &[ReportRow]) -> String {
     let now = chrono::Utc::now();
     let mut output = String::new();
     output.push_str("# Cockpit Tools Usage Report\n\n");
     output.push_str(&format!(
         "- Generated at: {}\n",
-        markdown_cell(generated_at)
+        markdown_cell(&meta.generated_at)
+    ));
+    output.push_str(&format!(
+        "- Data collected at: {}\n",
+        markdown_cell(&meta.data_collected_at)
+    ));
+    output.push_str(&format!(
+        "- Data delayed: {}\n",
+        markdown_cell(&meta.data_delayed)
+    ));
+    output.push_str(&format!(
+        "- Next AuthRefresh trigger time: {}\n",
+        markdown_cell(&meta.next_auth_refresh_trigger_time)
     ));
     output.push_str(&format!("- Rows: {}\n\n", rows.len()));
     output.push_str(
@@ -1386,10 +1634,19 @@ fn markdown_cell(value: &str) -> String {
         .replace('\n', "<br/>")
 }
 
-fn render_yaml(generated_at: &str, rows: &[ReportRow]) -> String {
+fn render_yaml(meta: &ReportMeta, rows: &[ReportRow]) -> String {
     let now = chrono::Utc::now();
     let mut output = String::new();
-    output.push_str(&format!("generated_at: {}\n", yaml_quote(generated_at)));
+    output.push_str(&format!("generated_at: {}\n", yaml_quote(&meta.generated_at)));
+    output.push_str(&format!(
+        "data_collected_at: {}\n",
+        yaml_quote(&meta.data_collected_at)
+    ));
+    output.push_str(&format!("data_delayed: {}\n", yaml_quote(&meta.data_delayed)));
+    output.push_str(&format!(
+        "next_auth_refresh_trigger_time: {}\n",
+        yaml_quote(&meta.next_auth_refresh_trigger_time)
+    ));
     output.push_str(&format!("row_count: {}\n", rows.len()));
     output.push_str("rows:\n");
     for row in rows {
@@ -1425,7 +1682,7 @@ fn render_yaml(generated_at: &str, rows: &[ReportRow]) -> String {
     output
 }
 
-fn render_html(generated_at: &str, rows: &[ReportRow]) -> String {
+fn render_html(meta: &ReportMeta, rows: &[ReportRow]) -> String {
     let now = chrono::Utc::now();
     let mut output = String::new();
     output.push_str(
@@ -1439,7 +1696,19 @@ fn render_html(generated_at: &str, rows: &[ReportRow]) -> String {
     output.push_str("<h1>Cockpit Tools Usage Report</h1>");
     output.push_str(&format!(
         "<p>Generated at: <span class=\"mono\">{}</span></p>",
-        html_escape(generated_at)
+        html_escape(&meta.generated_at)
+    ));
+    output.push_str(&format!(
+        "<p>Data collected at: <span class=\"mono\">{}</span></p>",
+        html_escape(&meta.data_collected_at)
+    ));
+    output.push_str(&format!(
+        "<p>Data delayed: <span class=\"mono\">{}</span></p>",
+        html_escape(&meta.data_delayed)
+    ));
+    output.push_str(&format!(
+        "<p>Next AuthRefresh trigger time: <span class=\"mono\">{}</span></p>",
+        html_escape(&meta.next_auth_refresh_trigger_time)
     ));
     output.push_str(&format!("<p>Rows: {}</p>", rows.len()));
     output.push_str("<table><thead><tr><th>Service</th><th>Account</th><th>Metric</th><th>Used</th><th>Remaining</th><th class=\"reset-friendly-col\">Reset Friendly</th><th>Status</th><th>Note</th></tr></thead><tbody>");
