@@ -6,22 +6,61 @@ on:
   workflow_dispatch:
 
 jobs:
-  prepare-release:
+  release:
     permissions:
       contents: write
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.app_version.outputs.VERSION }}
-      release_id: ${{ steps.ensure_release.outputs.release_id }}
-      release_draft: ${{ steps.ensure_release.outputs.release_draft }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Apple Silicon
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          # macOS Intel
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          # macOS Universal (同时支持 Intel 和 Apple Silicon)
+          - platform: "macos-latest"
+            args: "--target universal-apple-darwin"
+          # Linux x86_64
+          - platform: "ubuntu-22.04"
+            args: ""
+          # Linux ARM64
+          - platform: "ubuntu-24.04-arm"
+            args: ""
+          # Windows x86_64
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev
+          sudo apt-get install -y libnm-dev xdg-utils
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '') }}
 
       - name: Node.js setup
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Sync versions
+        run: npm run sync-version
 
       - name: Read app version
         id: app_version
@@ -95,6 +134,7 @@ jobs:
           fi
 
           {
+            echo "body<<EOF"
             echo "## 更新日志（中文）"
             echo
             printf '%s\n' "$zh_section"
@@ -102,126 +142,8 @@ jobs:
             echo "## Changelog (English)"
             echo
             printf '%s\n' "$en_section"
-          } > release-notes.md
-
-      - name: Ensure single release
-        id: ensure_release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.app_version.outputs.VERSION }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TAG="v${VERSION}"
-          EXISTING_RELEASE_IDS="$(
-            gh api "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq '.[] | select(.tag_name == "'"$TAG"'") | .id'
-          )"
-          RELEASE_COUNT="$(printf '%s\n' "$EXISTING_RELEASE_IDS" | sed '/^$/d' | wc -l | tr -d ' ')"
-
-          if [ "$RELEASE_COUNT" -gt 1 ]; then
-            echo "Multiple releases already exist for ${TAG}. Refusing to continue."
-            exit 1
-          fi
-
-          if [ "$RELEASE_COUNT" -eq 1 ]; then
-            RELEASE_ID="$(printf '%s\n' "$EXISTING_RELEASE_IDS" | sed -n '1p')"
-            RELEASE_DRAFT="$(
-              gh api "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq '.draft'
-            )"
-          else
-            node <<'EOF'
-            const fs = require('fs');
-
-            const version = process.env.VERSION;
-            const tag = `v${version}`;
-            const body = fs.readFileSync('release-notes.md', 'utf8');
-
-            fs.writeFileSync(
-              'release-create.json',
-              JSON.stringify(
-                {
-                  tag_name: tag,
-                  target_commitish: process.env.GITHUB_SHA,
-                  name: `Cockpit Tools v${version}`,
-                  body,
-                  draft: true,
-                  prerelease: false,
-                },
-                null,
-                2
-              )
-            );
-            EOF
-
-            RELEASE_ID="$(
-              gh api --method POST "/repos/${GITHUB_REPOSITORY}/releases" \
-                --input release-create.json \
-                --jq '.id'
-            )"
-            RELEASE_DRAFT="true"
-          fi
-
-          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
-          echo "release_draft=$RELEASE_DRAFT" >> "$GITHUB_OUTPUT"
-
-  release:
-    needs: prepare-release
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # macOS Apple Silicon
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-          # macOS Intel
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-          # macOS Universal (同时支持 Intel 和 Apple Silicon)
-          - platform: "macos-latest"
-            args: "--target universal-apple-darwin"
-          # Linux x86_64
-          - platform: "ubuntu-22.04"
-            args: ""
-          # Linux ARM64
-          - platform: "ubuntu-24.04-arm"
-            args: ""
-          # Windows x86_64
-          - platform: "windows-latest"
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies (Linux)
-        if: startsWith(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev
-          sudo apt-get install -y libnm-dev xdg-utils
-
-      - name: Rust setup
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '') }}
-
-      - name: Node.js setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm"
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Sync versions
-        run: npm run sync-version
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
@@ -230,11 +152,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.prepare-release.outputs.release_id }}
-          tagName: "v${{ needs.prepare-release.outputs.version }}"
-          releaseDraft: ${{ needs.prepare-release.outputs.release_draft }}
+          tagName: "v${{ steps.app_version.outputs.VERSION }}"
+          releaseName: "Cockpit Tools v${{ steps.app_version.outputs.VERSION }}"
+          releaseBody: ${{ steps.release_notes.outputs.body }}
+          releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
   rebuild-latest-json:
