@@ -181,7 +181,33 @@ pub async fn switch_account(app: AppHandle, account_id: String) -> Result<models
         modules::save_account(&account)?;
     }
 
-    // 3. 写入设备指纹到 storage.json
+    // 3. 更新工具内部状态
+    modules::set_current_account_id(&account_id)?;
+    account.update_last_used();
+    modules::save_account(&account)?;
+
+    // 4. 同步更新 Antigravity 默认实例的绑定账号（不同步到 Codex，因为账号体系不同）
+    if let Err(e) = modules::instance::update_default_settings(
+        Some(Some(account_id.clone())),
+        None,
+        Some(false),
+    ) {
+        modules::logger::log_warn(&format!("更新 Antigravity 默认实例绑定账号失败: {}", e));
+    } else {
+        modules::logger::log_info(&format!(
+            "已同步更新 Antigravity 默认实例绑定账号: {}",
+            account_id
+        ));
+    }
+
+    // 5. 关闭受管进程：按默认实例目录关闭受管进程，等待其完全退出
+    let default_dir = modules::instance::get_default_user_data_dir()?;
+    let default_dir_str = default_dir.to_string_lossy().to_string();
+    modules::process::close_antigravity_instances(&[default_dir_str], 20)?;
+    let _ = modules::instance::update_default_pid(None);
+
+    // 6. 进程完全退出后，执行磁盘级别的文件注入
+    // 6.1 写入设备指纹到 storage.json 和 state.vscdb
     if let Ok(storage_path) = modules::device::get_storage_path() {
         if let Some(ref fp_id) = account.fingerprint_id {
             // 优先使用绑定的指纹
@@ -199,30 +225,7 @@ pub async fn switch_account(app: AppHandle, account_id: String) -> Result<models
         }
     }
 
-    // 4. 更新工具内部状态
-    modules::set_current_account_id(&account_id)?;
-    account.update_last_used();
-    modules::save_account(&account)?;
-
-    // 5. 同步更新 Antigravity 默认实例的绑定账号（不同步到 Codex，因为账号体系不同）
-    if let Err(e) = modules::instance::update_default_settings(
-        Some(Some(account_id.clone())),
-        None,
-        Some(false),
-    ) {
-        modules::logger::log_warn(&format!("更新 Antigravity 默认实例绑定账号失败: {}", e));
-    } else {
-        modules::logger::log_info(&format!(
-            "已同步更新 Antigravity 默认实例绑定账号: {}",
-            account_id
-        ));
-    }
-
-    // 6. 对齐默认实例启动逻辑：按默认实例目录关闭受管进程，再将账号注入默认实例目录
-    let default_dir = modules::instance::get_default_user_data_dir()?;
-    let default_dir_str = default_dir.to_string_lossy().to_string();
-    modules::process::close_antigravity_instances(&[default_dir_str], 20)?;
-    let _ = modules::instance::update_default_pid(None);
+    // 6.2 将账号 Token 注入默认实例目录
     modules::instance::inject_account_to_profile(&default_dir, &account_id)?;
 
     // 7. 启动 Antigravity（带默认实例自定义启动参数；启动失败不阻断切号，保持原行为）
