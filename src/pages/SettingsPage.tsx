@@ -69,6 +69,7 @@ interface GeneralConfig {
   zed_app_path: string;
   codebuddy_auto_refresh_minutes: number;
   codebuddy_cn_auto_refresh_minutes: number;
+  workbuddy_auto_refresh_minutes: number;
   qoder_auto_refresh_minutes: number;
   trae_auto_refresh_minutes: number;
   zed_auto_refresh_minutes: number;
@@ -82,6 +83,8 @@ interface GeneralConfig {
   trae_quota_alert_threshold: number;
   zed_quota_alert_enabled: boolean;
   zed_quota_alert_threshold: number;
+  workbuddy_quota_alert_enabled: boolean;
+  workbuddy_quota_alert_threshold: number;
   opencode_sync_on_switch: boolean;
   opencode_auth_overwrite_on_switch: boolean;
   openclaw_auth_overwrite_on_switch: boolean;
@@ -113,6 +116,7 @@ type AppPathTarget =
   | 'kiro'
   | 'cursor'
   | 'codebuddy'
+  | 'codebuddy_cn'
   | 'qoder'
   | 'trae'
   | 'workbuddy'
@@ -218,6 +222,7 @@ export function SettingsPage() {
   const [zedAppPath, setZedAppPath] = useState('');
   const [codebuddyAutoRefresh, setCodebuddyAutoRefresh] = useState('10');
   const [codebuddyCnAutoRefresh, setCodebuddyCnAutoRefresh] = useState('10');
+  const [workbuddyAutoRefresh, setWorkbuddyAutoRefresh] = useState('10');
   const [qoderAutoRefresh, setQoderAutoRefresh] = useState('10');
   const [traeAutoRefresh, setTraeAutoRefresh] = useState('10');
   const [zedAutoRefresh, setZedAutoRefresh] = useState('10');
@@ -231,7 +236,11 @@ export function SettingsPage() {
   const [traeQuotaAlertThreshold, setTraeQuotaAlertThreshold] = useState('20');
   const [zedQuotaAlertEnabled, setZedQuotaAlertEnabled] = useState(false);
   const [zedQuotaAlertThreshold, setZedQuotaAlertThreshold] = useState('20');
+  const [workbuddyQuotaAlertEnabled, setWorkbuddyQuotaAlertEnabled] = useState(false);
+  const [workbuddyQuotaAlertThreshold, setWorkbuddyQuotaAlertThreshold] = useState('20');
   const [codebuddyAutoRefreshCustomMode, setCodebuddyAutoRefreshCustomMode] = useState(false);
+  const [codebuddyCnAutoRefreshCustomMode, setCodebuddyCnAutoRefreshCustomMode] = useState(false);
+  const [workbuddyAutoRefreshCustomMode, setWorkbuddyAutoRefreshCustomMode] = useState(false);
   const [codebuddyQuotaAlertThresholdCustomMode, setCodebuddyQuotaAlertThresholdCustomMode] = useState(false);
   const [qoderAutoRefreshCustomMode, setQoderAutoRefreshCustomMode] = useState(false);
   const [qoderQuotaAlertThresholdCustomMode, setQoderQuotaAlertThresholdCustomMode] = useState(false);
@@ -239,6 +248,8 @@ export function SettingsPage() {
   const [traeQuotaAlertThresholdCustomMode, setTraeQuotaAlertThresholdCustomMode] = useState(false);
   const [zedAutoRefreshCustomMode, setZedAutoRefreshCustomMode] = useState(false);
   const [zedQuotaAlertThresholdCustomMode, setZedQuotaAlertThresholdCustomMode] = useState(false);
+  const [codebuddyCnQuotaAlertThresholdCustomMode, setCodebuddyCnQuotaAlertThresholdCustomMode] = useState(false);
+  const [workbuddyQuotaAlertThresholdCustomMode, setWorkbuddyQuotaAlertThresholdCustomMode] = useState(false);
   const [appPathResetDetectingTargets, setAppPathResetDetectingTargets] = useState<Set<AppPathTarget>>(new Set());
   const [opencodeSyncOnSwitch, setOpencodeSyncOnSwitch] = useState(true);
   const [opencodeAuthOverwriteOnSwitch, setOpencodeAuthOverwriteOnSwitch] = useState(true);
@@ -422,6 +433,8 @@ export function SettingsPage() {
       !windsurfAutoRefresh.trim() ||
       !kiroAutoRefresh.trim() ||
       !codebuddyAutoRefresh.trim() ||
+      !codebuddyCnAutoRefresh.trim() ||
+      !workbuddyAutoRefresh.trim() ||
       !qoderAutoRefresh.trim() ||
       !traeAutoRefresh.trim() ||
       !zedAutoRefresh.trim() ||
@@ -438,6 +451,7 @@ export function SettingsPage() {
     const kiroAutoRefreshNum = parseInt(kiroAutoRefresh, 10) || -1;
     const codebuddyAutoRefreshNum = parseInt(codebuddyAutoRefresh, 10) || -1;
     const codebuddyCnAutoRefreshNum = parseInt(codebuddyCnAutoRefresh, 10) || -1;
+    const workbuddyAutoRefreshNum = parseInt(workbuddyAutoRefresh, 10) || -1;
     const qoderAutoRefreshNum = parseInt(qoderAutoRefresh, 10) || -1;
     const traeAutoRefreshNum = parseInt(traeAutoRefresh, 10) || -1;
     const zedAutoRefreshNum = parseInt(zedAutoRefresh, 10) || -1;
@@ -455,6 +469,7 @@ export function SettingsPage() {
     const parsedKiroQuotaAlertThreshold = Number.parseInt(kiroQuotaAlertThreshold, 10);
     const parsedCodebuddyQuotaAlertThreshold = Number.parseInt(codebuddyQuotaAlertThreshold, 10);
     const parsedCodebuddyCnQuotaAlertThreshold = Number.parseInt(codebuddyCnQuotaAlertThreshold, 10);
+    const parsedWorkbuddyQuotaAlertThreshold = Number.parseInt(workbuddyQuotaAlertThreshold, 10);
     const parsedQoderQuotaAlertThreshold = Number.parseInt(qoderQuotaAlertThreshold, 10);
     const parsedTraeQuotaAlertThreshold = Number.parseInt(traeQuotaAlertThreshold, 10);
     const parsedZedQuotaAlertThreshold = Number.parseInt(zedQuotaAlertThreshold, 10);
@@ -479,6 +494,7 @@ export function SettingsPage() {
           kiroAutoRefreshMinutes: kiroAutoRefreshNum,
           codebuddyAutoRefreshMinutes: codebuddyAutoRefreshNum,
           codebuddyCnAutoRefreshMinutes: codebuddyCnAutoRefreshNum,
+          workbuddyAutoRefreshMinutes: workbuddyAutoRefreshNum,
           qoderAutoRefreshMinutes: qoderAutoRefreshNum,
           traeAutoRefreshMinutes: traeAutoRefreshNum,
           zedAutoRefreshMinutes: zedAutoRefreshNum,
@@ -534,6 +550,10 @@ export function SettingsPage() {
           codebuddyCnQuotaAlertThreshold: Number.isNaN(parsedCodebuddyCnQuotaAlertThreshold)
             ? 20
             : parsedCodebuddyCnQuotaAlertThreshold,
+          workbuddyQuotaAlertEnabled,
+          workbuddyQuotaAlertThreshold: Number.isNaN(parsedWorkbuddyQuotaAlertThreshold)
+            ? 20
+            : parsedWorkbuddyQuotaAlertThreshold,
           qoderQuotaAlertEnabled,
           qoderQuotaAlertThreshold: Number.isNaN(parsedQoderQuotaAlertThreshold)
             ? 20
@@ -575,6 +595,7 @@ export function SettingsPage() {
     kiroAutoRefresh,
     traeAutoRefresh,
     zedAutoRefresh,
+    workbuddyAutoRefresh,
     qoderAutoRefresh,
     cursorAutoRefresh,
     geminiAutoRefresh,
@@ -622,6 +643,8 @@ export function SettingsPage() {
     codebuddyQuotaAlertThreshold,
     codebuddyCnQuotaAlertEnabled,
     codebuddyCnQuotaAlertThreshold,
+    workbuddyQuotaAlertEnabled,
+    workbuddyQuotaAlertThreshold,
     qoderQuotaAlertEnabled,
     qoderQuotaAlertThreshold,
     traeQuotaAlertEnabled,
@@ -852,6 +875,7 @@ export function SettingsPage() {
       setZedAppPath(config.zed_app_path || '');
       setCodebuddyAutoRefresh(String(config.codebuddy_auto_refresh_minutes ?? 10));
       setCodebuddyCnAutoRefresh(String(config.codebuddy_cn_auto_refresh_minutes ?? 10));
+      setWorkbuddyAutoRefresh(String(config.workbuddy_auto_refresh_minutes ?? 10));
       setQoderAutoRefresh(String(config.qoder_auto_refresh_minutes ?? 10));
       setTraeAutoRefresh(String(config.trae_auto_refresh_minutes ?? 10));
       setZedAutoRefresh(String(config.zed_auto_refresh_minutes ?? 10));
@@ -859,6 +883,8 @@ export function SettingsPage() {
       setCodebuddyQuotaAlertThreshold(String(config.codebuddy_quota_alert_threshold ?? 20));
       setCodebuddyCnQuotaAlertEnabled(config.codebuddy_cn_quota_alert_enabled ?? false);
       setCodebuddyCnQuotaAlertThreshold(String(config.codebuddy_cn_quota_alert_threshold ?? 20));
+      setWorkbuddyQuotaAlertEnabled(config.workbuddy_quota_alert_enabled ?? false);
+      setWorkbuddyQuotaAlertThreshold(String(config.workbuddy_quota_alert_threshold ?? 20));
       setQoderQuotaAlertEnabled(config.qoder_quota_alert_enabled ?? false);
       setQoderQuotaAlertThreshold(String(config.qoder_quota_alert_threshold ?? 20));
       setTraeQuotaAlertEnabled(config.trae_quota_alert_enabled ?? false);
@@ -891,6 +917,8 @@ export function SettingsPage() {
       setWindsurfAutoRefreshCustomMode(false);
       setKiroAutoRefreshCustomMode(false);
       setCodebuddyAutoRefreshCustomMode(false);
+      setCodebuddyCnAutoRefreshCustomMode(false);
+      setWorkbuddyAutoRefreshCustomMode(false);
       setQoderAutoRefreshCustomMode(false);
       setTraeAutoRefreshCustomMode(false);
       setZedAutoRefreshCustomMode(false);
@@ -903,6 +931,8 @@ export function SettingsPage() {
       setWindsurfQuotaAlertThresholdCustomMode(false);
       setKiroQuotaAlertThresholdCustomMode(false);
       setCodebuddyQuotaAlertThresholdCustomMode(false);
+      setCodebuddyCnQuotaAlertThresholdCustomMode(false);
+      setWorkbuddyQuotaAlertThresholdCustomMode(false);
       setQoderQuotaAlertThresholdCustomMode(false);
       setTraeQuotaAlertThresholdCustomMode(false);
       setZedQuotaAlertThresholdCustomMode(false);
@@ -1002,10 +1032,14 @@ export function SettingsPage() {
       setCursorAppPath(path);
     } else if (target === 'codebuddy') {
       setCodebuddyAppPath(path);
+    } else if (target === 'codebuddy_cn') {
+      setCodebuddyCnAppPath(path);
     } else if (target === 'qoder') {
       setQoderAppPath(path);
     } else if (target === 'trae') {
       setTraeAppPath(path);
+    } else if (target === 'workbuddy') {
+      setWorkbuddyAppPath(path);
     } else if (target === 'zed') {
       setZedAppPath(path);
     } else {
@@ -1028,6 +1062,9 @@ export function SettingsPage() {
     }
     if (target === 'codebuddy') {
       return t('settings.general.codebuddyPathReset', '重置默认');
+    }
+    if (target === 'codebuddy_cn') {
+      return t('settings.general.codebuddyCnPathReset', '重置默认');
     }
     if (target === 'qoder') {
       return t('settings.general.qoderPathReset', '重置默认');
@@ -1102,6 +1139,8 @@ export function SettingsPage() {
   const windsurfAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(windsurfAutoRefresh);
   const kiroAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(kiroAutoRefresh);
   const codebuddyAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(codebuddyAutoRefresh);
+  const codebuddyCnAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(codebuddyCnAutoRefresh);
+  const workbuddyAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(workbuddyAutoRefresh);
   const qoderAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(qoderAutoRefresh);
   const traeAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(traeAutoRefresh);
   const zedAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(zedAutoRefresh);
@@ -1114,6 +1153,8 @@ export function SettingsPage() {
   const windsurfQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(windsurfQuotaAlertThreshold);
   const kiroQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(kiroQuotaAlertThreshold);
   const codebuddyQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(codebuddyQuotaAlertThreshold);
+  const codebuddyCnQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(codebuddyCnQuotaAlertThreshold);
+  const workbuddyQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(workbuddyQuotaAlertThreshold);
   const qoderQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(qoderQuotaAlertThreshold);
   const traeQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(traeQuotaAlertThreshold);
   const zedQuotaAlertThresholdIsPreset = THRESHOLD_PRESET_VALUES.includes(zedQuotaAlertThreshold);
@@ -2723,6 +2764,194 @@ export function SettingsPage() {
             </div>
               </div>
 
+              <div style={{ order: platformSettingsOrder.codebuddy_cn }}>
+                <div className="group-title">{t('settings.general.codebuddyCnSettingsTitle', 'CodeBuddy CN 设置')}</div>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="row-label">
+                      <div className="row-title">{t('settings.general.codebuddyCnAutoRefresh', 'CodeBuddy CN 自动刷新配额')}</div>
+                      <div className="row-desc">{t('settings.general.codebuddyCnAutoRefreshDesc', '后台自动更新频率')}</div>
+                    </div>
+                    <div className="row-control">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {codebuddyCnAutoRefreshCustomMode ? (
+                          <div className="settings-inline-input" style={{ minWidth: '120px', width: 'auto' }}>
+                            <input
+                              type="number"
+                              min={1}
+                              max={999}
+                              className="settings-select settings-select--input-mode settings-select--with-unit"
+                              value={codebuddyCnAutoRefresh}
+                              placeholder={t('quickSettings.inputMinutes', '输入分钟数')}
+                              onChange={(e) => setCodebuddyCnAutoRefresh(sanitizeNumberInput(e.target.value))}
+                              onBlur={() => {
+                                const normalized = normalizeNumberInput(codebuddyCnAutoRefresh, 1, 999);
+                                if (REFRESH_PRESET_VALUES.includes(normalized)) {
+                                  setCodebuddyCnAutoRefreshCustomMode(false);
+                                }
+                                setCodebuddyCnAutoRefresh(normalized);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const normalized = normalizeNumberInput(codebuddyCnAutoRefresh, 1, 999);
+                                  setCodebuddyCnAutoRefreshCustomMode(false);
+                                  setCodebuddyCnAutoRefresh(normalized);
+                                }
+                              }}
+                            />
+                            <span className="settings-input-unit">{t('settings.general.minutes')}</span>
+                          </div>
+                        ) : (
+                          <select
+                            className="settings-select"
+                            style={{ minWidth: '120px', width: 'auto' }}
+                            value={codebuddyCnAutoRefresh}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setCodebuddyCnAutoRefreshCustomMode(true);
+                                setCodebuddyCnAutoRefresh(codebuddyCnAutoRefresh !== '-1' ? codebuddyCnAutoRefresh : '1');
+                                return;
+                              }
+                              setCodebuddyCnAutoRefreshCustomMode(false);
+                              setCodebuddyCnAutoRefresh(val);
+                            }}
+                          >
+                            {!codebuddyCnAutoRefreshIsPreset && (
+                              <option value={codebuddyCnAutoRefresh}>
+                                {codebuddyCnAutoRefresh} {t('settings.general.minutes')}
+                              </option>
+                            )}
+                            <option value="-1">{t('settings.general.autoRefreshDisabled')}</option>
+                            <option value="2">2 {t('settings.general.minutes')}</option>
+                            <option value="5">5 {t('settings.general.minutes')}</option>
+                            <option value="10">10 {t('settings.general.minutes')}</option>
+                            <option value="15">15 {t('settings.general.minutes')}</option>
+                            <option value="custom">{t('settings.general.autoRefreshCustom')}</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="row-label">
+                      <div className="row-title">{t('settings.general.codebuddyCnAppPath', 'CodeBuddy CN 启动路径')}</div>
+                      <div className="row-desc">{t('settings.general.codebuddyCnAppPathDesc', '留空则使用默认路径')}</div>
+                    </div>
+                    <div className="row-control row-control--grow">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
+                        <input
+                          type="text"
+                          className="settings-input settings-input--path"
+                          value={codebuddyCnAppPath}
+                          placeholder={t('settings.general.codebuddyCnAppPathPlaceholder', '默认路径')}
+                          onChange={(e) => setCodebuddyCnAppPath(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handlePickAppPath('codebuddy_cn')}
+                          disabled={isAppPathResetDetecting('codebuddy_cn')}
+                        >
+                          {t('settings.general.codebuddyCnPathSelect', '选择')}
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => handleResetAppPath('codebuddy_cn')}
+                          disabled={isAppPathResetDetecting('codebuddy_cn')}
+                        >
+                          <RefreshCw size={16} className={isAppPathResetDetecting('codebuddy_cn') ? 'spin' : undefined} />
+                          {isAppPathResetDetecting('codebuddy_cn')
+                            ? t('common.loading', '加载中...')
+                            : getResetLabelByTarget('codebuddy_cn')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="row-label">
+                      <div className="row-title">{t('quickSettings.quotaAlert.enable', '超额预警')}</div>
+                      <div className="row-desc">{t('quickSettings.quotaAlert.hint', '当当前账号任意模型配额低于阈值时，发送原生通知并在页面提示快捷切号。')}</div>
+                    </div>
+                    <div className="row-control">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={codebuddyCnQuotaAlertEnabled}
+                          onChange={(e) => setCodebuddyCnQuotaAlertEnabled(e.target.checked)}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                  {codebuddyCnQuotaAlertEnabled && (
+                    <div className="settings-row" style={{ animation: 'fadeUp 0.3s ease both' }}>
+                      <div className="row-label">
+                        <div className="row-title">{t('quickSettings.quotaAlert.threshold', '预警阈值')}</div>
+                        <div className="row-desc">{t('quickSettings.quotaAlert.thresholdDesc', '任意模型配额低于此百分比时触发预警')}</div>
+                      </div>
+                      <div className="row-control">
+                        {codebuddyCnQuotaAlertThresholdCustomMode ? (
+                          <div className="settings-inline-input">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="settings-select settings-select--input-mode settings-select--with-unit"
+                              value={codebuddyCnQuotaAlertThreshold}
+                              placeholder={t('quickSettings.inputPercent', '输入百分比')}
+                              onChange={(e) => setCodebuddyCnQuotaAlertThreshold(sanitizeNumberInput(e.target.value))}
+                              onBlur={() => {
+                                const normalized = normalizeNumberInput(codebuddyCnQuotaAlertThreshold, 0, 100);
+                                if (THRESHOLD_PRESET_VALUES.includes(normalized)) {
+                                  setCodebuddyCnQuotaAlertThresholdCustomMode(false);
+                                }
+                                setCodebuddyCnQuotaAlertThreshold(normalized);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const normalized = normalizeNumberInput(codebuddyCnQuotaAlertThreshold, 0, 100);
+                                  setCodebuddyCnQuotaAlertThresholdCustomMode(false);
+                                  setCodebuddyCnQuotaAlertThreshold(normalized);
+                                }
+                              }}
+                            />
+                            <span className="settings-input-unit">%</span>
+                          </div>
+                        ) : (
+                          <select
+                            className="settings-select"
+                            value={codebuddyCnQuotaAlertThreshold}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setCodebuddyCnQuotaAlertThresholdCustomMode(true);
+                                setCodebuddyCnQuotaAlertThreshold(codebuddyCnQuotaAlertThreshold || '20');
+                                return;
+                              }
+                              setCodebuddyCnQuotaAlertThresholdCustomMode(false);
+                              setCodebuddyCnQuotaAlertThreshold(val);
+                            }}
+                          >
+                            {!codebuddyCnQuotaAlertThresholdIsPreset && (
+                              <option value={codebuddyCnQuotaAlertThreshold}>{codebuddyCnQuotaAlertThreshold}%</option>
+                            )}
+                            <option value="0">0%</option>
+                            <option value="20">20%</option>
+                            <option value="40">40%</option>
+                            <option value="60">60%</option>
+                            <option value="custom">{t('settings.general.autoRefreshCustom')}</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ order: platformSettingsOrder.qoder }}>
                 <div className="group-title">{t('quickSettings.qoder.title', 'Qoder 设置')}</div>
                 <div className="settings-group">
@@ -3019,41 +3248,6 @@ export function SettingsPage() {
 
                   <div className="settings-row">
                     <div className="row-label">
-                      <div className="row-title">{t('settings.general.workbuddyAppPath', 'WorkBuddy 启动路径')}</div>
-                      <div className="row-desc">{t('settings.general.workbuddyAppPathDesc', '留空则使用默认路径')}</div>
-                    </div>
-                    <div className="row-control row-control--grow">
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
-                        <input
-                          type="text"
-                          className="settings-input settings-input--path"
-                          value={workbuddyAppPath}
-                          placeholder={t('settings.general.workbuddyAppPathPlaceholder', '默认路径')}
-                          onChange={(e) => setWorkbuddyAppPath(e.target.value)}
-                        />
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handlePickAppPath('workbuddy')}
-                          disabled={isAppPathResetDetecting('workbuddy')}
-                        >
-                          {t('settings.general.workbuddyPathSelect', '选择')}
-                        </button>
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleResetAppPath('workbuddy')}
-                          disabled={isAppPathResetDetecting('workbuddy')}
-                        >
-                          <RefreshCw size={16} className={isAppPathResetDetecting('workbuddy') ? 'spin' : undefined} />
-                          {isAppPathResetDetecting('workbuddy')
-                            ? t('common.loading', '加载中...')
-                            : getResetLabelByTarget('workbuddy')}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="settings-row">
-                    <div className="row-label">
                       <div className="row-title">{t('quickSettings.quotaAlert.enable', '超额预警')}</div>
                       <div className="row-desc">{t('quickSettings.quotaAlert.hint', '当当前账号任意模型配额低于阈值时，发送原生通知并在页面提示快捷切号。')}</div>
                     </div>
@@ -3139,6 +3333,74 @@ export function SettingsPage() {
                 <div className="settings-group">
                   <div className="settings-row">
                     <div className="row-label">
+                      <div className="row-title">{t('settings.general.workbuddyAutoRefresh', 'WorkBuddy 自动刷新配额')}</div>
+                      <div className="row-desc">{t('settings.general.workbuddyAutoRefreshDesc', '后台自动更新频率')}</div>
+                    </div>
+                    <div className="row-control">
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {workbuddyAutoRefreshCustomMode ? (
+                          <div className="settings-inline-input" style={{ minWidth: '120px', width: 'auto' }}>
+                            <input
+                              type="number"
+                              min={1}
+                              max={999}
+                              className="settings-select settings-select--input-mode settings-select--with-unit"
+                              value={workbuddyAutoRefresh}
+                              placeholder={t('quickSettings.inputMinutes', '输入分钟数')}
+                              onChange={(e) => setWorkbuddyAutoRefresh(sanitizeNumberInput(e.target.value))}
+                              onBlur={() => {
+                                const normalized = normalizeNumberInput(workbuddyAutoRefresh, 1, 999);
+                                if (REFRESH_PRESET_VALUES.includes(normalized)) {
+                                  setWorkbuddyAutoRefreshCustomMode(false);
+                                }
+                                setWorkbuddyAutoRefresh(normalized);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const normalized = normalizeNumberInput(workbuddyAutoRefresh, 1, 999);
+                                  setWorkbuddyAutoRefreshCustomMode(false);
+                                  setWorkbuddyAutoRefresh(normalized);
+                                }
+                              }}
+                            />
+                            <span className="settings-input-unit">{t('settings.general.minutes')}</span>
+                          </div>
+                        ) : (
+                          <select
+                            className="settings-select"
+                            style={{ minWidth: '120px', width: 'auto' }}
+                            value={workbuddyAutoRefresh}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setWorkbuddyAutoRefreshCustomMode(true);
+                                setWorkbuddyAutoRefresh(workbuddyAutoRefresh !== '-1' ? workbuddyAutoRefresh : '1');
+                                return;
+                              }
+                              setWorkbuddyAutoRefreshCustomMode(false);
+                              setWorkbuddyAutoRefresh(val);
+                            }}
+                          >
+                            {!workbuddyAutoRefreshIsPreset && (
+                              <option value={workbuddyAutoRefresh}>
+                                {workbuddyAutoRefresh} {t('settings.general.minutes')}
+                              </option>
+                            )}
+                            <option value="-1">{t('settings.general.autoRefreshDisabled')}</option>
+                            <option value="2">2 {t('settings.general.minutes')}</option>
+                            <option value="5">5 {t('settings.general.minutes')}</option>
+                            <option value="10">10 {t('settings.general.minutes')}</option>
+                            <option value="15">15 {t('settings.general.minutes')}</option>
+                            <option value="custom">{t('settings.general.autoRefreshCustom')}</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="row-label">
                       <div className="row-title">{t('settings.general.workbuddyAppPath', 'WorkBuddy 启动路径')}</div>
                       <div className="row-desc">{t('settings.general.workbuddyAppPathDesc', '留空则使用默认路径')}</div>
                     </div>
@@ -3171,6 +3433,86 @@ export function SettingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="settings-row">
+                    <div className="row-label">
+                      <div className="row-title">{t('quickSettings.quotaAlert.enable', '超额预警')}</div>
+                      <div className="row-desc">{t('quickSettings.quotaAlert.hint', '当当前账号任意模型配额低于阈值时，发送原生通知并在页面提示快捷切号。')}</div>
+                    </div>
+                    <div className="row-control">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={workbuddyQuotaAlertEnabled}
+                          onChange={(e) => setWorkbuddyQuotaAlertEnabled(e.target.checked)}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                  {workbuddyQuotaAlertEnabled && (
+                    <div className="settings-row" style={{ animation: 'fadeUp 0.3s ease both' }}>
+                      <div className="row-label">
+                        <div className="row-title">{t('quickSettings.quotaAlert.threshold', '预警阈值')}</div>
+                        <div className="row-desc">{t('quickSettings.quotaAlert.thresholdDesc', '任意模型配额低于此百分比时触发预警')}</div>
+                      </div>
+                      <div className="row-control">
+                        {workbuddyQuotaAlertThresholdCustomMode ? (
+                          <div className="settings-inline-input">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="settings-select settings-select--input-mode settings-select--with-unit"
+                              value={workbuddyQuotaAlertThreshold}
+                              placeholder={t('quickSettings.inputPercent', '输入百分比')}
+                              onChange={(e) => setWorkbuddyQuotaAlertThreshold(sanitizeNumberInput(e.target.value))}
+                              onBlur={() => {
+                                const normalized = normalizeNumberInput(workbuddyQuotaAlertThreshold, 0, 100);
+                                if (THRESHOLD_PRESET_VALUES.includes(normalized)) {
+                                  setWorkbuddyQuotaAlertThresholdCustomMode(false);
+                                }
+                                setWorkbuddyQuotaAlertThreshold(normalized);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const normalized = normalizeNumberInput(workbuddyQuotaAlertThreshold, 0, 100);
+                                  setWorkbuddyQuotaAlertThresholdCustomMode(false);
+                                  setWorkbuddyQuotaAlertThreshold(normalized);
+                                }
+                              }}
+                            />
+                            <span className="settings-input-unit">%</span>
+                          </div>
+                        ) : (
+                          <select
+                            className="settings-select"
+                            value={workbuddyQuotaAlertThreshold}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setWorkbuddyQuotaAlertThresholdCustomMode(true);
+                                setWorkbuddyQuotaAlertThreshold(workbuddyQuotaAlertThreshold || '20');
+                                return;
+                              }
+                              setWorkbuddyQuotaAlertThresholdCustomMode(false);
+                              setWorkbuddyQuotaAlertThreshold(val);
+                            }}
+                          >
+                            {!workbuddyQuotaAlertThresholdIsPreset && (
+                              <option value={workbuddyQuotaAlertThreshold}>{workbuddyQuotaAlertThreshold}%</option>
+                            )}
+                            <option value="0">0%</option>
+                            <option value="20">20%</option>
+                            <option value="40">40%</option>
+                            <option value="60">60%</option>
+                            <option value="custom">{t('settings.general.autoRefreshCustom')}</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

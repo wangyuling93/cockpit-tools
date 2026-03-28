@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "Wiele instancji CodeBuddy CN jest obsługiwane tylko na macOS, Windows i Linux."
       }
+    },
+    "checkin": {
+      "title": "Codzienne zameldowanie",
+      "modalTitle": "Codzienne zameldowanie",
+      "status": "Status zameldowania",
+      "checkedIn": "Zameldowano",
+      "notCheckedIn": "Brak zameldowania",
+      "button": "Zamelduj",
+      "button.loading": "Trwa zameldowanie...",
+      "done": "Gotowe",
+      "success": "Zameldowanie udane! Seria {{days}} dni",
+      "failure": "Zameldowanie nie powiodło się: {{message}}",
+      "failure.network": "Błąd sieci, spróbuj ponownie później",
+      "lastCheckin": "Ostatnie zameldowanie: {{time}}",
+      "streak": "Seria {{days}} dni",
+      "reward": "Nagroda: {{reward}}",
+      "refreshStatus": "Odśwież",
+      "checkAll": "Zamelduj wszystkie",
+      "noAccounts": "Brak kont",
+      "querying": "Ładowanie...",
+      "streakDays": "{{days}} dni",
+      "streakRewardCountdown": "Do nagrody bonusowej pozostało {{days}} dni",
+      "streakRewardToday": "Nagroda bonusowa dostępna dzisiaj!",
+      "recentDates": "Ostatnie: ",
+      "quotaCategory": {
+        "base": "Pakiet podstawowy",
+        "activity": "Bonus aktywności",
+        "extra": "Dodatkowe kredyty",
+        "other": "Inne",
+        "empty": "Brak danych limitu"
+      }
     }
   },
   "workbuddy": {

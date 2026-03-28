@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "CodeBuddy CN-Mehrinstanzen werden nur unter macOS, Windows und Linux unterstützt."
       }
+    },
+    "checkin": {
+      "title": "Täglicher Check-in",
+      "modalTitle": "Täglicher Check-in",
+      "status": "Check-in-Status",
+      "checkedIn": "Eingecheckt",
+      "notCheckedIn": "Nicht eingecheckt",
+      "button": "Einchecken",
+      "button.loading": "Check-in läuft...",
+      "done": "Fertig",
+      "success": "Check-in erfolgreich! {{days}} Tage Serie",
+      "failure": "Check-in fehlgeschlagen: {{message}}",
+      "failure.network": "Netzwerkfehler, bitte später erneut versuchen",
+      "lastCheckin": "Letzter Check-in: {{time}}",
+      "streak": "{{days}}-Tage-Serie",
+      "reward": "Belohnung: {{reward}}",
+      "refreshStatus": "Aktualisieren",
+      "checkAll": "Alle einchecken",
+      "noAccounts": "Keine Konten",
+      "querying": "Wird geladen...",
+      "streakDays": "{{days}} Tage",
+      "streakRewardCountdown": "Noch {{days}} Tage bis zur Bonusbelohnung",
+      "streakRewardToday": "Bonusbelohnung heute verfügbar!",
+      "recentDates": "Kürzlich: ",
+      "quotaCategory": {
+        "base": "Basispaket",
+        "activity": "Aktivitätsbonus",
+        "extra": "Zusatzguthaben",
+        "other": "Sonstiges",
+        "empty": "Keine Kontingentdaten"
+      }
     }
   },
   "workbuddy": {

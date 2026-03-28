@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "Le mode multi-instances CodeBuddy CN est pris en charge uniquement sur macOS, Windows et Linux."
       }
+    },
+    "checkin": {
+      "title": "Check-in quotidien",
+      "modalTitle": "Check-in quotidien",
+      "status": "Statut du check-in",
+      "checkedIn": "Check-in effectué",
+      "notCheckedIn": "Pas encore check-in",
+      "button": "Faire le check-in",
+      "button.loading": "Check-in en cours...",
+      "done": "Terminé",
+      "success": "Check-in réussi ! Série de {{days}} jours",
+      "failure": "Échec du check-in : {{message}}",
+      "failure.network": "Erreur réseau, veuillez réessayer plus tard",
+      "lastCheckin": "Dernier check-in : {{time}}",
+      "streak": "Série de {{days}} jours",
+      "reward": "Récompense : {{reward}}",
+      "refreshStatus": "Actualiser",
+      "checkAll": "Tout check-in",
+      "noAccounts": "Aucun compte",
+      "querying": "Chargement...",
+      "streakDays": "{{days}} jours",
+      "streakRewardCountdown": "Encore {{days}} jours avant la récompense bonus",
+      "streakRewardToday": "Récompense bonus disponible aujourd’hui !",
+      "recentDates": "Récent : ",
+      "quotaCategory": {
+        "base": "Forfait de base",
+        "activity": "Bonus d’activité",
+        "extra": "Crédits supplémentaires",
+        "other": "Autre",
+        "empty": "Aucune donnée de quota"
+      }
     }
   },
   "workbuddy": {

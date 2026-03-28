@@ -9,6 +9,7 @@ import { useCursorAccountStore } from '../stores/useCursorAccountStore';
 import { useGeminiAccountStore } from '../stores/useGeminiAccountStore';
 import { useCodebuddyAccountStore } from '../stores/useCodebuddyAccountStore';
 import { useCodebuddyCnAccountStore } from '../stores/useCodebuddyCnAccountStore';
+import { useWorkbuddyAccountStore } from '../stores/useWorkbuddyAccountStore';
 import { useQoderAccountStore } from '../stores/useQoderAccountStore';
 import { useTraeAccountStore } from '../stores/useTraeAccountStore';
 import { useZedAccountStore } from '../stores/useZedAccountStore';
@@ -25,6 +26,7 @@ interface GeneralConfig {
   gemini_auto_refresh_minutes: number;
   codebuddy_auto_refresh_minutes: number;
   codebuddy_cn_auto_refresh_minutes: number;
+  workbuddy_auto_refresh_minutes: number;
   qoder_auto_refresh_minutes: number;
   trae_auto_refresh_minutes: number;
   zed_auto_refresh_minutes: number;
@@ -71,6 +73,7 @@ export function useAutoRefresh() {
   const refreshAllGeminiTokens = useGeminiAccountStore((state) => state.refreshAllTokens);
   const refreshAllCodebuddyTokens = useCodebuddyAccountStore((state) => state.refreshAllTokens);
   const refreshAllCodebuddyCnTokens = useCodebuddyCnAccountStore((state) => state.refreshAllTokens);
+  const refreshAllWorkbuddyTokens = useWorkbuddyAccountStore((state) => state.refreshAllTokens);
   const refreshAllQoderTokens = useQoderAccountStore((state) => state.refreshAllTokens);
   const refreshAllTraeTokens = useTraeAccountStore((state) => state.refreshAllTokens);
   const refreshAllZedTokens = useZedAccountStore((state) => state.refreshAllTokens);
@@ -86,6 +89,7 @@ export function useAutoRefresh() {
   const geminiIntervalRef = useRef<number | null>(null);
   const codebuddyIntervalRef = useRef<number | null>(null);
   const codebuddyCnIntervalRef = useRef<number | null>(null);
+  const workbuddyIntervalRef = useRef<number | null>(null);
   const qoderIntervalRef = useRef<number | null>(null);
   const traeIntervalRef = useRef<number | null>(null);
   const zedIntervalRef = useRef<number | null>(null);
@@ -100,6 +104,7 @@ export function useAutoRefresh() {
   const geminiRefreshingRef = useRef(false);
   const codebuddyRefreshingRef = useRef(false);
   const codebuddyCnRefreshingRef = useRef(false);
+  const workbuddyRefreshingRef = useRef(false);
   const qoderRefreshingRef = useRef(false);
   const traeRefreshingRef = useRef(false);
   const zedRefreshingRef = useRef(false);
@@ -153,6 +158,10 @@ export function useAutoRefresh() {
     if (codebuddyCnIntervalRef.current) {
       window.clearInterval(codebuddyCnIntervalRef.current);
       codebuddyCnIntervalRef.current = null;
+    }
+    if (workbuddyIntervalRef.current) {
+      window.clearInterval(workbuddyIntervalRef.current);
+      workbuddyIntervalRef.current = null;
     }
     if (qoderIntervalRef.current) {
       window.clearInterval(qoderIntervalRef.current);
@@ -236,6 +245,7 @@ export function useAutoRefresh() {
                     geminiAutoRefreshMinutes: config.gemini_auto_refresh_minutes,
                     codebuddyAutoRefreshMinutes: config.codebuddy_auto_refresh_minutes,
                     codebuddyCnAutoRefreshMinutes: config.codebuddy_cn_auto_refresh_minutes,
+                    workbuddyAutoRefreshMinutes: config.workbuddy_auto_refresh_minutes,
                     qoderAutoRefreshMinutes: config.qoder_auto_refresh_minutes,
                     traeAutoRefreshMinutes: config.trae_auto_refresh_minutes,
                     zedAutoRefreshMinutes: config.zed_auto_refresh_minutes,
@@ -518,6 +528,29 @@ export function useAutoRefresh() {
             console.log('[AutoRefresh] CodeBuddy CN 已禁用');
           }
 
+          if (config.workbuddy_auto_refresh_minutes > 0) {
+            console.log(`[AutoRefresh] WorkBuddy 已启用: 每 ${config.workbuddy_auto_refresh_minutes} 分钟`);
+            const workbuddyMs = config.workbuddy_auto_refresh_minutes * 60 * 1000;
+
+            workbuddyIntervalRef.current = window.setInterval(async () => {
+              if (workbuddyRefreshingRef.current) {
+                return;
+              }
+              workbuddyRefreshingRef.current = true;
+
+              try {
+                console.log('[AutoRefresh] 触发 WorkBuddy 配额刷新...');
+                await refreshAllWorkbuddyTokens();
+              } catch (e) {
+                console.error('[AutoRefresh] WorkBuddy 刷新失败:', e);
+              } finally {
+                workbuddyRefreshingRef.current = false;
+              }
+            }, workbuddyMs);
+          } else {
+            console.log('[AutoRefresh] WorkBuddy 已禁用');
+          }
+
           if (config.qoder_auto_refresh_minutes > 0) {
             console.log(`[AutoRefresh] Qoder 已启用: 每 ${config.qoder_auto_refresh_minutes} 分钟`);
             const qoderMs = config.qoder_auto_refresh_minutes * 60 * 1000;
@@ -626,6 +659,9 @@ export function useAutoRefresh() {
             config.codebuddy_cn_auto_refresh_minutes > 0
               ? `codebuddy_cn=${config.codebuddy_cn_auto_refresh_minutes}`
               : null,
+            config.workbuddy_auto_refresh_minutes > 0
+              ? `workbuddy=${config.workbuddy_auto_refresh_minutes}`
+              : null,
             config.qoder_auto_refresh_minutes > 0 ? `qoder=${config.qoder_auto_refresh_minutes}` : null,
             config.trae_auto_refresh_minutes > 0 ? `trae=${config.trae_auto_refresh_minutes}` : null,
             config.zed_auto_refresh_minutes > 0 ? `zed=${config.zed_auto_refresh_minutes}` : null,
@@ -661,6 +697,7 @@ export function useAutoRefresh() {
     refreshAllKiroTokens,
     refreshAllCodebuddyTokens,
     refreshAllCodebuddyCnTokens,
+    refreshAllWorkbuddyTokens,
     refreshAllQoderTokens,
     refreshAllTraeTokens,
     refreshAllZedTokens,

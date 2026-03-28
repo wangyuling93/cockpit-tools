@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountStore } from '../stores/useAccountStore';
 import { useCodexAccountStore } from '../stores/useCodexAccountStore';
@@ -22,7 +22,7 @@ import {
   usePlatformLayoutStore,
 } from '../stores/usePlatformLayoutStore';
 import { Page } from '../types/navigation';
-import { Users, CheckCircle2, Sparkles, RotateCw, Play, Github, Tag } from 'lucide-react';
+import { Users, CheckCircle2, Sparkles, RotateCw, Play, Github, Tag, ChevronDown } from 'lucide-react';
 import { TagEditModal } from '../components/TagEditModal';
 import { Account } from '../types/account';
 import {
@@ -30,6 +30,7 @@ import {
   getCodebuddyResourceSummary,
   getCodebuddyExtraCreditSummary,
   getCodebuddyOfficialQuotaModel,
+  getCodebuddyQuotaCategoryGroups,
 } from '../types/codebuddy';
 import {
   QoderAccount,
@@ -91,6 +92,7 @@ import {
   buildZedAccountPresentation,
   UnifiedAccountPresentation,
   buildWindsurfAccountPresentation,
+  UnifiedQuotaMetric,
 } from '../presentation/platformAccountPresentation';
 
 interface DashboardPageProps {
@@ -165,10 +167,24 @@ function getZedRecommendationScore(account: ZedAccount): { remainingPercent: num
   };
 }
 
+interface DashboardCardCollapseState {
+  workbuddy: boolean;
+}
+
 export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTriggerClick }: DashboardPageProps) {
   const { t } = useTranslation();
   
   const [tagModalState, setTagModalState] = React.useState<{ accountId: string; platform: PlatformId | 'codebuddy_cn'; tags: string[] } | null>(null);
+  const [dashboardCardCollapse, setDashboardCardCollapse] = React.useState<DashboardCardCollapseState>({
+    workbuddy: false,
+  });
+
+  const toggleDashboardCardCollapse = useCallback((platform: keyof DashboardCardCollapseState) => {
+    setDashboardCardCollapse((prev) => ({
+      ...prev,
+      [platform]: !prev[platform],
+    }));
+  }, []);
 
   const handleSaveTags = async (newTags: string[]) => {
     if (!tagModalState) return;
@@ -519,6 +535,7 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
     }
     return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
   }, [agAccounts, codexAccounts, zedAccounts, githubCopilotAccounts, windsurfAccounts, kiroAccounts, cursorAccounts, geminiAccounts, codebuddyAccounts, codebuddyCnAccounts, qoderAccounts, traeAccounts, workbuddyAccounts]);
+
 
   // Refresh States
   const [refreshing, setRefreshing] = React.useState<Set<string>>(new Set());
@@ -996,7 +1013,7 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
   const handleRefreshCodebuddyCnCard = async () => {
     if (cardRefreshing.codebuddyCn) return;
     setCardRefreshing((prev) => ({ ...prev, codebuddyCn: true }));
-    const idsToRefresh = [codebuddyCnCurrent?.id, codebuddyCnRecommended?.id].filter(Boolean) as string[];
+    const idsToRefresh = Array.from(new Set([codebuddyCnCurrent?.id, codebuddyCnRecommended?.id].filter(Boolean))) as string[];
     try {
       for (const id of idsToRefresh) {
         await useCodebuddyCnAccountStore.getState().refreshToken(id);
@@ -1041,7 +1058,7 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
   const handleRefreshWorkbuddyCard = async () => {
     if (cardRefreshing.workbuddy) return;
     setCardRefreshing((prev) => ({ ...prev, workbuddy: true }));
-    const idsToRefresh = [workbuddyCurrent?.id, workbuddyRecommended?.id].filter(Boolean) as string[];
+    const idsToRefresh = Array.from(new Set([workbuddyCurrent?.id, workbuddyRecommended?.id].filter(Boolean))) as string[];
     try {
       for (const id of idsToRefresh) {
         await useWorkbuddyAccountStore.getState().refreshToken(id);
@@ -1580,6 +1597,29 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
   }, [zedAccounts, zedCurrent?.id]);
 
   // Render Helpers
+  const formatQuotaValue = (value: number) => {
+    if (!Number.isFinite(value)) return '0';
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Math.max(0, value));
+  };
+
+  const buildCodebuddyCategoryQuotaItems = (account: CodebuddyAccount): UnifiedQuotaMetric[] => {
+    const groups = getCodebuddyQuotaCategoryGroups(account, (key, defaultValue) => t(key, defaultValue || key));
+    return groups
+      .filter((group) => group.visible)
+      .map((group) => ({
+        key: `category_${group.key}`,
+        label: `${group.label} (${group.items.length})`,
+        percentage: Math.max(0, Math.min(100, group.usedPercent)),
+        progressPercent: Math.max(0, Math.min(100, group.usedPercent)),
+        quotaClass: group.quotaClass,
+        valueText: `${formatQuotaValue(group.used)} / ${formatQuotaValue(group.total)}`,
+        used: group.used,
+        total: group.total,
+        left: group.remain,
+        showProgress: true,
+      }));
+  };
+
   const renderPresentationQuotaItems = (
     presentation: UnifiedAccountPresentation,
     limit = 3,
@@ -1906,8 +1946,12 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
     if (!account) return <div className="empty-slot">{t('dashboard.noAccount', '无账号')}</div>;
 
     const presentation = buildCodebuddyAccountPresentation(account, t);
+    const mergedQuotaItems = buildCodebuddyCategoryQuotaItems(account);
     return renderUnifiedAccountCard({
-      presentation,
+      presentation: {
+        ...presentation,
+        quotaItems: mergedQuotaItems,
+      },
       onRefresh: () => handleRefreshCodebuddy(account.id),
       onSwitch: () => handleSwitchCodebuddy(account.id),
       isRefreshing: refreshing.has(account.id),
@@ -1920,8 +1964,12 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
     if (!account) return <div className="empty-slot">{t('dashboard.noAccount', '无账号')}</div>;
 
     const presentation = buildCodebuddyAccountPresentation(account, t);
+    const mergedQuotaItems = buildCodebuddyCategoryQuotaItems(account);
     return renderUnifiedAccountCard({
-      presentation,
+      presentation: {
+        ...presentation,
+        quotaItems: mergedQuotaItems,
+      },
       onRefresh: () => handleRefreshCodebuddyCn(account.id),
       onSwitch: () => handleSwitchCodebuddyCn(account.id),
       isRefreshing: refreshing.has(account.id),
@@ -2538,22 +2586,36 @@ export function DashboardPage({ onNavigate, onOpenPlatformLayout, onEasterEggTri
     }
 
     if (platformId === 'workbuddy') {
+      const workbuddyCollapsed = dashboardCardCollapse.workbuddy;
       return (
-        <div className="main-card windsurf-card" key={platformId}>
+        <div
+          className={`main-card windsurf-card main-card-collapsible ${workbuddyCollapsed ? 'main-card-collapsed' : ''}`}
+          key={platformId}
+        >
           <div className="main-card-header">
             <div className="header-title">
               <WorkbuddyIcon style={{ width: 18, height: 18 }} />
               <h3>{getPlatformLabel(platformId, t)}</h3>
             </div>
-            <button
-              className="header-action-btn"
-              onClick={handleRefreshWorkbuddyCard}
-              disabled={cardRefreshing.workbuddy}
-              title={t('common.refresh', '刷新')}
-            >
-              <RotateCw size={14} className={cardRefreshing.workbuddy ? 'loading-spinner' : ''} />
-              <span>{t('common.refresh', '刷新')}</span>
-            </button>
+            <div className="header-action-group">
+              <button
+                className="header-action-btn"
+                onClick={handleRefreshWorkbuddyCard}
+                disabled={cardRefreshing.workbuddy}
+                title={t('common.refresh', '刷新')}
+              >
+                <RotateCw size={14} className={cardRefreshing.workbuddy ? 'loading-spinner' : ''} />
+                <span>{t('common.refresh', '刷新')}</span>
+              </button>
+              <button
+                className="header-action-btn header-collapse-btn"
+                onClick={() => toggleDashboardCardCollapse('workbuddy')}
+                title={workbuddyCollapsed ? t('common.expand', '展开') : t('common.collapse', '收起')}
+                aria-label={workbuddyCollapsed ? t('common.expand', '展开') : t('common.collapse', '收起')}
+              >
+                <ChevronDown size={14} className={`collapse-arrow ${workbuddyCollapsed ? 'collapsed' : ''}`} />
+              </button>
+            </div>
           </div>
 
           <div className="split-content">

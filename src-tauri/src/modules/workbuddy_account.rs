@@ -635,6 +635,9 @@ pub fn upsert_account(payload: WorkbuddyOAuthCompletePayload) -> Result<Workbudd
         quota_query_last_error: None,
         quota_query_last_error_at: None,
         usage_updated_at: None,
+        last_checkin_time: None,
+        checkin_streak: None,
+        checkin_rewards: None,
         created_at,
         last_used: now,
     });
@@ -881,6 +884,9 @@ fn upsert_account_record_from_payload(
         quota_query_last_error: None,
         quota_query_last_error_at: None,
         usage_updated_at: None,
+        last_checkin_time: None,
+        checkin_streak: None,
+        checkin_rewards: None,
         created_at: now,
         last_used: now,
     };
@@ -1371,6 +1377,9 @@ pub fn sync_accounts_to_codebuddy_cn() -> Result<usize, String> {
             usage_raw: wb_account.usage_raw.clone(),
             status: wb_account.status.clone(),
             status_reason: wb_account.status_reason.clone(),
+            last_checkin_time: None,
+            checkin_streak: 0,
+            checkin_rewards: None,
         };
 
         // 使用 CodeBuddy CN 的 upsert 函数保存账号
@@ -1392,4 +1401,30 @@ pub fn sync_accounts_to_codebuddy_cn() -> Result<usize, String> {
     }
 
     Ok(synced_count)
+}
+
+pub fn update_checkin_info(
+    account_id: &str,
+    last_checkin_time: Option<i64>,
+    streak: i32,
+    rewards: Option<serde_json::Value>,
+) -> Result<WorkbuddyAccount, String> {
+    let mut account = load_account(account_id).ok_or_else(|| "账号不存在".to_string())?;
+
+    if let Some(time) = last_checkin_time {
+        account.last_checkin_time = Some(time);
+    }
+    account.checkin_streak = Some(streak);
+    account.checkin_rewards = rewards;
+
+    account.last_used = now_ts();
+    let updated = account.clone();
+    save_account_file(&account)?;
+
+    logger::log_info(&format!(
+        "[WorkBuddy Checkin] 签到信息已更新: account_id={}, streak={}",
+        updated.id, streak
+    ));
+
+    Ok(updated)
 }

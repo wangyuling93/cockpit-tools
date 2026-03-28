@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "CodeBuddy CN çoklu örneği yalnızca macOS, Windows ve Linux'ta desteklenir."
       }
+    },
+    "checkin": {
+      "title": "Günlük check-in",
+      "modalTitle": "Günlük check-in",
+      "status": "Check-in durumu",
+      "checkedIn": "Check-in yapıldı",
+      "notCheckedIn": "Check-in yapılmadı",
+      "button": "Check-in yap",
+      "button.loading": "Check-in yapılıyor...",
+      "done": "Tamam",
+      "success": "Check-in başarılı! {{days}} günlük seri",
+      "failure": "Check-in başarısız: {{message}}",
+      "failure.network": "Ağ hatası, lütfen daha sonra tekrar deneyin",
+      "lastCheckin": "Son check-in: {{time}}",
+      "streak": "{{days}} günlük seri",
+      "reward": "Ödül: {{reward}}",
+      "refreshStatus": "Yenile",
+      "checkAll": "Tümünü check-in yap",
+      "noAccounts": "Hesap yok",
+      "querying": "Yükleniyor...",
+      "streakDays": "{{days}} gün",
+      "streakRewardCountdown": "Bonus ödüle {{days}} gün kaldı",
+      "streakRewardToday": "Bonus ödül bugün kullanılabilir!",
+      "recentDates": "Son: ",
+      "quotaCategory": {
+        "base": "Temel paket",
+        "activity": "Etkinlik bonusu",
+        "extra": "Ek krediler",
+        "other": "Diğer",
+        "empty": "Kota verisi yok"
+      }
     }
   },
   "workbuddy": {

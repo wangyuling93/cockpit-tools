@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use tauri::{AppHandle, Emitter};
+use crate::modules::codebuddy_cn_oauth;
 
 use crate::models::workbuddy::{WorkbuddyAccount, WorkbuddyOAuthStartResponse};
 use crate::modules::{logger, workbuddy_account, workbuddy_oauth};
@@ -428,4 +429,83 @@ pub async fn sync_workbuddy_to_codebuddy_cn(app: AppHandle) -> Result<i32, Strin
     ));
 
     Ok(synced_count as i32)
+}
+
+#[tauri::command]
+pub async fn get_checkin_status_workbuddy(
+    account_id: String,
+) -> Result<crate::modules::codebuddy_cn_oauth::CheckinStatusResponse, String> {
+    let account = workbuddy_account::load_account(&account_id)
+        .ok_or_else(|| format!("账号不存在: {}", account_id))?;
+
+    codebuddy_cn_oauth::get_checkin_status(
+        &account.access_token,
+        account.uid.as_deref(),
+        account.enterprise_id.as_deref(),
+        account.domain.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn checkin_workbuddy(
+    app: AppHandle,
+    account_id: String,
+) -> Result<crate::modules::codebuddy_cn_oauth::CheckinResponse, String> {
+    use std::time::Instant;
+
+    let started_at = Instant::now();
+    logger::log_info(&format!(
+        "[WorkBuddy Checkin] 执行签到开始: account_id={}",
+        account_id
+    ));
+
+    let account = workbuddy_account::load_account(&account_id)
+        .ok_or_else(|| format!("账号不存在: {}", account_id))?;
+
+    let response = codebuddy_cn_oauth::perform_checkin(
+        &account.access_token,
+        account.uid.as_deref(),
+        account.enterprise_id.as_deref(),
+        account.domain.as_deref(),
+    )
+    .await?;
+
+    if response.success {
+        let now = chrono::Utc::now().timestamp();
+        let streak = account.checkin_streak.unwrap_or(0).saturating_add(1);
+        workbuddy_account::update_checkin_info(
+            &account_id,
+            Some(now),
+            streak,
+            response.reward.clone(),
+        )
+        .map_err(|e| {
+            logger::log_warn(&format!(
+                "[WorkBuddy Checkin] 更新签到信息失败: account_id={}, error={}",
+                account_id, e
+            ));
+            format!("签到成功但更新状态失败: {}", e)
+        })?;
+
+        let _ = crate::modules::tray::update_tray_menu(&app);
+        let _ = app.emit(
+            "workbuddy:checkin_completed",
+            serde_json::json!({
+                "accountId": account_id,
+                "success": true,
+                "reward": response.reward,
+                "streak": streak,
+            }),
+        );
+    }
+
+    logger::log_info(&format!(
+        "[WorkBuddy Checkin] 执行签到完成: account_id={}, success={}, elapsed={}ms",
+        account_id,
+        response.success,
+        started_at.elapsed().as_millis()
+    ));
+
+    Ok(response)
 }

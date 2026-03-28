@@ -103,6 +103,9 @@ pub struct UserConfig {
     /// CodeBuddy CN 自动刷新间隔（分钟），-1 表示禁用
     #[serde(default = "default_codebuddy_cn_auto_refresh")]
     pub codebuddy_cn_auto_refresh_minutes: i32,
+    /// WorkBuddy 自动刷新间隔（分钟），-1 表示禁用
+    #[serde(default = "default_workbuddy_auto_refresh")]
+    pub workbuddy_auto_refresh_minutes: i32,
     /// Qoder 自动刷新间隔（分钟），-1 表示禁用
     #[serde(default = "default_qoder_auto_refresh")]
     pub qoder_auto_refresh_minutes: i32,
@@ -391,6 +394,9 @@ fn default_codebuddy_auto_refresh() -> i32 {
 fn default_codebuddy_cn_auto_refresh() -> i32 {
     10
 }
+fn default_workbuddy_auto_refresh() -> i32 {
+    10
+}
 fn default_qoder_auto_refresh() -> i32 {
     10
 }
@@ -599,6 +605,7 @@ impl Default for UserConfig {
             gemini_auto_refresh_minutes: default_gemini_auto_refresh(),
             codebuddy_auto_refresh_minutes: default_codebuddy_auto_refresh(),
             codebuddy_cn_auto_refresh_minutes: default_codebuddy_cn_auto_refresh(),
+            workbuddy_auto_refresh_minutes: default_workbuddy_auto_refresh(),
             qoder_auto_refresh_minutes: default_qoder_auto_refresh(),
             trae_auto_refresh_minutes: default_trae_auto_refresh(),
             close_behavior: default_close_behavior(),
@@ -895,6 +902,20 @@ pub fn load_user_config() -> Result<UserConfig, String> {
                 .unwrap_or_else(default_codebuddy_cn_auto_refresh);
             obj.insert(
                 "codebuddy_cn_auto_refresh_minutes".to_string(),
+                json!(inherited_refresh),
+            );
+        }
+
+        if !obj.contains_key("workbuddy_auto_refresh_minutes") {
+            let inherited_refresh = obj
+                .get("codebuddy_cn_auto_refresh_minutes")
+                .or_else(|| obj.get("codebuddy_auto_refresh_minutes"))
+                .or_else(|| obj.get("gemini_auto_refresh_minutes"))
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32)
+                .unwrap_or_else(default_workbuddy_auto_refresh);
+            obj.insert(
+                "workbuddy_auto_refresh_minutes".to_string(),
                 json!(inherited_refresh),
             );
         }

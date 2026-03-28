@@ -56,6 +56,14 @@ pub struct WorkbuddyAccount {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage_updated_at: Option<i64>,
 
+    // 签到相关字段
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checkin_time: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkin_streak: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkin_rewards: Option<serde_json::Value>,
+
     pub created_at: i64,
     pub last_used: i64,
 }

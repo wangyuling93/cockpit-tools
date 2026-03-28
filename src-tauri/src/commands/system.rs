@@ -69,6 +69,8 @@ pub struct GeneralConfig {
     pub codebuddy_auto_refresh_minutes: i32,
     /// CodeBuddy CN 自动刷新间隔（分钟），-1 表示禁用
     pub codebuddy_cn_auto_refresh_minutes: i32,
+    /// WorkBuddy 自动刷新间隔（分钟），-1 表示禁用
+    pub workbuddy_auto_refresh_minutes: i32,
     /// Qoder 自动刷新间隔（分钟），-1 表示禁用
     pub qoder_auto_refresh_minutes: i32,
     /// Trae 自动刷新间隔（分钟），-1 表示禁用
@@ -341,6 +343,7 @@ pub fn save_network_config(
         gemini_auto_refresh_minutes: current.gemini_auto_refresh_minutes,
         codebuddy_auto_refresh_minutes: current.codebuddy_auto_refresh_minutes,
         codebuddy_cn_auto_refresh_minutes: current.codebuddy_cn_auto_refresh_minutes,
+        workbuddy_auto_refresh_minutes: current.workbuddy_auto_refresh_minutes,
         qoder_auto_refresh_minutes: current.qoder_auto_refresh_minutes,
         trae_auto_refresh_minutes: current.trae_auto_refresh_minutes,
         close_behavior: current.close_behavior,
@@ -441,6 +444,7 @@ pub fn get_general_config() -> Result<GeneralConfig, String> {
         gemini_auto_refresh_minutes: user_config.gemini_auto_refresh_minutes,
         codebuddy_auto_refresh_minutes: user_config.codebuddy_auto_refresh_minutes,
         codebuddy_cn_auto_refresh_minutes: user_config.codebuddy_cn_auto_refresh_minutes,
+        workbuddy_auto_refresh_minutes: user_config.workbuddy_auto_refresh_minutes,
         qoder_auto_refresh_minutes: user_config.qoder_auto_refresh_minutes,
         trae_auto_refresh_minutes: user_config.trae_auto_refresh_minutes,
         close_behavior: close_behavior_str.to_string(),
@@ -505,7 +509,7 @@ pub fn get_general_config() -> Result<GeneralConfig, String> {
     };
 
     modules::logger::log_info(&format!(
-        "[StartupPerf][SystemCommand] get_general_config completed in {}ms: auto_refresh={}, codex={}, zed={}, ghcp={}, windsurf={}, kiro={}, cursor={}, gemini={}, codebuddy={}, codebuddy_cn={}, qoder={}, trae={}, auto_switch={}",
+        "[StartupPerf][SystemCommand] get_general_config completed in {}ms: auto_refresh={}, codex={}, zed={}, ghcp={}, windsurf={}, kiro={}, cursor={}, gemini={}, codebuddy={}, codebuddy_cn={}, workbuddy={}, qoder={}, trae={}, auto_switch={}",
         started.elapsed().as_millis(),
         result.auto_refresh_minutes,
         result.codex_auto_refresh_minutes,
@@ -517,6 +521,7 @@ pub fn get_general_config() -> Result<GeneralConfig, String> {
         result.gemini_auto_refresh_minutes,
         result.codebuddy_auto_refresh_minutes,
         result.codebuddy_cn_auto_refresh_minutes,
+        result.workbuddy_auto_refresh_minutes,
         result.qoder_auto_refresh_minutes,
         result.trae_auto_refresh_minutes,
         result.auto_switch_enabled
@@ -542,6 +547,7 @@ pub fn save_general_config(
     gemini_auto_refresh_minutes: Option<i32>,
     codebuddy_auto_refresh_minutes: Option<i32>,
     codebuddy_cn_auto_refresh_minutes: Option<i32>,
+    workbuddy_auto_refresh_minutes: Option<i32>,
     qoder_auto_refresh_minutes: Option<i32>,
     trae_auto_refresh_minutes: Option<i32>,
     close_behavior: String,
@@ -601,6 +607,8 @@ pub fn save_general_config(
     qoder_quota_alert_threshold: Option<i32>,
     trae_quota_alert_enabled: Option<bool>,
     trae_quota_alert_threshold: Option<i32>,
+    workbuddy_quota_alert_enabled: Option<bool>,
+    workbuddy_quota_alert_threshold: Option<i32>,
 ) -> Result<(), String> {
     let current = config::get_user_config();
     let normalized_opencode_path = opencode_app_path.trim().to_string();
@@ -709,6 +717,8 @@ pub fn save_general_config(
             .unwrap_or(current.codebuddy_auto_refresh_minutes),
         codebuddy_cn_auto_refresh_minutes: codebuddy_cn_auto_refresh_minutes
             .unwrap_or(current.codebuddy_cn_auto_refresh_minutes),
+        workbuddy_auto_refresh_minutes: workbuddy_auto_refresh_minutes
+            .unwrap_or(current.workbuddy_auto_refresh_minutes),
         qoder_auto_refresh_minutes: qoder_auto_refresh_minutes
             .unwrap_or(current.qoder_auto_refresh_minutes),
         trae_auto_refresh_minutes: trae_auto_refresh_minutes
@@ -798,8 +808,10 @@ pub fn save_general_config(
             .unwrap_or(current.trae_quota_alert_enabled),
         trae_quota_alert_threshold: trae_quota_alert_threshold
             .unwrap_or(current.trae_quota_alert_threshold),
-        workbuddy_quota_alert_enabled: current.workbuddy_quota_alert_enabled,
-        workbuddy_quota_alert_threshold: current.workbuddy_quota_alert_threshold,
+        workbuddy_quota_alert_enabled: workbuddy_quota_alert_enabled
+            .unwrap_or(current.workbuddy_quota_alert_enabled),
+        workbuddy_quota_alert_threshold: workbuddy_quota_alert_threshold
+            .unwrap_or(current.workbuddy_quota_alert_threshold),
     };
 
     config::save_user_config(&new_config)?;

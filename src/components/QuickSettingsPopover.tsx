@@ -265,6 +265,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
           geminiAutoRefreshMinutes: merged.gemini_auto_refresh_minutes,
           codebuddyAutoRefreshMinutes: merged.codebuddy_auto_refresh_minutes,
           codebuddyCnAutoRefreshMinutes: merged.codebuddy_cn_auto_refresh_minutes,
+          workbuddyAutoRefreshMinutes: merged.workbuddy_auto_refresh_minutes,
           qoderAutoRefreshMinutes: merged.qoder_auto_refresh_minutes,
           traeAutoRefreshMinutes: merged.trae_auto_refresh_minutes,
           zedAutoRefreshMinutes: merged.zed_auto_refresh_minutes,
@@ -320,6 +321,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
           qoderQuotaAlertThreshold: merged.qoder_quota_alert_threshold,
           traeQuotaAlertEnabled: merged.trae_quota_alert_enabled,
           traeQuotaAlertThreshold: merged.trae_quota_alert_threshold,
+          workbuddyQuotaAlertEnabled: merged.workbuddy_quota_alert_enabled,
+          workbuddyQuotaAlertThreshold: merged.workbuddy_quota_alert_threshold,
           zedQuotaAlertEnabled: merged.zed_quota_alert_enabled,
           zedQuotaAlertThreshold: merged.zed_quota_alert_threshold,
         });
@@ -474,7 +477,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         case 'trae':
           return 'Trae';
         case 'workbuddy':
-          return 'Workbuddy';
+          return 'WorkBuddy';
         case 'zed':
           return 'Zed';
       }
@@ -640,7 +643,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       case 'trae':
         return t('quickSettings.trae.appPath', 'Trae 路径');
       case 'workbuddy':
-        return t('quickSettings.workbuddy.appPath', 'Workbuddy 路径');
+        return t('quickSettings.workbuddy.appPath', 'WorkBuddy 路径');
       case 'zed':
         return t('quickSettings.zed.appPath', 'Zed 路径');
     }
@@ -1109,6 +1112,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                                       ? 'qoder_app_path'
                                     : type === 'trae'
                                       ? 'trae_app_path'
+                                    : type === 'workbuddy'
+                                      ? 'workbuddy_app_path'
                                     : type === 'zed'
                                       ? 'zed_app_path'
                                   : 'kiro_app_path';

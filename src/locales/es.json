@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "La función de múltiples instancias de CodeBuddy CN solo es compatible con macOS, Windows y Linux."
       }
+    },
+    "checkin": {
+      "title": "Registro diario",
+      "modalTitle": "Registro diario",
+      "status": "Estado del registro",
+      "checkedIn": "Registrado",
+      "notCheckedIn": "Sin registrar",
+      "button": "Registrar",
+      "button.loading": "Registrando...",
+      "done": "Hecho",
+      "success": "¡Registro exitoso! Racha de {{days}} días",
+      "failure": "Error en el registro: {{message}}",
+      "failure.network": "Error de red, inténtalo de nuevo más tarde",
+      "lastCheckin": "Último registro: {{time}}",
+      "streak": "Racha de {{days}} días",
+      "reward": "Recompensa: {{reward}}",
+      "refreshStatus": "Actualizar",
+      "checkAll": "Registrar todo",
+      "noAccounts": "Sin cuentas",
+      "querying": "Cargando...",
+      "streakDays": "{{days}} días",
+      "streakRewardCountdown": "Faltan {{days}} días para la recompensa extra",
+      "streakRewardToday": "¡Recompensa extra disponible hoy!",
+      "recentDates": "Reciente: ",
+      "quotaCategory": {
+        "base": "Paquete base",
+        "activity": "Bono de actividad",
+        "extra": "Créditos extra",
+        "other": "Otros",
+        "empty": "No hay datos de cuota"
+      }
     }
   },
   "workbuddy": {

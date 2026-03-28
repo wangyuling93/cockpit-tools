@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { CodebuddyAccount } from '../types/codebuddy';
+import type { CodebuddyAccount, CheckinStatusResponse, CheckinResponse } from '../types/codebuddy';
 
 export interface CodebuddyCnOAuthLoginStartResponse {
   loginId: string;
@@ -75,4 +75,44 @@ export async function syncCodebuddyCnToWorkbuddy(): Promise<number> {
 
 export async function syncWorkbuddyToCodebuddyCn(): Promise<number> {
   return await invoke('sync_workbuddy_to_codebuddy_cn');
+}
+
+// ==================== 签到 API 函数 ====================
+
+/**
+ * 执行 CodeBuddy CN 签到
+ * @param accountId 账号 ID
+ * @returns 签到结果
+ */
+export async function checkinCodebuddyCn(accountId: string): Promise<CheckinResponse> {
+  return await invoke('checkin_codebuddy_cn', { accountId });
+}
+
+/**
+ * 获取 CodeBuddy CN 签到状态
+ * @param accountId 账号 ID
+ * @returns 签到状态信息
+ */
+export async function getCheckinStatusCodebuddyCn(accountId: string): Promise<CheckinStatusResponse> {
+  return await invoke('get_checkin_status_codebuddy_cn', { accountId });
+}
+
+// ==================== WorkBuddy 签到 API 函数 ====================
+
+/**
+ * 执行 WorkBuddy 签到
+ * @param accountId 账号 ID
+ * @returns 签到结果
+ */
+export async function checkinWorkbuddy(accountId: string): Promise<CheckinResponse> {
+  return await invoke('checkin_workbuddy', { accountId });
+}
+
+/**
+ * 获取 WorkBuddy 签到状态
+ * @param accountId 账号 ID
+ * @returns 签到状态信息
+ */
+export async function getCheckinStatusWorkbuddy(accountId: string): Promise<CheckinStatusResponse> {
+  return await invoke('get_checkin_status_workbuddy', { accountId });
 }

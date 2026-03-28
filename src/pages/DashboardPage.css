@@ -196,6 +196,7 @@
   background: var(--bg-tertiary);
 }
 
+
 .header-title {
   display: flex;
   align-items: center;
@@ -238,6 +239,58 @@
 .header-action-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.header-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.main-card-collapsible .split-content,
+.main-card-collapsible .card-footer-action {
+  transition: opacity 0.2s ease, max-height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+}
+
+.main-card-collapsible .split-content {
+  max-height: 700px;
+  opacity: 1;
+}
+
+.main-card-collapsed .split-content {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.main-card-collapsible .card-footer-action {
+  max-height: 40px;
+  opacity: 1;
+}
+
+.main-card-collapsed .card-footer-action {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  overflow: hidden;
+}
+
+.header-collapse-btn {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.collapse-arrow {
+  transition: transform 0.2s ease;
+}
+
+.collapse-arrow.collapsed {
+  transform: rotate(-90deg);
 }
 
 .dashboard-manual-btn {

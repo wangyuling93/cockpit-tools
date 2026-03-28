@@ -2549,6 +2549,37 @@
       "unsupported": {
         "descPlatform": "Phiên bản đa phiên bản CodeBuddy CN chỉ được hỗ trợ trên macOS, Windows và Linux."
       }
+    },
+    "checkin": {
+      "title": "Điểm danh hằng ngày",
+      "modalTitle": "Điểm danh hằng ngày",
+      "status": "Trạng thái điểm danh",
+      "checkedIn": "Đã điểm danh",
+      "notCheckedIn": "Chưa điểm danh",
+      "button": "Điểm danh",
+      "button.loading": "Đang điểm danh...",
+      "done": "Hoàn tất",
+      "success": "Điểm danh thành công! Chuỗi {{days}} ngày",
+      "failure": "Điểm danh thất bại: {{message}}",
+      "failure.network": "Lỗi mạng, vui lòng thử lại sau",
+      "lastCheckin": "Lần điểm danh gần nhất: {{time}}",
+      "streak": "Chuỗi {{days}} ngày",
+      "reward": "Phần thưởng: {{reward}}",
+      "refreshStatus": "Làm mới",
+      "checkAll": "Điểm danh tất cả",
+      "noAccounts": "Không có tài khoản",
+      "querying": "Đang tải...",
+      "streakDays": "{{days}} ngày",
+      "streakRewardCountdown": "Còn {{days}} ngày nữa để nhận thưởng bonus",
+      "streakRewardToday": "Hôm nay có thể nhận thưởng bonus!",
+      "recentDates": "Gần đây: ",
+      "quotaCategory": {
+        "base": "Gói cơ bản",
+        "activity": "Thưởng hoạt động",
+        "extra": "Tín dụng bổ sung",
+        "other": "Khác",
+        "empty": "Không có dữ liệu hạn mức"
+      }
     }
   },
   "workbuddy": {
