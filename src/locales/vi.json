@@ -1545,6 +1545,7 @@
     "authorizing": "Đang chờ cấp quyền hệ thống...",
     "installFailed": "Cài đặt hệ thống thất bại. Hãy thử lại sau hoặc tải gói về thủ công.",
     "restartRequiredAfterInstall": "Bản cập nhật đã được cài. Hãy khởi động lại ứng dụng thủ công để hoàn tất chuyển đổi.",
+    "stoppingApiService": "Đang dừng dịch vụ API...",
     "skipThisVersion": "Bỏ qua phiên bản này",
     "skipFailed": "Không thể bỏ qua bản cập nhật này: {{error}}"
   },
@@ -1720,6 +1721,12 @@
       "clearStats": "Xóa thống kê",
       "clearStatsConfirm": "Xóa toàn bộ thống kê dịch vụ API?",
       "clearStatsSuccess": "Đã xóa thống kê dịch vụ API",
+      "killPortAction": "Dọn cổng",
+      "killPortTitle": "Dọn cổng dịch vụ API",
+      "killPortConfirmMessage": "Các tiến trình khác đang dùng cổng cục bộ {{port}} sẽ bị buộc đóng, sau đó dịch vụ API sẽ khởi động lại. Tiếp tục?",
+      "killPortSuccess": "Đã dọn cổng (đã đóng {{count}} tiến trình)",
+      "killPortSuccessNone": "Đã kiểm tra cổng. Không có tiến trình bên ngoài nào đang dùng.",
+      "killPortSuccessUnknown": "Đã dọn cổng dịch vụ API",
       "refreshStats": "Làm mới thống kê",
       "refreshStatsSuccess": "Đã làm mới thống kê dịch vụ API",
       "routingStrategy": {

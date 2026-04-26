@@ -1545,6 +1545,7 @@
     "authorizing": "Warten auf Systemautorisierung...",
     "installFailed": "Die Systeminstallation ist fehlgeschlagen. Versuchen Sie es später erneut oder laden Sie das Paket manuell herunter.",
     "restartRequiredAfterInstall": "Das Update ist installiert. Starten Sie die App manuell neu, um den Wechsel abzuschließen.",
+    "stoppingApiService": "API-Dienst wird gestoppt...",
     "skipThisVersion": "Diese Version überspringen",
     "skipFailed": "Dieses Update konnte nicht übersprungen werden: {{error}}"
   },
@@ -1720,6 +1721,12 @@
       "clearStats": "Statistik löschen",
       "clearStatsConfirm": "Alle API-Service-Statistiken löschen?",
       "clearStatsSuccess": "API-Service-Statistiken wurden gelöscht",
+      "killPortAction": "Port bereinigen",
+      "killPortTitle": "API-Dienstport bereinigen",
+      "killPortConfirmMessage": "Andere Prozesse, die den lokalen Port {{port}} verwenden, werden zwangsweise beendet. Danach wird der API-Dienst neu gestartet. Fortfahren?",
+      "killPortSuccess": "Port bereinigt ({{count}} Prozess(e) beendet)",
+      "killPortSuccessNone": "Port geprüft. Kein externer Prozess verwendet ihn.",
+      "killPortSuccessUnknown": "API-Dienstport bereinigt",
       "refreshStats": "Statistik aktualisieren",
       "refreshStatsSuccess": "API-Service-Statistiken wurden aktualisiert",
       "routingStrategy": {

@@ -45,6 +45,7 @@ import {
   ChevronRight,
   LogOut,
   Server,
+  Wrench,
 } from 'lucide-react';
 import { useCodexAccountStore } from '../stores/useCodexAccountStore';
 import * as codexService from '../services/codexService';
@@ -324,6 +325,7 @@ export function CodexAccountsPage() {
   const [localAccessTesting, setLocalAccessTesting] = useState(false);
   const [localAccessStarting, setLocalAccessStarting] = useState(false);
   const [localAccessRefreshing, setLocalAccessRefreshing] = useState(false);
+  const [localAccessPortKilling, setLocalAccessPortKilling] = useState(false);
   const [showLocalAccessHideConfirm, setShowLocalAccessHideConfirm] = useState(false);
   const [localAccessHideSubmitting, setLocalAccessHideSubmitting] = useState(false);
   const [localAccessRiskNoticeAction, setLocalAccessRiskNoticeAction] =
@@ -2395,7 +2397,11 @@ export function CodexAccountsPage() {
   );
   const overviewAccounts = accounts;
   const localAccessBusy =
-    localAccessSaving || localAccessTesting || localAccessStarting || localAccessRefreshing;
+    localAccessSaving ||
+    localAccessTesting ||
+    localAccessStarting ||
+    localAccessRefreshing ||
+    localAccessPortKilling;
 
   const resolveLocalAccessBaseUrl = useCallback(() => {
     if (!localAccessCollection) return localAccessState?.baseUrl || CODEX_LOCAL_ACCESS_FALLBACK_BASE_URL;
@@ -2716,6 +2722,48 @@ export function CodexAccountsPage() {
       setLocalAccessSaving(false);
     }
   }, [setMessage, t]);
+
+  const handleKillLocalAccessPort = useCallback(async () => {
+    if (!localAccessCollection) return;
+    const confirmed = await confirmDialog(
+      t('codex.localAccess.killPortConfirmMessage', {
+        port: localAccessCollection.port,
+        defaultValue:
+          '将强制结束占用本机 {{port}} 端口的其他进程，然后重新启动 API 服务。确认继续吗？',
+      }),
+      {
+        title: t('codex.localAccess.killPortTitle', '清理 API 服务端口'),
+        kind: 'warning',
+        okLabel: t('codex.localAccess.killPortAction', '清理端口'),
+        cancelLabel: t('common.cancel', '取消'),
+      },
+    );
+    if (!confirmed) return;
+
+    setLocalAccessPortKilling(true);
+    try {
+      const result = await codexLocalAccessService.killCodexLocalAccessPort();
+      setLocalAccessState(result.state);
+      setMessage({
+        text:
+          result.killedCount > 0
+            ? t('codex.localAccess.killPortSuccess', {
+                count: result.killedCount,
+                defaultValue: '端口已清理（结束 {{count}} 个进程）',
+              })
+            : t(
+                'codex.localAccess.killPortSuccessNone',
+                '端口已检查，未发现外部占用进程',
+              ),
+      });
+      return result.state;
+    } catch (error) {
+      console.error('Failed to kill local access port:', error);
+      throw new Error(String(error).replace(/^Error:\s*/, ''));
+    } finally {
+      setLocalAccessPortKilling(false);
+    }
+  }, [localAccessCollection, setMessage, t]);
 
   const handleUpdateLocalAccessPort = useCallback(async (port: number) => {
     setLocalAccessSaving(true);
@@ -3605,6 +3653,20 @@ export function CodexAccountsPage() {
               <div className="quota-error-inline">
                 <CircleAlert size={14} />
                 <span>{localAccessState.lastError}</span>
+                <button
+                  type="button"
+                  className="folder-icon-btn codex-local-access-error-action"
+                  onClick={() => void handleKillLocalAccessPort()}
+                  title={t('codex.localAccess.killPortAction', '清理端口')}
+                  aria-label={t('codex.localAccess.killPortAction', '清理端口')}
+                  disabled={localAccessBusy || !localAccessCollection}
+                >
+                  {localAccessPortKilling ? (
+                    <RefreshCw size={14} className="loading-spinner" />
+                  ) : (
+                    <Wrench size={14} />
+                  )}
+                </button>
               </div>
             )}
 
@@ -5138,11 +5200,13 @@ export function CodexAccountsPage() {
           onUpdatePort={handleUpdateLocalAccessPort}
           onUpdateRoutingStrategy={handleUpdateLocalAccessRoutingStrategy}
           onRotateApiKey={handleRotateLocalAccessApiKey}
+          onKillPort={handleKillLocalAccessPort}
           onToggleEnabled={handleToggleLocalAccessEnabled}
           onTest={handleTestLocalAccess}
           saving={localAccessSaving}
           testing={localAccessTesting}
           starting={localAccessStarting}
+          portCleanupBusy={localAccessPortKilling}
         />
 
         {/* Codex 分组管理弹窗 */}

@@ -1592,7 +1592,8 @@
     "installing": "Memasang...",
     "authorizing": "Menunggu otorisasi sistem...",
     "installFailed": "Instalasi sistem gagal. Coba lagi nanti atau unduh secara manual.",
-    "restartRequiredAfterInstall": "Pembaruan terpasang. Mulai ulang aplikasi secara manual untuk menyelesaikan peralihan."
+    "restartRequiredAfterInstall": "Pembaruan terpasang. Mulai ulang aplikasi secara manual untuk menyelesaikan peralihan.",
+    "stoppingApiService": "Menghentikan layanan API..."
   },
   "closeDialog": {
     "title": "Tutup Jendela",
@@ -1769,6 +1770,12 @@
       "clearStats": "Hapus Statistik",
       "clearStatsConfirm": "Hapus semua statistik layanan API?",
       "clearStatsSuccess": "Statistik layanan API telah dihapus",
+      "killPortAction": "Bersihkan Port",
+      "killPortTitle": "Bersihkan Port Layanan API",
+      "killPortConfirmMessage": "Proses lain yang memakai port lokal {{port}} akan dihentikan paksa, lalu layanan API dimulai ulang. Lanjutkan?",
+      "killPortSuccess": "Port dibersihkan ({{count}} proses dihentikan)",
+      "killPortSuccessNone": "Port diperiksa. Tidak ada proses eksternal yang memakainya.",
+      "killPortSuccessUnknown": "Port layanan API dibersihkan",
       "refreshStats": "Segarkan Statistik",
       "refreshStatsSuccess": "Statistik layanan API telah disegarkan",
       "routingStrategy": {

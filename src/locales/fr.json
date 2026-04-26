@@ -1545,6 +1545,7 @@
     "authorizing": "En attente de l'autorisation système...",
     "installFailed": "L'installation système a échoué. Réessayez plus tard ou téléchargez le paquet manuellement.",
     "restartRequiredAfterInstall": "La mise à jour est installée. Redémarrez l'application manuellement pour terminer le basculement.",
+    "stoppingApiService": "Arrêt du service API...",
     "skipThisVersion": "Ignorer cette version",
     "skipFailed": "Impossible d'ignorer cette mise à jour : {{error}}"
   },
@@ -1720,6 +1721,12 @@
       "clearStats": "Effacer les stats",
       "clearStatsConfirm": "Effacer toutes les statistiques du service API ?",
       "clearStatsSuccess": "Les statistiques du service API ont été effacées",
+      "killPortAction": "Libérer le port",
+      "killPortTitle": "Libérer le port du service API",
+      "killPortConfirmMessage": "Les autres processus utilisant le port local {{port}} seront fermés de force, puis le service API sera redémarré. Continuer ?",
+      "killPortSuccess": "Port libéré ({{count}} processus fermé(s))",
+      "killPortSuccessNone": "Port vérifié. Aucun processus externe ne l’utilise.",
+      "killPortSuccessUnknown": "Port du service API libéré",
       "refreshStats": "Actualiser les stats",
       "refreshStatsSuccess": "Les statistiques du service API ont été actualisées",
       "routingStrategy": {

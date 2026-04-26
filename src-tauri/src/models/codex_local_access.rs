@@ -140,3 +140,10 @@ pub struct CodexLocalAccessState {
     pub member_count: usize,
     pub stats: CodexLocalAccessStats,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexLocalAccessPortCleanupResult {
+    pub killed_count: u32,
+    pub state: CodexLocalAccessState,
+}

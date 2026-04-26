@@ -343,8 +343,19 @@
 .codex-local-access-inline-error span,
 .codex-local-access-inline-success span,
 .codex-local-access-inline-info span {
+  flex: 1;
   min-width: 0;
   line-height: 1.55;
+}
+
+.codex-local-access-inline-error-with-action {
+  align-items: center;
+}
+
+.codex-local-access-inline-action {
+  flex-shrink: 0;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .codex-local-access-inline-error {

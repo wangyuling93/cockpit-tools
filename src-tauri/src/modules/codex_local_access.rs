@@ -1,11 +1,11 @@
 use crate::models::codex::{CodexAccount, CodexApiProviderMode};
 use crate::models::codex_local_access::{
-    CodexLocalAccessAccountStats, CodexLocalAccessCollection, CodexLocalAccessRoutingStrategy,
-    CodexLocalAccessState, CodexLocalAccessStats, CodexLocalAccessStatsWindow,
-    CodexLocalAccessUsageEvent, CodexLocalAccessUsageStats,
+    CodexLocalAccessAccountStats, CodexLocalAccessCollection, CodexLocalAccessPortCleanupResult,
+    CodexLocalAccessRoutingStrategy, CodexLocalAccessState, CodexLocalAccessStats,
+    CodexLocalAccessStatsWindow, CodexLocalAccessUsageEvent, CodexLocalAccessUsageStats,
 };
 use crate::modules::atomic_write::write_string_atomic;
-use crate::modules::{codex_account, codex_oauth, codex_wakeup, logger};
+use crate::modules::{codex_account, codex_oauth, codex_wakeup, logger, process};
 use futures_util::StreamExt;
 use rand::{distributions::Alphanumeric, Rng};
 use reqwest::header::{HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
@@ -43,6 +43,7 @@ const DAY_WINDOW_MS: i64 = 24 * 60 * 60 * 1000;
 const WEEK_WINDOW_MS: i64 = 7 * DAY_WINDOW_MS;
 const MONTH_WINDOW_MS: i64 = 30 * DAY_WINDOW_MS;
 const MAX_RECENT_USAGE_EVENTS: usize = 5_000;
+const GATEWAY_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 const UPSTREAM_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const DEFAULT_CODEX_USER_AGENT: &str =
     "codex-tui/0.118.0 (Mac OS 26.3.1; arm64) iTerm.app/3.6.9 (codex-tui; 0.118.0)";
@@ -2215,6 +2216,16 @@ fn ensure_local_port_available(port: u16, current_port: Option<u16>) -> Result<(
     Ok(())
 }
 
+fn format_gateway_bind_error(port: u16, error: &std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::AddrInUse {
+        return format!(
+            "启动本地接入服务失败: 端口 {} 已被占用，请先清理端口或改用其他端口（{}）",
+            port, error
+        );
+    }
+    format!("启动本地接入服务失败: {}", error)
+}
+
 fn is_free_plan_type(plan_type: Option<&str>) -> bool {
     let Some(plan_type) = plan_type else {
         return false;
@@ -2284,7 +2295,7 @@ fn sanitize_collection(
     Ok((changed, valid_account_ids))
 }
 
-async fn ensure_runtime_loaded() -> Result<(), String> {
+async fn ensure_runtime_loaded_without_start() -> Result<(), String> {
     {
         let runtime = gateway_runtime().lock().await;
         if runtime.loaded {
@@ -2322,11 +2333,6 @@ async fn ensure_runtime_loaded() -> Result<(), String> {
         }
     }
 
-    let should_start = next_collection
-        .as_ref()
-        .map(|collection| collection.enabled)
-        .unwrap_or(false);
-
     {
         let mut runtime = gateway_runtime().lock().await;
         normalize_stats(&mut loaded_stats);
@@ -2342,6 +2348,21 @@ async fn ensure_runtime_loaded() -> Result<(), String> {
             prune_prepared_account_cache(&mut runtime, now_ms());
         }
     }
+
+    Ok(())
+}
+
+async fn ensure_runtime_loaded() -> Result<(), String> {
+    ensure_runtime_loaded_without_start().await?;
+
+    let should_start = {
+        let runtime = gateway_runtime().lock().await;
+        runtime
+            .collection
+            .as_ref()
+            .map(|collection| collection.enabled)
+            .unwrap_or(false)
+    };
 
     if should_start {
         ensure_gateway_matches_runtime().await?;
@@ -2386,9 +2407,17 @@ async fn ensure_gateway_matches_runtime() -> Result<(), String> {
 
     stop_gateway().await;
 
-    let listener = TcpListener::bind(("127.0.0.1", collection.port))
-        .await
-        .map_err(|e| format!("启动本地接入服务失败: {}", e))?;
+    let listener = match TcpListener::bind(("127.0.0.1", collection.port)).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            let message = format_gateway_bind_error(collection.port, &error);
+            let mut runtime = gateway_runtime().lock().await;
+            runtime.running = false;
+            runtime.actual_port = None;
+            runtime.last_error = Some(message.clone());
+            return Err(message);
+        }
+    };
     let (shutdown_sender, mut shutdown_receiver) = watch::channel(false);
     let port = collection.port;
 
@@ -2457,8 +2486,17 @@ async fn stop_gateway() {
     if let Some(sender) = shutdown_sender {
         let _ = sender.send(true);
     }
-    if let Some(task) = task {
-        let _ = task.await;
+    if let Some(mut task) = task {
+        tokio::select! {
+            result = &mut task => {
+                let _ = result;
+            }
+            _ = tokio::time::sleep(GATEWAY_SHUTDOWN_TIMEOUT) => {
+                logger::log_codex_api_warn("[CodexLocalAccess] 停止本地接入服务超时，已强制中止监听任务");
+                task.abort();
+                let _ = task.await;
+            }
+        }
     }
 }
 
@@ -2597,8 +2635,12 @@ fn build_state_snapshot(runtime: &GatewayRuntime) -> CodexLocalAccessState {
 }
 
 async fn snapshot_state() -> Result<CodexLocalAccessState, String> {
-    ensure_runtime_loaded().await?;
-    ensure_gateway_matches_runtime().await?;
+    ensure_runtime_loaded_without_start().await?;
+    if let Err(err) = ensure_gateway_matches_runtime().await {
+        let mut runtime = gateway_runtime().lock().await;
+        runtime.last_error = Some(err);
+        return Ok(build_state_snapshot(&runtime));
+    }
     let runtime = gateway_runtime().lock().await;
     Ok(build_state_snapshot(&runtime))
 }
@@ -2780,6 +2822,45 @@ pub async fn clear_local_access_stats() -> Result<CodexLocalAccessState, String>
     schedule_stats_flush_if_needed().await;
 
     snapshot_state().await
+}
+
+pub async fn prepare_local_access_gateway_for_restart() -> Result<CodexLocalAccessState, String> {
+    ensure_runtime_loaded_without_start().await?;
+    stop_gateway().await;
+
+    let runtime = gateway_runtime().lock().await;
+    Ok(build_state_snapshot(&runtime))
+}
+
+pub async fn kill_local_access_port_processes() -> Result<CodexLocalAccessPortCleanupResult, String>
+{
+    if let Err(err) = ensure_runtime_loaded_without_start().await {
+        logger::log_codex_api_warn(&format!(
+            "[CodexLocalAccess] 清理端口前加载配置失败: {}",
+            err
+        ));
+        return Err(err);
+    }
+
+    let collection = {
+        let runtime = gateway_runtime().lock().await;
+        runtime.collection.clone()
+    }
+    .ok_or_else(|| "API 服务集合尚未创建".to_string())?;
+
+    stop_gateway().await;
+
+    let killed_count = process::kill_port_processes(collection.port)? as u32;
+
+    if collection.enabled {
+        ensure_gateway_matches_runtime().await?;
+    }
+
+    let state = snapshot_state().await?;
+    Ok(CodexLocalAccessPortCleanupResult {
+        killed_count,
+        state,
+    })
 }
 
 pub async fn update_local_access_port(port: u16) -> Result<CodexLocalAccessState, String> {

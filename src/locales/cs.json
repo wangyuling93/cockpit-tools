@@ -1545,6 +1545,7 @@
     "authorizing": "Čeká se na autorizaci systému...",
     "installFailed": "Instalace do systému selhala. Zkuste to později nebo stáhněte balíček ručně.",
     "restartRequiredAfterInstall": "Aktualizace je nainstalována. Dokončete přepnutí ručním restartem aplikace.",
+    "stoppingApiService": "Zastavuji službu API...",
     "skipThisVersion": "Přeskočit tuto verzi",
     "skipFailed": "Tuto aktualizaci se nepodařilo přeskočit: {{error}}"
   },
@@ -1720,6 +1721,12 @@
       "clearStats": "Vymazat statistiky",
       "clearStatsConfirm": "Vymazat všechny statistiky služby API?",
       "clearStatsSuccess": "Statistiky služby API byly vymazány",
+      "killPortAction": "Vyčistit port",
+      "killPortTitle": "Vyčistit port služby API",
+      "killPortConfirmMessage": "Tím se vynuceně ukončí ostatní procesy používající místní port {{port}} a poté se služba API znovu spustí. Pokračovat?",
+      "killPortSuccess": "Port byl vyčištěn (ukončeno {{count}} procesů)",
+      "killPortSuccessNone": "Port byl zkontrolován. Nepoužívá ho žádný externí proces.",
+      "killPortSuccessUnknown": "Port služby API byl vyčištěn",
       "refreshStats": "Obnovit statistiky",
       "refreshStatsSuccess": "Statistiky služby API byly obnoveny",
       "routingStrategy": {

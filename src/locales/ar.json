@@ -1591,6 +1591,7 @@
     "authorizing": "بانتظار تفويض النظام...",
     "installFailed": "فشل التثبيت على النظام. حاول لاحقًا أو نزّل الحزمة يدويًا.",
     "restartRequiredAfterInstall": "تم تثبيت التحديث. أعد تشغيل التطبيق يدويًا لإكمال التبديل.",
+    "stoppingApiService": "جارٍ إيقاف خدمة API...",
     "skipThisVersion": "تخطي هذا الإصدار",
     "skipFailed": "تعذر تخطي هذا التحديث: {{error}}"
   },
@@ -1766,6 +1767,12 @@
       "clearStats": "مسح الإحصاءات",
       "clearStatsConfirm": "هل تريد مسح كل إحصاءات خدمة API؟",
       "clearStatsSuccess": "تم مسح إحصاءات خدمة API",
+      "killPortAction": "تنظيف المنفذ",
+      "killPortTitle": "تنظيف منفذ خدمة API",
+      "killPortConfirmMessage": "سيتم إنهاء العمليات الأخرى التي تستخدم المنفذ المحلي {{port}} بالقوة، ثم إعادة تشغيل خدمة API. هل تريد المتابعة؟",
+      "killPortSuccess": "تم تنظيف المنفذ (تم إنهاء {{count}} عملية)",
+      "killPortSuccessNone": "تم فحص المنفذ. لا توجد عملية خارجية تستخدمه.",
+      "killPortSuccessUnknown": "تم تنظيف منفذ خدمة API",
       "refreshStats": "تحديث الإحصاءات",
       "refreshStatsSuccess": "تم تحديث إحصاءات خدمة API",
       "routingStrategy": {

@@ -62,3 +62,8 @@ export interface CodexLocalAccessState {
   memberCount: number;
   stats: CodexLocalAccessStats;
 }
+
+export interface CodexLocalAccessPortCleanupResult {
+  killedCount: number;
+  state: CodexLocalAccessState;
+}

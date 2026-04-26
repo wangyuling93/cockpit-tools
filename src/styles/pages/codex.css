@@ -446,6 +446,20 @@
   margin-top: 0;
 }
 
+.codex-local-access-card .quota-error-inline {
+  width: 100%;
+}
+
+.codex-local-access-card .quota-error-inline span {
+  flex: 1;
+  min-width: 0;
+}
+
+.codex-local-access-error-action {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .codex-local-access-hide-confirm-overlay {
   background: rgba(15, 23, 42, 0.64);
   backdrop-filter: blur(8px);

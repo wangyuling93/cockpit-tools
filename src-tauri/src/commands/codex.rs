@@ -1,7 +1,9 @@
 use crate::models::codex::{
     CodexAccount, CodexApiProviderMode, CodexQuickConfig, CodexQuota, CodexTokens,
 };
-use crate::models::codex_local_access::{CodexLocalAccessRoutingStrategy, CodexLocalAccessState};
+use crate::models::codex_local_access::{
+    CodexLocalAccessPortCleanupResult, CodexLocalAccessRoutingStrategy, CodexLocalAccessState,
+};
 use crate::modules::{
     codex_account, codex_local_access, codex_oauth, codex_quota, codex_wakeup,
     codex_wakeup_scheduler, config, logger, openclaw_auth, opencode_auth, process,
@@ -735,6 +737,16 @@ pub async fn codex_local_access_rotate_api_key() -> Result<CodexLocalAccessState
 #[tauri::command]
 pub async fn codex_local_access_clear_stats() -> Result<CodexLocalAccessState, String> {
     codex_local_access::clear_local_access_stats().await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_prepare_restart() -> Result<CodexLocalAccessState, String> {
+    codex_local_access::prepare_local_access_gateway_for_restart().await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_kill_port() -> Result<CodexLocalAccessPortCleanupResult, String> {
+    codex_local_access::kill_local_access_port_processes().await
 }
 
 #[tauri::command]

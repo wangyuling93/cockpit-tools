@@ -1545,6 +1545,7 @@
     "authorizing": "Sistem yetkisi bekleniyor...",
     "installFailed": "Sistem kurulumu başarısız oldu. Daha sonra yeniden deneyin veya paketi manuel indirin.",
     "restartRequiredAfterInstall": "Güncelleme yüklendi. Geçişi tamamlamak için uygulamayı manuel olarak yeniden başlatın.",
+    "stoppingApiService": "API hizmeti durduruluyor...",
     "skipThisVersion": "Bu sürümü atla",
     "skipFailed": "Bu güncelleme atlanamadı: {{error}}"
   },
@@ -1720,6 +1721,12 @@
       "clearStats": "İstatistikleri Temizle",
       "clearStatsConfirm": "API hizmeti istatistiklerinin tümü temizlensin mi?",
       "clearStatsSuccess": "API hizmeti istatistikleri temizlendi",
+      "killPortAction": "Portu temizle",
+      "killPortTitle": "API hizmeti portunu temizle",
+      "killPortConfirmMessage": "Yerel {{port}} portunu kullanan diğer işlemler zorla kapatılacak, ardından API hizmeti yeniden başlatılacak. Devam edilsin mi?",
+      "killPortSuccess": "Port temizlendi ({{count}} işlem kapatıldı)",
+      "killPortSuccessNone": "Port kontrol edildi. Harici bir işlem kullanmıyor.",
+      "killPortSuccessUnknown": "API hizmeti portu temizlendi",
       "refreshStats": "İstatistikleri Yenile",
       "refreshStatsSuccess": "API hizmeti istatistikleri yenilendi",
       "routingStrategy": {

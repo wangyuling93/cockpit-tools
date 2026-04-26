@@ -15,6 +15,7 @@ import {
   Server,
   ShieldCheck,
   Trash2,
+  Wrench,
   X,
 } from 'lucide-react';
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
@@ -61,11 +62,13 @@ interface CodexLocalAccessModalProps {
     strategy: CodexLocalAccessRoutingStrategy,
   ) => Promise<unknown> | unknown;
   onRotateApiKey: () => Promise<unknown> | unknown;
+  onKillPort: () => Promise<unknown> | unknown;
   onToggleEnabled: () => Promise<unknown> | unknown;
   onTest: () => Promise<number> | number;
   saving: boolean;
   testing: boolean;
   starting: boolean;
+  portCleanupBusy: boolean;
 }
 
 type StatsRangeKey = 'daily' | 'weekly' | 'monthly';
@@ -125,18 +128,20 @@ export function CodexLocalAccessModal({
   accountGroups,
   initialSelectedIds,
   maskAccountText,
-    onClose,
-    onSaveAccounts,
-    onClearStats,
-    onRefreshStats,
-    onUpdatePort,
-    onUpdateRoutingStrategy,
-    onRotateApiKey,
+  onClose,
+  onSaveAccounts,
+  onClearStats,
+  onRefreshStats,
+  onUpdatePort,
+  onUpdateRoutingStrategy,
+  onRotateApiKey,
+  onKillPort,
   onToggleEnabled,
   onTest,
   saving,
   testing,
   starting,
+  portCleanupBusy,
 }: CodexLocalAccessModalProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -187,7 +192,7 @@ export function CodexLocalAccessModal({
     selectedTotals && selectedTotals.requestCount > 0
       ? Math.round((selectedTotals.successCount / selectedTotals.requestCount) * 100)
       : 0;
-  const actionBusy = saving || testing || starting;
+  const actionBusy = saving || testing || starting || portCleanupBusy;
   const summaryStats = useMemo(
     () => [
       {
@@ -698,6 +703,15 @@ export function CodexLocalAccessModal({
     }, t('codex.localAccess.clearStatsSuccess', 'API 服务统计已清空'));
   };
 
+  const handleKillPort = async () => {
+    await runAction(
+      async () => {
+        await onKillPort();
+      },
+      t('codex.localAccess.killPortSuccessUnknown', 'API 服务端口已清理'),
+    );
+  };
+
   const handleRefreshStats = async () => {
     setError('');
     setNotice('');
@@ -849,9 +863,24 @@ export function CodexLocalAccessModal({
 
         <div className="modal-body codex-local-access-modal-body">
           {state?.lastError && (
-            <div className="codex-local-access-inline-error">
+            <div className="codex-local-access-inline-error codex-local-access-inline-error-with-action">
               <CircleAlert size={14} />
               <span>{state.lastError}</span>
+              {collection && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm codex-local-access-inline-action"
+                  onClick={() => void handleKillPort()}
+                  disabled={actionBusy}
+                >
+                  {portCleanupBusy ? (
+                    <RefreshCw size={14} className="loading-spinner" />
+                  ) : (
+                    <Wrench size={14} />
+                  )}
+                  {t('codex.localAccess.killPortAction', '清理端口')}
+                </button>
+              )}
             </div>
           )}
 

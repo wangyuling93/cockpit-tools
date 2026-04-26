@@ -60,6 +60,7 @@ import {
   normalizeExternalProviderImportPayload,
 } from './utils/externalProviderImport';
 import { runAutoBackupCycle } from './services/scheduledBackupService';
+import { prepareCodexLocalAccessForRestart } from './services/codexLocalAccessService';
 
 const DashboardPage = lazy(() =>
   import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })),
@@ -634,6 +635,33 @@ function MainApp() {
     void invoke('update_log', { level, message }).catch(() => {});
   }, []);
 
+  const prepareCodexLocalAccessBeforeRelaunch = useCallback(async () => {
+    setUpdateRetryStatus(
+      t('update_notification.stoppingApiService', '正在关闭 API 服务...'),
+    );
+    try {
+      const state = await prepareCodexLocalAccessForRestart();
+      writeUpdateLog(
+        'info',
+        `应用重启前已关闭 Codex API 服务监听: enabled=${Boolean(state.collection?.enabled)}, running=${state.running}`,
+      );
+    } catch (error) {
+      writeUpdateLog(
+        'warn',
+        `应用重启前关闭 Codex API 服务监听失败，继续重启: error=${sanitizeUpdaterErrorMessage(error)}`,
+      );
+    }
+  }, [t, writeUpdateLog]);
+
+  const restoreCodexLocalAccessAfterRelaunchFailure = useCallback(async () => {
+    await invoke('codex_local_access_get_state').catch((error) => {
+      writeUpdateLog(
+        'warn',
+        `应用重启失败后恢复 Codex API 服务状态失败: error=${sanitizeUpdaterErrorMessage(error)}`,
+      );
+    });
+  }, [writeUpdateLog]);
+
   const prepareUpdateNotificationInfo = useCallback(async (update: UpdaterUpdate): Promise<UpdateInfo> => {
     const { releaseNotes, releaseNotesZh } = parseUpdaterReleaseNotes(update.body);
     const currentVersion = update.currentVersion || (await getVersion());
@@ -899,6 +927,7 @@ function MainApp() {
         await pendingUpdate.close();
         pendingSilentUpdateRef.current = null;
       }
+      await prepareCodexLocalAccessBeforeRelaunch();
       setSilentUpdateVersion(null);
       setUpdateRetryStatus('');
       setUpdateDownloadError('');
@@ -912,10 +941,17 @@ function MainApp() {
       const { relaunch } = await import('@tauri-apps/plugin-process');
       await relaunch();
     } catch (error) {
+      await restoreCodexLocalAccessAfterRelaunchFailure();
       console.error('[App] Failed to apply pending update:', error);
       writeUpdateLog('error', `用户手动应用更新失败: error=${sanitizeUpdaterErrorMessage(error)}`);
     }
-  }, [silentUpdateVersion, updateAction, writeUpdateLog]);
+  }, [
+    prepareCodexLocalAccessBeforeRelaunch,
+    restoreCodexLocalAccessAfterRelaunchFailure,
+    silentUpdateVersion,
+    updateAction,
+    writeUpdateLog,
+  ]);
 
   const runLinuxManagedUpdate = useCallback(async (expectedVersion: string) => {
     setUpdateRetryStatus('');
@@ -952,9 +988,11 @@ function MainApp() {
       setUpdateErrorDetails('');
 
       try {
+        await prepareCodexLocalAccessBeforeRelaunch();
         const { relaunch } = await import('@tauri-apps/plugin-process');
         await relaunch();
       } catch (error) {
+        await restoreCodexLocalAccessAfterRelaunchFailure();
         const compactError = sanitizeUpdaterErrorMessage(error);
         console.error('[App] Linux managed update installed but relaunch failed:', error);
         writeUpdateLog(
@@ -984,7 +1022,13 @@ function MainApp() {
       });
       throw error;
     }
-  }, [closeUpdaterHandle, t, writeUpdateLog]);
+  }, [
+    closeUpdaterHandle,
+    prepareCodexLocalAccessBeforeRelaunch,
+    restoreCodexLocalAccessAfterRelaunchFailure,
+    t,
+    writeUpdateLog,
+  ]);
 
   const runSharedUpdateDownload = useCallback(async (expectedVersion: string) => {
     const taskId = Date.now();
