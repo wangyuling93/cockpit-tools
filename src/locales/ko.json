@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "시작",
       "timeWindowTo": "종료",
       "fallbackTimes": "대체 시간",
-      "saveTask": "작업 저장"
+      "saveTask": "작업 저장",
+      "executionMode": "실행 모드",
+      "executionModeAuto": "바로 실행",
+      "executionModeConfirm": "확인 필요",
+      "confirmTimeout": "확인 시간 초과"
     },
     "test": {
       "modelsLabel": "트리거할 모델",

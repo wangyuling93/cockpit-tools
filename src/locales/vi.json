@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Từ",
       "timeWindowTo": "Đến",
       "fallbackTimes": "Thời gian ngoài khung giờ",
-      "saveTask": "Lưu nhiệm vụ"
+      "saveTask": "Lưu nhiệm vụ",
+      "executionMode": "Chế độ thực thi",
+      "executionModeAuto": "Chạy trực tiếp",
+      "executionModeConfirm": "Cần xác nhận",
+      "confirmTimeout": "Hết hạn xác nhận"
     },
     "test": {
       "modelsLabel": "Mô hình kích hoạt",

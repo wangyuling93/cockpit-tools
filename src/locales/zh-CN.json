@@ -1623,7 +1623,11 @@
       "timeWindowFrom": "从",
       "timeWindowTo": "到",
       "fallbackTimes": "时段外触发时间",
-      "saveTask": "保存任务"
+      "saveTask": "保存任务",
+      "executionMode": "执行模式",
+      "executionModeAuto": "直接执行",
+      "executionModeConfirm": "需要确认",
+      "confirmTimeout": "确认超时"
     },
     "test": {
       "modelsLabel": "选择要触发的模型",

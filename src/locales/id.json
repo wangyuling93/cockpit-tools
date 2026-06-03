@@ -1623,7 +1623,11 @@
       "timeWindowFrom": "Dari",
       "timeWindowTo": "Ke",
       "fallbackTimes": "Waktu cadangan",
-      "saveTask": "Simpan tugas"
+      "saveTask": "Simpan tugas",
+      "executionMode": "Mode eksekusi",
+      "executionModeAuto": "Jalankan langsung",
+      "executionModeConfirm": "Perlu konfirmasi",
+      "confirmTimeout": "Batas waktu konfirmasi"
     },
     "test": {
       "modelsLabel": "Model yang akan dipicu",

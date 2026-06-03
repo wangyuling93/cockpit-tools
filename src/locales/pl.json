@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Od",
       "timeWindowTo": "Do",
       "fallbackTimes": "Zastępcze godziny",
-      "saveTask": "Zapisz zadanie"
+      "saveTask": "Zapisz zadanie",
+      "executionMode": "Tryb wykonania",
+      "executionModeAuto": "Uruchom bezpośrednio",
+      "executionModeConfirm": "Wymagaj potwierdzenia",
+      "confirmTimeout": "Limit potwierdzenia"
     },
     "test": {
       "modelsLabel": "Modele do wywołania",

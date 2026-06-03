@@ -97,6 +97,7 @@ import {
   type CodexQuotaErrorInfo,
 } from "../types/codex";
 import { filterCodexLocalAccessAccountIds } from "../utils/codexLocalAccessAccounts";
+import { isBlockingCodexQuotaError } from "../utils/codexQuotaError";
 import { buildCodexAccountPresentation } from "../presentation/platformAccountPresentation";
 
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
@@ -4327,7 +4328,7 @@ export function CodexAccountsPage() {
           summary.cooldown += 1;
           return;
         }
-        if (account.quota_error) {
+        if (isBlockingCodexQuotaError(account.quota_error)) {
           summary.quotaLimited += 1;
           summary.abnormal += 1;
           return;

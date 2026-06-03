@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Od",
       "timeWindowTo": "Do",
       "fallbackTimes": "Náhradní časy",
-      "saveTask": "Uložit úlohu"
+      "saveTask": "Uložit úlohu",
+      "executionMode": "Režim spuštění",
+      "executionModeAuto": "Spustit přímo",
+      "executionModeConfirm": "Vyžadovat potvrzení",
+      "confirmTimeout": "Limit potvrzení"
     },
     "test": {
       "modelsLabel": "Modely k probuzení",

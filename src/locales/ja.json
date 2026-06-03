@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "開始",
       "timeWindowTo": "終了",
       "fallbackTimes": "時間外の実行時間",
-      "saveTask": "タスクを保存"
+      "saveTask": "タスクを保存",
+      "executionMode": "実行モード",
+      "executionModeAuto": "直接実行",
+      "executionModeConfirm": "確認が必要",
+      "confirmTimeout": "確認タイムアウト"
     },
     "test": {
       "modelsLabel": "起動するモデル",

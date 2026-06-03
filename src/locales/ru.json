@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "С",
       "timeWindowTo": "По",
       "fallbackTimes": "Времена по умолчанию",
-      "saveTask": "Сохранить задачу"
+      "saveTask": "Сохранить задачу",
+      "executionMode": "Режим выполнения",
+      "executionModeAuto": "Выполнить сразу",
+      "executionModeConfirm": "Требовать подтверждение",
+      "confirmTimeout": "Тайм-аут подтверждения"
     },
     "test": {
       "modelsLabel": "Модели для запуска",

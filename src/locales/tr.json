@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Başlangıç",
       "timeWindowTo": "Bitiş",
       "fallbackTimes": "Geri dönüş zamanları",
-      "saveTask": "Görevi kaydet"
+      "saveTask": "Görevi kaydet",
+      "executionMode": "Çalıştırma modu",
+      "executionModeAuto": "Doğrudan çalıştır",
+      "executionModeConfirm": "Onay gerekli",
+      "confirmTimeout": "Onay zaman aşımı"
     },
     "test": {
       "modelsLabel": "Tetiklenecek modeller",

@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "De",
       "timeWindowTo": "A",
       "fallbackTimes": "Horas fuera de ventana",
-      "saveTask": "Guardar tarea"
+      "saveTask": "Guardar tarea",
+      "executionMode": "Modo de ejecución",
+      "executionModeAuto": "Ejecutar directo",
+      "executionModeConfirm": "Requiere confirmación",
+      "confirmTimeout": "Tiempo de confirmación"
     },
     "test": {
       "modelsLabel": "Modelos a activar",

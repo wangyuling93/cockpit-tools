@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Von",
       "timeWindowTo": "Bis",
       "fallbackTimes": "Zeiten außerhalb des Fensters",
-      "saveTask": "Aufgabe speichern"
+      "saveTask": "Aufgabe speichern",
+      "executionMode": "Ausführungsmodus",
+      "executionModeAuto": "Direkt ausführen",
+      "executionModeConfirm": "Bestätigung nötig",
+      "confirmTimeout": "Bestätigungs-Timeout"
     },
     "test": {
       "modelsLabel": "Zu auslösende Modelle",

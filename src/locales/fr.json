@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "De",
       "timeWindowTo": "À",
       "fallbackTimes": "Heures hors fenêtre",
-      "saveTask": "Enregistrer la tâche"
+      "saveTask": "Enregistrer la tâche",
+      "executionMode": "Mode d'exécution",
+      "executionModeAuto": "Exécuter directement",
+      "executionModeConfirm": "Confirmation requise",
+      "confirmTimeout": "Délai de confirmation"
     },
     "test": {
       "modelsLabel": "Modèles à déclencher",

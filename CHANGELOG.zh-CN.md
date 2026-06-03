@@ -7,6 +7,27 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
 ---
+## [0.24.12] - 2026-06-03
+
+### 新增
+- **Codex API 服务现更贴近官方 Codex 客户端流量行为**：Sidecar 请求增强了客户端指纹、reasoning/signature replay、清理后的请求签名，以及 Responses/WebSocket 处理；Legacy/WebSocket 网关也会补齐 Codex client metadata、turn metadata，并清理非法 reasoning signature，让账号池请求更接近官方客户端流程。
+- **Codex 唤醒任务现支持执行模式**：每个 Codex 唤醒任务可选择直接执行，或在执行前要求确认并设置确认超时时间。感谢 @Ac-spider。
+
+### 变更
+- **Codex API 服务错误现保留更完整的诊断信息**：本地 API 服务测试、请求日志与上游失败会保留更完整的错误详情，便于区分鉴权失败、额度失败、代理问题和上游响应异常。
+- **Codex API 服务账号池健康状态不再把单纯额度刷新失败当作异常账号**：非鉴权类额度刷新失败不会再按 401 类认证失败处理，减少不必要的账号排除。
+- **Codex API 服务网关兼容性现覆盖 Legacy、Sidecar 与 WebSocket 路径**：路由、用量捕获、图片处理、reasoning 输出和流式完成行为会在维护中的多网关之间保持一致，而不是只偏向单一路径。
+- **账号级刷新设置现与平台级刷新控件保持一致**：账号覆盖项使用与平台默认值相同的预设集合，并支持自定义分钟数，不再提供不一致的 30/60 分钟预设。感谢 @Ac-spider。
+- **Windows Antigravity Desktop 版本检测更可靠**：可执行文件元数据探测改为通过进程环境传递目标路径，增加卸载注册表 `DisplayVersion` 兜底，并在选择 Desktop 认证模式前复用缓存版本信息。感谢 @insane66613。
+
+### 修复
+- **Codex API 服务认证投影不再为 API Key 绑定写出无效 OAuth 认证文件**：API Key 账号绑定到缺少 `id_token` 的 OAuth 快照时，会保留 API Key auth 形态，而不是生成无效的 OAuth `auth.json`。感谢 @luoyanglang。
+- **外部导入 Deep Link 不再把可执行文件名当作导入参数**：single-instance 和 startup 导入处理会跳过 `argv0`，避免误导性诊断和 WSL 导入处理失败。感谢 @Disaster-Terminator。
+- **Dashboard Antigravity 配额卡片现优先展示分组配额数据，再回退到规范模型**：仅能通过 display group 映射到配额的账号不再显示为“暂无数据”。感谢 @Hao-Wu。
+- **Codex 唤醒任务执行模式控件现使用标准表单样式**：执行模式下拉框与唤醒任务表单里的其它控件保持一致的高度、内边距、边框、焦点态和字体。
+- **Codex 更新后启动路径失效时会自动重探测并写回路径**：保存的 Codex 启动路径不可用时，启动链路会重新检测当前安装位置并更新配置，减少升级后需要手动修路径的情况。
+
+---
 ## [0.24.11] - 2026-06-01
 
 ### 新增

@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "從",
       "timeWindowTo": "到",
       "fallbackTimes": "時段外觸發時間",
-      "saveTask": "儲存任務"
+      "saveTask": "儲存任務",
+      "executionMode": "執行模式",
+      "executionModeAuto": "直接執行",
+      "executionModeConfirm": "需要確認",
+      "confirmTimeout": "確認逾時"
     },
     "test": {
       "modelsLabel": "選擇要觸發的模型",

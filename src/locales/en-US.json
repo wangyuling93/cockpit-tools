@@ -1623,7 +1623,11 @@
       "timeWindowFrom": "From",
       "timeWindowTo": "To",
       "fallbackTimes": "Fallback times",
-      "saveTask": "Save task"
+      "saveTask": "Save task",
+      "executionMode": "Execution mode",
+      "executionModeAuto": "Run directly",
+      "executionModeConfirm": "Require confirmation",
+      "confirmTimeout": "Confirmation timeout"
     },
     "test": {
       "modelsLabel": "Models to trigger",

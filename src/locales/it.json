@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "Da",
       "timeWindowTo": "A",
       "fallbackTimes": "Orari fuori finestra",
-      "saveTask": "Salva attività"
+      "saveTask": "Salva attività",
+      "executionMode": "Modalità di esecuzione",
+      "executionModeAuto": "Esegui subito",
+      "executionModeConfirm": "Richiedi conferma",
+      "confirmTimeout": "Timeout conferma"
     },
     "test": {
       "modelsLabel": "Modelli da attivare",

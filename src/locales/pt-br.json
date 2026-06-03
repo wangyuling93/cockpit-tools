@@ -1577,7 +1577,11 @@
       "timeWindowFrom": "De",
       "timeWindowTo": "Até",
       "fallbackTimes": "Horários fora da janela",
-      "saveTask": "Salvar tarefa"
+      "saveTask": "Salvar tarefa",
+      "executionMode": "Modo de execução",
+      "executionModeAuto": "Executar direto",
+      "executionModeConfirm": "Exigir confirmação",
+      "confirmTimeout": "Tempo de confirmação"
     },
     "test": {
       "modelsLabel": "Modelos para disparar",
