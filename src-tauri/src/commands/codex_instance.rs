@@ -282,6 +282,27 @@ fn repair_session_visibility_before_launch(
     Ok(())
 }
 
+async fn apply_bound_account_to_initialized_profile(
+    profile_dir: &Path,
+    bind_account_id: Option<&str>,
+    context: &str,
+) -> Result<Option<CodexLaunchCredentialChange>, String> {
+    if !is_profile_initialized(&profile_dir.to_string_lossy()) {
+        return Ok(None);
+    }
+
+    let previous_provider = read_launch_provider_for_dir(profile_dir);
+    if let Some(account_id) = bind_account_id {
+        inject_bound_account_to_profile(profile_dir, account_id).await?;
+    } else {
+        modules::codex_local_access::cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
+    }
+    let launch_provider_change =
+        build_launch_credential_change(previous_provider, read_launch_provider_for_dir(profile_dir));
+    repair_session_visibility_before_launch(context, &launch_provider_change)?;
+    Ok(launch_provider_change.and_then(|change| change.credential_change))
+}
+
 fn sanitize_codex_config_before_launch(data_dir: &Path) -> Result<(), String> {
     modules::logger::log_info(&format!(
         "[Codex Config] sanitize before launch: data_dir={}",
@@ -678,6 +699,8 @@ pub async fn codex_update_instance(
     app_speed: Option<CodexAppSpeed>,
     auto_sync_threads: Option<bool>,
 ) -> Result<CodexInstanceProfileView, String> {
+    let should_apply_bind_account =
+        bind_account_id.is_some() || follow_local_account.is_some();
     if instance_id == DEFAULT_INSTANCE_ID {
         let default_dir = modules::codex_instance::get_default_codex_home()?;
         let mut updated = modules::codex_instance::update_default_settings(
@@ -697,6 +720,16 @@ pub async fn codex_update_instance(
         );
         let running = resolved_pid.is_some();
         let default_bind_account_id = resolve_default_account_id(&updated);
+        let launch_credential_change = if should_apply_bind_account {
+            apply_bound_account_to_initialized_profile(
+                &default_dir,
+                default_bind_account_id.as_deref(),
+                "update-default-bind-account",
+            )
+            .await?
+        } else {
+            None
+        };
         let _ = working_dir;
         return Ok(default_instance_view(
             &default_dir,
@@ -704,7 +737,8 @@ pub async fn codex_update_instance(
             default_bind_account_id,
             running,
             resolved_pid,
-        ));
+        )
+        .with_launch_credential_change(launch_credential_change));
     }
 
     let wants_bind = bind_account_id
@@ -723,6 +757,7 @@ pub async fn codex_update_instance(
         }
     }
 
+    let should_apply_instance_bind_account = bind_account_id.is_some();
     let selected_app_speed = app_speed.clone();
     let instance =
         modules::codex_instance::update_instance(modules::codex_instance::UpdateInstanceParams {
@@ -743,11 +778,18 @@ pub async fn codex_update_instance(
         .map(modules::process::is_pid_running)
         .unwrap_or(false);
     let initialized = is_profile_initialized(&instance.user_data_dir);
-    Ok(CodexInstanceProfileView::from_profile(
-        instance,
-        running,
-        initialized,
-    ))
+    let launch_credential_change = if should_apply_instance_bind_account {
+        apply_bound_account_to_initialized_profile(
+            Path::new(&instance.user_data_dir),
+            instance.bind_account_id.as_deref(),
+            "update-instance-bind-account",
+        )
+        .await?
+    } else {
+        None
+    };
+    Ok(CodexInstanceProfileView::from_profile(instance, running, initialized)
+        .with_launch_credential_change(launch_credential_change))
 }
 
 #[tauri::command]
