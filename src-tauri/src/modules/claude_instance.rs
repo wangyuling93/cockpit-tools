@@ -779,6 +779,94 @@ fn resolve_macos_exec_path(path_str: &str) -> Option<PathBuf> {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn is_windows_claude_code_cli_path(path: &Path) -> bool {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if file_name != "claude.exe" {
+        return false;
+    }
+
+    let normalized = path
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_ascii_lowercase();
+    normalized.contains("\\.local\\bin\\claude.exe")
+        || normalized.contains("\\claude-code\\")
+        || normalized.contains("\\node_modules\\@anthropic-ai\\claude-code\\")
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_claude_desktop_exec_path(path: &Path) -> bool {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    path.exists()
+        && path.is_file()
+        && file_name.eq_ignore_ascii_case("claude.exe")
+        && !is_windows_claude_code_cli_path(path)
+}
+
+#[cfg(target_os = "windows")]
+fn log_ignored_windows_claude_path(path: &Path, reason: &str) {
+    modules::logger::log_warn(&format!(
+        "[Claude Resolve] ignored non-Desktop Claude launch path: path={}, reason={}",
+        path.to_string_lossy(),
+        reason
+    ));
+}
+
+#[cfg(target_os = "windows")]
+fn detect_windows_claude_desktop_package_path() -> Option<PathBuf> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let script = r#"
+$ErrorActionPreference='SilentlyContinue'
+Get-AppxPackage -Name Claude |
+  Sort-Object Version -Descending |
+  ForEach-Object {
+    $candidate = Join-Path $_.InstallLocation 'app\Claude.exe'
+    if (Test-Path -LiteralPath $candidate) {
+      Write-Output $candidate
+      return
+    }
+  }
+"#;
+    let output = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        modules::logger::log_warn(&format!(
+            "[Claude Resolve] Get-AppxPackage failed while detecting Claude Desktop: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .find(|path| is_windows_claude_desktop_exec_path(path))
+}
+
 fn detect_claude_exec_path() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
@@ -830,9 +918,14 @@ fn detect_claude_exec_path() -> Option<PathBuf> {
             candidates.push(Path::new(&program_files).join("Claude").join("Claude.exe"));
         }
         for candidate in candidates {
-            if candidate.exists() {
+            if is_windows_claude_desktop_exec_path(&candidate) {
                 return Some(candidate);
+            } else if candidate.exists() {
+                log_ignored_windows_claude_path(&candidate, "not a Claude Desktop executable");
             }
+        }
+        if let Some(path) = detect_windows_claude_desktop_package_path() {
+            return Some(path);
         }
         modules::process::detect_windows_exec_path_by_signatures(
             "claude",
@@ -841,6 +934,14 @@ fn detect_claude_exec_path() -> Option<PathBuf> {
             &["claude"],
             &["claude"],
         )
+        .and_then(|path| {
+            if is_windows_claude_desktop_exec_path(&path) {
+                Some(path)
+            } else {
+                log_ignored_windows_claude_path(&path, "detected path is not Claude Desktop");
+                None
+            }
+        })
     }
 
     #[cfg(target_os = "linux")]
@@ -873,8 +974,21 @@ fn normalize_claude_path_for_config(path: &Path) -> String {
 
 pub fn detect_and_save_claude_launch_path(force: bool) -> Option<String> {
     let current = modules::config::get_user_config();
-    if !force && normalize_custom_path(&current.claude_app_path).is_some() {
-        return Some(current.claude_app_path);
+    if !force {
+        if let Some(custom) = normalize_custom_path(&current.claude_app_path) {
+            #[cfg(target_os = "windows")]
+            {
+                let path = PathBuf::from(&custom);
+                if is_windows_claude_desktop_exec_path(&path) {
+                    return Some(current.claude_app_path);
+                }
+                log_ignored_windows_claude_path(&path, "configured path is not Claude Desktop");
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                return Some(current.claude_app_path);
+            }
+        }
     }
 
     let detected = detect_claude_exec_path()?;
@@ -892,10 +1006,28 @@ pub fn detect_and_save_claude_launch_path(force: bool) -> Option<String> {
 fn resolve_claude_launch_path() -> Result<PathBuf, String> {
     let config = modules::config::get_user_config();
     if let Some(custom) = normalize_custom_path(&config.claude_app_path) {
-        if let Some(exec) = resolve_macos_exec_path(&custom) {
-            return Ok(exec);
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(exec) = resolve_macos_exec_path(&custom) {
+                if is_windows_claude_desktop_exec_path(&exec) {
+                    return Ok(exec);
+                }
+                log_ignored_windows_claude_path(&exec, "configured path is not Claude Desktop");
+            }
+            if let Some(detected) = detect_and_save_claude_launch_path(true)
+                .and_then(|value| resolve_macos_exec_path(&value))
+            {
+                return Ok(detected);
+            }
+            return Err("APP_PATH_NOT_FOUND:claude".to_string());
         }
-        return Err("APP_PATH_NOT_FOUND:claude".to_string());
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(exec) = resolve_macos_exec_path(&custom) {
+                return Ok(exec);
+            }
+            return Err("APP_PATH_NOT_FOUND:claude".to_string());
+        }
     }
 
     detect_and_save_claude_launch_path(false)
@@ -1381,4 +1513,22 @@ pub fn close_claude(user_data_dirs: &[String], timeout_secs: u64) -> Result<(), 
     }
 
     Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_claude_code_cli_paths_are_not_desktop_paths() {
+        assert!(is_windows_claude_code_cli_path(Path::new(
+            r"C:\Users\me\.local\bin\claude.exe"
+        )));
+        assert!(is_windows_claude_code_cli_path(Path::new(
+            r"C:\Users\me\AppData\Roaming\Claude\claude-code\2.1.177\claude.exe"
+        )));
+        assert!(!is_windows_claude_code_cli_path(Path::new(
+            r"C:\Program Files\WindowsApps\Claude_1.0.0.0_x64__pzs8sxrjxfjjc\app\Claude.exe"
+        )));
+    }
 }
