@@ -5092,6 +5092,15 @@ const CODEX_LOCAL_ACCESS_PRICE_BOOK: &[CodexLocalAccessPriceBookEntry] = &[
         priority_long: None,
     },
     CodexLocalAccessPriceBookEntry {
+        model_id: "gpt-5.3-codex-spark",
+        max_context_tokens: 128_000,
+        long_context_threshold_tokens: CODEX_LOCAL_ACCESS_LONG_CONTEXT_THRESHOLD_TOKENS,
+        standard: codex_price(1.75, 0.175, 14.0),
+        standard_long: None,
+        priority: None,
+        priority_long: None,
+    },
+    CodexLocalAccessPriceBookEntry {
         model_id: "gpt-5.2",
         max_context_tokens: 400_000,
         long_context_threshold_tokens: CODEX_LOCAL_ACCESS_LONG_CONTEXT_THRESHOLD_TOKENS,
