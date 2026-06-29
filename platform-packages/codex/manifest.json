@@ -1,7 +1,7 @@
 {
   "id": "codex",
   "platformId": "codex",
-  "version": "0.26.9",
+  "version": "0.26.10",
   "apiVersion": 1,
   "minCoreVersion": "0.26.5",
   "displayName": "Codex",
@@ -32,6 +32,28 @@
     "cli"
   ],
   "changelog": [
+    {
+      "version": "0.26.10",
+      "date": "2026-06-29",
+      "notes": [
+        "Restores APIKEY.FUN quick add behavior from the relay page to Codex.",
+        "The Codex add dialog now opens with the APIKEY.FUN provider settings prefilled even when the remote UI loads after navigation."
+      ],
+      "locales": {
+        "zh-CN": {
+          "notes": [
+            "恢复中转站快速添加到 Codex 的预填行为。",
+            "即使 Codex 远端 UI 在跳转后才加载，也会自动打开添加弹框并带入 APIKEY.FUN 配置。"
+          ]
+        },
+        "zh-TW": {
+          "notes": [
+            "恢復中轉站快速加入 Codex 的預填行為。",
+            "即使 Codex 遠端 UI 在跳轉後才載入，也會自動開啟新增彈框並帶入 APIKEY.FUN 設定。"
+          ]
+        }
+      }
+    },
     {
       "version": "0.26.9",
       "date": "2026-06-29",

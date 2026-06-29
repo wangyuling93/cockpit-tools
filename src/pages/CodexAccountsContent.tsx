@@ -5385,8 +5385,8 @@ export function CodexAccountsContent() {
   ]);
 
   useEffect(() => {
-    const consumePrefill = () => {
-      const request = consumeApiKeyFunPrefill("codex");
+    const consumePrefill = (event?: Event) => {
+      const request = consumeApiKeyFunPrefill("codex", event);
       if (request) {
         applyApiKeyFunPrefill(request);
       }

@@ -14,6 +14,11 @@ import { renderPlatformIcon } from '../../utils/platformMeta';
 
 type AntigravityPlatformId = Extract<PlatformId, 'antigravity' | 'antigravity_ide'>;
 type AntigravitySuiteTab = Extract<Page, 'overview' | 'instances' | 'wakeup' | 'verification'>;
+type AntigravityTabSpec = {
+  key: AntigravitySuiteTab;
+  label: string;
+  icon: React.ReactNode;
+};
 
 type AntigravityRemoteHostApi = {
   platformId: AntigravityPlatformId;
@@ -36,7 +41,10 @@ function normalizeLocale(locale: string | null | undefined): string {
   return locale && locale.trim() ? locale : 'zh-CN';
 }
 
-function normalizeTab(value: unknown): AntigravitySuiteTab {
+function normalizeTab(value: unknown, platformId: AntigravityPlatformId): AntigravitySuiteTab {
+  if (platformId === 'antigravity') {
+    return 'overview';
+  }
   if (value === 'instances' || value === 'wakeup' || value === 'verification') {
     return value;
   }
@@ -53,29 +61,37 @@ function AntigravityRemoteTabs({
   onTabChange: (tab: AntigravitySuiteTab) => void;
 }) {
   const { t } = useTranslation();
-  const tabs = useMemo(
-    () => [
-      {
+  const tabs = useMemo<AntigravityTabSpec[]>(
+    () => {
+      const overviewTab: AntigravityTabSpec = {
         key: 'overview' as const,
         label: t('overview.title', '账号总览'),
         icon: <span className="tab-icon">{renderPlatformIcon(platformId, 16)}</span>,
-      },
-      {
-        key: 'instances' as const,
-        label: t('instances.title', '多开实例'),
-        icon: <Layers className="tab-icon" />,
-      },
-      {
-        key: 'wakeup' as const,
-        label: t('wakeup.title', '唤醒任务'),
-        icon: <AlarmClock className="tab-icon" />,
-      },
-      {
-        key: 'verification' as const,
-        label: t('wakeup.verification.title', '账户检测'),
-        icon: <ShieldCheck className="tab-icon" />,
-      },
-    ],
+      };
+
+      if (platformId === 'antigravity') {
+        return [overviewTab];
+      }
+
+      return [
+        overviewTab,
+        {
+          key: 'instances' as const,
+          label: t('instances.title', '多开实例'),
+          icon: <Layers className="tab-icon" />,
+        },
+        {
+          key: 'wakeup' as const,
+          label: t('wakeup.title', '唤醒任务'),
+          icon: <AlarmClock className="tab-icon" />,
+        },
+        {
+          key: 'verification' as const,
+          label: t('wakeup.verification.title', '账户检测'),
+          icon: <ShieldCheck className="tab-icon" />,
+        },
+      ];
+    },
     [platformId, t],
   );
 
@@ -124,12 +140,12 @@ function AntigravityRemoteApp({
   tabsContainer: HTMLElement | null;
 }) {
   const [activeTab, setActiveTab] = useState<AntigravitySuiteTab>(() =>
-    normalizeTab(hostApi.runtimeParams?.initialTab),
+    normalizeTab(hostApi.runtimeParams?.initialTab, hostApi.platformId),
   );
 
   const handleNavigate = (page: Page) => {
     if (page === 'overview' || page === 'instances' || page === 'wakeup' || page === 'verification') {
-      setActiveTab(page);
+      setActiveTab(normalizeTab(page, hostApi.platformId));
       return;
     }
     window.dispatchEvent(new CustomEvent('app-request-navigate', { detail: page }));

@@ -1392,10 +1392,10 @@ export function ClaudeAccountsContent({
   );
 
   useEffect(() => {
-    const consumePrefill = () => {
+    const consumePrefill = (event?: Event) => {
       const request =
-        consumeApiKeyFunPrefill('claude_desktop') ||
-        consumeApiKeyFunPrefill('claude_cli');
+        consumeApiKeyFunPrefill('claude_desktop', event) ||
+        consumeApiKeyFunPrefill('claude_cli', event);
       if (request) {
         applyApiKeyFunPrefill(request);
       }
