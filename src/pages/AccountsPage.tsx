@@ -218,6 +218,11 @@ const ANTIGRAVITY_FILTER_FIELD_TAG_FILTER = 'tag_filter'
 const ANTIGRAVITY_FILTER_FIELD_GROUP_BY_TAG = 'group_by_tag'
 const ANTIGRAVITY_FILTER_FIELD_ACTIVE_GROUP_ID = 'active_group_id'
 
+// 缓存切换 Tab 前的临时过滤状态
+let sessionSearchQuery: string = ''
+let sessionFilterTypes: any[] | null = null
+let sessionTagFilter: string[] | null = null
+
 export function AccountsPage({ onNavigate, hideHeader = false }: AccountsPageProps) {
   const { t, i18n } = useTranslation()
   const antigravityRuntimeTarget = useAntigravityRuntimeTarget()
@@ -336,23 +341,29 @@ export function AccountsPage({ onNavigate, hideHeader = false }: AccountsPagePro
   )
 
   // 筛选
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterTypes, setFilterTypes] = useState<AccountsFilterType[]>(() =>
-    initialFilterPersistenceEnabled
+  const [searchQuery, setSearchQuery] = useState(() => sessionSearchQuery)
+  const [filterTypes, setFilterTypes] = useState<AccountsFilterType[]>(() => {
+    if (sessionFilterTypes !== null) {
+      return sessionFilterTypes
+    }
+    return initialFilterPersistenceEnabled
       ? (readAccountsOverviewFilterStringArray(
           ANTIGRAVITY_FILTER_PERSISTENCE_SCOPE,
           ANTIGRAVITY_FILTER_FIELD_FILTER_TYPES,
         ) as AccountsFilterType[])
-      : [],
-  )
-  const [tagFilter, setTagFilter] = useState<string[]>(() =>
-    initialFilterPersistenceEnabled
+      : []
+  })
+  const [tagFilter, setTagFilter] = useState<string[]>(() => {
+    if (sessionTagFilter !== null) {
+      return sessionTagFilter
+    }
+    return initialFilterPersistenceEnabled
       ? readAccountsOverviewFilterStringArray(
           ANTIGRAVITY_FILTER_PERSISTENCE_SCOPE,
           ANTIGRAVITY_FILTER_FIELD_TAG_FILTER,
         )
-      : [],
-  )
+      : []
+  })
   const [groupByTag, setGroupByTag] = useState<boolean>(() =>
     initialFilterPersistenceEnabled
       ? Boolean(
@@ -762,6 +773,18 @@ export function AccountsPage({ onNavigate, hideHeader = false }: AccountsPagePro
       )
     }
   }, [loadPersistedOverviewFilters, resetOverviewFilters])
+
+  useEffect(() => {
+    sessionSearchQuery = searchQuery
+  }, [searchQuery])
+
+  useEffect(() => {
+    sessionFilterTypes = filterTypes
+  }, [filterTypes])
+
+  useEffect(() => {
+    sessionTagFilter = tagFilter
+  }, [tagFilter])
 
   useEffect(() => {
     if (!filterPersistenceEnabled) {
