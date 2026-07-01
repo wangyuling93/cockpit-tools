@@ -1,3 +1,8 @@
+// Tauri commands, platform adapters and cross-platform helpers are reached from
+// the app runtime or specific target builds, so Rust's static dead-code pass
+// reports many non-actionable warnings in release builds.
+#![allow(dead_code, unused_imports)]
+
 mod commands;
 pub mod error;
 mod models;
