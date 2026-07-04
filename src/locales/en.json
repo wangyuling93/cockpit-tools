@@ -1143,8 +1143,8 @@
       "claudeAutoRefreshDesc": "Automatically refresh cached quota for Claude accounts in the background.",
       "claudeAppPath": "Claude Desktop launch target",
       "claudeAppPathDesc": "The default profile can use a Microsoft Store target; multi-instance profiles need the real Claude.exe.",
-      "antigravityLaunchOnSwitch": "Launch Antigravity IDE on switch",
-      "antigravityLaunchOnSwitchDesc": "When off, switching only writes the default Antigravity IDE account data and will not close, launch, or restart the app."
+      "antigravityLaunchOnSwitch": "Launch Antigravity on switch",
+      "antigravityLaunchOnSwitchDesc": "When off, switching only writes the default Antigravity account data and will not close, launch, or restart the app."
     },
     "network": {
       "apiTitle": "Antigravity Cockpit API",

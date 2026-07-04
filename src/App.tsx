@@ -187,6 +187,7 @@ interface GeneralConfig extends GeneralConfigTheme, GeneralConfigLanguage {
   codebuddy_cn_app_path: string;
   qoder_app_path: string;
   trae_app_path: string;
+  workbuddy_app_path: string;
   zed_app_path: string;
 }
 
@@ -203,6 +204,7 @@ type AppPathMissingDetail = {
     | 'codebuddy_cn'
     | 'qoder'
     | 'trae'
+    | 'workbuddy'
     | 'zed';
   retry?:
     | { kind: 'default'; runtimeTarget?: string }
@@ -210,7 +212,7 @@ type AppPathMissingDetail = {
     | { kind: 'switchAccount'; accountId?: string; runtimeTarget?: string };
 };
 
-type ClaudeDesktopLaunchCandidate = {
+type AppLaunchCandidate = {
   target_type: string;
   label: string;
   target: string;
@@ -539,7 +541,7 @@ function MainApp() {
   const [appPathDetecting, setAppPathDetecting] = useState(false);
   const [appPathDraft, setAppPathDraft] = useState('');
   const [appPathScanRootsDraft, setAppPathScanRootsDraft] = useState('');
-  const [claudeLaunchCandidates, setClaudeLaunchCandidates] = useState<ClaudeDesktopLaunchCandidate[]>([]);
+  const [appLaunchCandidates, setAppLaunchCandidates] = useState<AppLaunchCandidate[]>([]);
   const [appPathActionError, setAppPathActionError] = useState('');
   const [appPathCodexLaunchOnSwitch, setAppPathCodexLaunchOnSwitch] = useState(true);
   const [appPathCodexLaunchSetting, setAppPathCodexLaunchSetting] = useState(false);
@@ -2706,6 +2708,7 @@ function MainApp() {
         detail.app !== 'codebuddy_cn' &&
         detail.app !== 'qoder' &&
         detail.app !== 'trae' &&
+        detail.app !== 'workbuddy' &&
         detail.app !== 'zed'
       ) {
         return;
@@ -2736,7 +2739,7 @@ function MainApp() {
     if (!appPathMissing) {
       setAppPathDraft('');
       setAppPathScanRootsDraft('');
-      setClaudeLaunchCandidates([]);
+      setAppLaunchCandidates([]);
       setAppPathDetecting(false);
       setAppPathActionError('');
       setAppPathCodexLaunchOnSwitch(true);
@@ -2746,6 +2749,7 @@ function MainApp() {
       };
     }
     setAppPathActionError('');
+    setAppLaunchCandidates([]);
     (async () => {
       try {
         const config = await invoke<GeneralConfig>('get_general_config');
@@ -2770,6 +2774,8 @@ function MainApp() {
                 ? config.qoder_app_path
               : appPathMissing.app === 'trae'
                 ? config.trae_app_path
+              : appPathMissing.app === 'workbuddy'
+                ? config.workbuddy_app_path
               : appPathMissing.app === 'zed'
                 ? config.zed_app_path
               : config.antigravity_app_path;
@@ -2780,7 +2786,9 @@ function MainApp() {
             appPathMissing.retry?.kind === 'instance' &&
             isClaudeWindowsAppLaunchTarget(normalizedPath);
           setAppPathDraft(shouldClearClaudeDefaultTarget ? '' : normalizedPath);
-          setAppPathScanRootsDraft(config.claude_app_scan_roots || '');
+          setAppPathScanRootsDraft(
+            appPathMissing.app === 'claude' ? config.claude_app_scan_roots || '' : '',
+          );
           setAppPathCodexLaunchOnSwitch(config.codex_launch_on_switch ?? true);
         }
       } catch (error) {
@@ -2803,13 +2811,14 @@ function MainApp() {
       if (path) {
         setAppPathActionError('');
         setAppPathDraft(path);
+        setAppLaunchCandidates([]);
       }
     } catch (error) {
       console.error('选择应用路径失败:', error);
     }
   };
 
-  const handlePickMissingClaudeScanRoot = async () => {
+  const handlePickMissingAppScanRoot = async () => {
     if (appPathSetting || appPathDetecting) return;
     try {
       const selected = await open({
@@ -2820,16 +2829,18 @@ function MainApp() {
       if (path) {
         setAppPathActionError('');
         setAppPathScanRootsDraft(path);
+        setAppLaunchCandidates([]);
       }
     } catch (error) {
       console.error('选择 Claude 扫描范围失败:', error);
     }
   };
 
-  const handleClearMissingClaudeScanRoot = () => {
+  const handleClearMissingAppScanRoot = () => {
     if (appPathSetting || appPathDetecting) return;
     setAppPathActionError('');
     setAppPathScanRootsDraft('');
+    setAppLaunchCandidates([]);
   };
 
   const handleSaveMissingAppPath = async () => {
@@ -2855,7 +2866,7 @@ function MainApp() {
       const app = appPathMissing.app;
       const retry = appPathMissing.retry;
       const antigravityInstanceStartCommand =
-        app === 'antigravity' && retry?.runtimeTarget === 'antigravity'
+        app === 'antigravity' && retry?.runtimeTarget !== 'antigravity_ide'
           ? 'antigravity_legacy_start_instance'
           : 'start_instance';
       await invoke('set_app_path', { app, path });
@@ -2901,6 +2912,8 @@ function MainApp() {
           await invoke('qoder_start_instance', { instanceId: retry.instanceId });
         } else if (app === 'trae') {
           await invoke('trae_start_instance', { instanceId: retry.instanceId });
+        } else if (app === 'workbuddy') {
+          await invoke('workbuddy_start_instance', { instanceId: retry.instanceId });
         } else if (app === 'zed') {
           await invoke('zed_start_default_session');
         } else {
@@ -2927,6 +2940,8 @@ function MainApp() {
           await invoke('qoder_start_instance', { instanceId: '__default__' });
         } else if (app === 'trae') {
           await invoke('trae_start_instance', { instanceId: '__default__' });
+        } else if (app === 'workbuddy') {
+          await invoke('workbuddy_start_instance', { instanceId: '__default__' });
         } else if (app === 'zed') {
           await invoke('zed_start_default_session');
         } else {
@@ -2944,18 +2959,23 @@ function MainApp() {
 
   const handleResetMissingAppPath = async () => {
     if (!appPathMissing || appPathSetting || appPathDetecting) return;
-    if (appPathMissing.app === 'claude') {
+    const scanApp =
+      appPathMissing.app === 'antigravity' && appPathMissing.retry?.runtimeTarget !== 'antigravity_ide'
+        ? 'antigravity_legacy'
+        : appPathMissing.app === 'antigravity' && appPathMissing.retry?.runtimeTarget === 'antigravity_ide'
+          ? 'antigravity_ide'
+          : appPathMissing.app;
+
+    if (isWindowsPlatform()) {
       setAppPathDetecting(true);
       setAppPathActionError('');
       try {
-        const candidates = await invoke<ClaudeDesktopLaunchCandidate[]>(
-          'scan_claude_desktop_launch_targets',
-          {
-            scanRoots: appPathScanRootsDraft.trim() || null,
-          },
-        );
-        setClaudeLaunchCandidates(candidates);
-        if (appPathMissing.retry?.kind === 'instance') {
+        const candidates = await invoke<AppLaunchCandidate[]>('scan_app_launch_targets', {
+          app: scanApp,
+          scanRoots: appPathScanRootsDraft.trim() || null,
+        });
+        setAppLaunchCandidates(candidates);
+        if (appPathMissing.app === 'claude' && appPathMissing.retry?.kind === 'instance') {
           const exeCandidate = candidates.find((candidate) => candidate.supports_multi_instance);
           if (exeCandidate) {
             setAppPathDraft(exeCandidate.target);
@@ -2967,8 +2987,16 @@ function MainApp() {
               ),
             );
           }
+        } else if (candidates.length > 0) {
+          setAppPathDraft(candidates[0].target);
         }
-        if (candidates.length === 0) {
+        if (candidates.length === 0 && appPathMissing.app !== 'claude') {
+          setAppPathActionError(
+            t('appPath.missing.scanEmptyGeneric', '未扫描到 {{app}}，请手动选择路径或调整扫描范围。', {
+              app: appPathMissingAppName,
+            }),
+          );
+        } else if (candidates.length === 0) {
           setAppPathActionError(
             t('appPath.missing.claudeScanEmpty', '未扫描到 Claude Desktop，请手动选择 Claude.exe 或调整扫描范围。'),
           );
@@ -2983,14 +3011,8 @@ function MainApp() {
     }
     setAppPathDetecting(true);
     try {
-      const detectApp =
-        appPathMissing.app === 'antigravity' && appPathMissing.retry?.runtimeTarget === 'antigravity'
-          ? 'antigravity_legacy'
-          : appPathMissing.app === 'antigravity' && appPathMissing.retry?.runtimeTarget === 'antigravity_ide'
-            ? 'antigravity_ide'
-            : appPathMissing.app;
       const detected = await invoke<string | null>('detect_app_path', {
-        app: detectApp,
+        app: scanApp,
         force: true,
       });
       setAppPathActionError('');
@@ -3021,7 +3043,7 @@ function MainApp() {
     }
   };
 
-  const handleSelectClaudeLaunchCandidate = (candidate: ClaudeDesktopLaunchCandidate) => {
+  const handleSelectAppLaunchCandidate = (candidate: AppLaunchCandidate) => {
     if (
       appPathMissing?.app === 'claude' &&
       appPathMissing.retry?.kind === 'instance' &&
@@ -3190,9 +3212,11 @@ function MainApp() {
                 ? 'Qoder'
               : appPathMissing.app === 'trae'
                 ? 'Trae'
-              : appPathMissing.app === 'antigravity' && appPathMissingRuntimeTarget === 'antigravity'
-                ? 'Antigravity'
-                : 'Antigravity IDE'
+              : appPathMissing.app === 'workbuddy'
+                ? 'WorkBuddy'
+              : appPathMissing.app === 'antigravity' && appPathMissingRuntimeTarget === 'antigravity_ide'
+                ? 'Antigravity IDE'
+                : 'Antigravity'
     : '';
 
   const appPathMissingPathLabel = appPathMissing
@@ -3347,7 +3371,7 @@ function MainApp() {
                   <FolderOpen size={15} />
                   <span>{appPathMissingPathLabel}</span>
                 </div>
-                {appPathMissing.app === 'claude' ? (
+                {isWindowsPlatform() ? (
                   <div className="app-path-missing-scan-roots">
                     <label>{t('appPath.missing.scanRoots', '扫描范围')}</label>
                     <div className="app-path-missing-scan-root-row">
@@ -3365,14 +3389,14 @@ function MainApp() {
                       <div className="qs-path-actions">
                         <button
                           className="qs-btn"
-                          onClick={handlePickMissingClaudeScanRoot}
+                          onClick={handlePickMissingAppScanRoot}
                           disabled={appPathMissingBusy}
                         >
                           {t('settings.general.codexPathSelect', '选择')}
                         </button>
                         <button
                           className="qs-btn"
-                          onClick={handleClearMissingClaudeScanRoot}
+                          onClick={handleClearMissingAppScanRoot}
                           disabled={appPathMissingBusy || !appPathScanRootsDraft.trim()}
                         >
                           {t('common.clear', '清除')}
@@ -3412,7 +3436,9 @@ function MainApp() {
                       title={
                         appPathDetecting
                           ? t('common.loading', '加载中...')
-                          : (
+                          : isWindowsPlatform()
+                            ? t('appPath.missing.scanApps', '鎵弿搴旂敤')
+                            : (
                             appPathMissing.app === 'vscode'
                               ? t('settings.general.vscodePathReset', '重置默认')
                               : appPathMissing.app === 'windsurf'
@@ -3433,7 +3459,7 @@ function MainApp() {
                           )
                       }
                     >
-                      {appPathMissing.app === 'claude' ? (
+                      {isWindowsPlatform() ? (
                         appPathDetecting
                           ? t('common.loading', '加载中...')
                           : t('appPath.missing.scanApps', '扫描应用')
@@ -3443,25 +3469,25 @@ function MainApp() {
                     </button>
                   </div>
                 </div>
-                {appPathMissing.app === 'claude' ? (
+                {isWindowsPlatform() ? (
                   <>
-                    {claudeLaunchCandidates.length > 0 ? (
+                    {appLaunchCandidates.length > 0 ? (
                       <div className="app-path-candidate-list">
-                        {claudeLaunchCandidates.map((candidate) => (
+                        {appLaunchCandidates.map((candidate) => (
                           <button
                             key={`${candidate.target_type}:${candidate.target}`}
                             type="button"
                             className={`app-path-candidate-item${
                               appPathDraft.trim() === candidate.target ? ' selected' : ''
                             }`}
-                            onClick={() => handleSelectClaudeLaunchCandidate(candidate)}
+                            onClick={() => handleSelectAppLaunchCandidate(candidate)}
                             disabled={
                               appPathMissingBusy ||
                               (claudeMultiInstanceNeedsExe && !candidate.supports_multi_instance)
                             }
                           >
                             <div className="app-path-candidate-main">
-                              <span>{candidate.label || 'Claude Desktop'}</span>
+                              <span>{candidate.label || appPathMissingAppName}</span>
                               <span className="app-path-candidate-badge">
                                 {candidate.target_type === 'windows_app'
                                   ? t('appPath.missing.windowsApp', 'Microsoft Store')

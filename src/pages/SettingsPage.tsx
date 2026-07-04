@@ -2872,13 +2872,13 @@ export function SettingsPage() {
                   <div className="row-title">
                     {t(
                       'settings.general.antigravityLaunchOnSwitch',
-                      '切换时启动 Antigravity IDE',
+                      '切换时启动 Antigravity',
                     )}
                   </div>
                   <div className="row-desc">
                     {t(
                       'settings.general.antigravityLaunchOnSwitchDesc',
-                      '关闭后切号只写入 Antigravity IDE 默认账号数据，不会关闭、启动或重启应用。',
+                      '关闭后切号只写入 Antigravity 默认账号数据，不会关闭、启动或重启应用。',
                     )}
                   </div>
                 </div>

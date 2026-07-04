@@ -1,4 +1,5 @@
 use crate::modules::config;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -38,6 +39,15 @@ const WINDOWS_PROCESS_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(target_os = "windows")]
 static CODEX_STORE_APP_USER_MODEL_ID_CACHE: std::sync::OnceLock<String> =
     std::sync::OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AppLaunchCandidate {
+    pub target_type: String,
+    pub label: String,
+    pub target: String,
+    pub source: String,
+    pub supports_multi_instance: bool,
+}
 
 /// On macOS, extract the executable path from a `ps` command line output.
 /// Handles paths with spaces in .app bundles (e.g., "Visual Studio Code.app").
@@ -642,6 +652,486 @@ fn parse_windows_exec_candidates(
         program_files_x86
     ));
     None
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Clone, Copy)]
+struct WindowsAppLaunchSignature {
+    label: &'static str,
+    exe_names: &'static [&'static str],
+    command_names: &'static [&'static str],
+    protocol_names: &'static [&'static str],
+    display_keywords: &'static [&'static str],
+    common_paths: &'static [&'static str],
+    supports_multi_instance: bool,
+}
+
+#[cfg(target_os = "windows")]
+const WINDOWS_APP_SCAN_MAX_DEPTH: usize = 6;
+#[cfg(target_os = "windows")]
+const WINDOWS_APP_SCAN_DIR_LIMIT: usize = 5000;
+#[cfg(target_os = "windows")]
+const WINDOWS_APP_SCAN_CANDIDATE_LIMIT: usize = 80;
+
+#[cfg(target_os = "windows")]
+fn windows_app_launch_signature(app: &str) -> Option<WindowsAppLaunchSignature> {
+    match app {
+        "antigravity" | "antigravity_ide" => Some(WindowsAppLaunchSignature {
+            label: "Antigravity IDE",
+            exe_names: &["Antigravity IDE.exe", "antigravity-ide.exe"],
+            command_names: &["antigravity-ide"],
+            protocol_names: &["antigravity-ide", "antigravity ide"],
+            display_keywords: &["antigravity ide", "antigravity-ide"],
+            common_paths: &[
+                "Antigravity IDE\\Antigravity IDE.exe",
+                "Antigravity IDE\\antigravity-ide.exe",
+            ],
+            supports_multi_instance: true,
+        }),
+        "antigravity_legacy" => Some(WindowsAppLaunchSignature {
+            label: "Antigravity",
+            exe_names: &["Antigravity.exe", "antigravity.exe", "Electron.exe"],
+            command_names: &["antigravity"],
+            protocol_names: &["antigravity"],
+            display_keywords: &["antigravity"],
+            common_paths: &["Antigravity\\Antigravity.exe", "Antigravity\\Electron.exe"],
+            supports_multi_instance: true,
+        }),
+        "codex" => Some(WindowsAppLaunchSignature {
+            label: "Codex",
+            exe_names: &["Codex.exe"],
+            command_names: &["codex"],
+            protocol_names: &["codex"],
+            display_keywords: &["codex", "openai codex"],
+            common_paths: &["Codex\\Codex.exe", "OpenAI Codex\\Codex.exe"],
+            supports_multi_instance: true,
+        }),
+        "vscode" => Some(WindowsAppLaunchSignature {
+            label: "Visual Studio Code",
+            exe_names: &["Code.exe", "Code - Insiders.exe"],
+            command_names: &["code", "code-insiders"],
+            protocol_names: &["vscode", "vscode-insiders"],
+            display_keywords: &["visual studio code", "vs code", "vscode"],
+            common_paths: &[
+                "Microsoft VS Code\\Code.exe",
+                "VSCode\\Code.exe",
+                "Microsoft VS Code Insiders\\Code - Insiders.exe",
+            ],
+            supports_multi_instance: true,
+        }),
+        "windsurf" => Some(WindowsAppLaunchSignature {
+            label: "Windsurf",
+            exe_names: &["Windsurf.exe", "Electron.exe"],
+            command_names: &["windsurf"],
+            protocol_names: &["windsurf"],
+            display_keywords: &["windsurf", "codeium"],
+            common_paths: &["Windsurf\\Windsurf.exe", "Windsurf\\Electron.exe"],
+            supports_multi_instance: true,
+        }),
+        "kiro" => Some(WindowsAppLaunchSignature {
+            label: "Kiro",
+            exe_names: &["Kiro.exe", "Electron.exe"],
+            command_names: &["kiro"],
+            protocol_names: &["kiro"],
+            display_keywords: &["kiro"],
+            common_paths: &["Kiro\\Kiro.exe", "Kiro\\Electron.exe"],
+            supports_multi_instance: true,
+        }),
+        "cursor" => Some(WindowsAppLaunchSignature {
+            label: "Cursor",
+            exe_names: &["Cursor.exe", "Electron.exe"],
+            command_names: &["cursor"],
+            protocol_names: &["cursor"],
+            display_keywords: &["cursor"],
+            common_paths: &["Cursor\\Cursor.exe", "Cursor\\Electron.exe"],
+            supports_multi_instance: true,
+        }),
+        "codebuddy" => Some(WindowsAppLaunchSignature {
+            label: "CodeBuddy",
+            exe_names: &["CodeBuddy.exe"],
+            command_names: &["codebuddy"],
+            protocol_names: &["codebuddy"],
+            display_keywords: &["codebuddy"],
+            common_paths: &["CodeBuddy\\CodeBuddy.exe"],
+            supports_multi_instance: true,
+        }),
+        "codebuddy_cn" => Some(WindowsAppLaunchSignature {
+            label: "CodeBuddy CN",
+            exe_names: &["CodeBuddy CN.exe", "CodeBuddy.exe"],
+            command_names: &["codebuddy-cn", "codebuddy"],
+            protocol_names: &["codebuddy-cn", "codebuddy"],
+            display_keywords: &["codebuddy cn", "codebuddy"],
+            common_paths: &[
+                "CodeBuddy CN\\CodeBuddy CN.exe",
+                "CodeBuddy CN\\CodeBuddy.exe",
+            ],
+            supports_multi_instance: true,
+        }),
+        "qoder" => Some(WindowsAppLaunchSignature {
+            label: "Qoder",
+            exe_names: &["Qoder.exe"],
+            command_names: &["qoder"],
+            protocol_names: &["qoder"],
+            display_keywords: &["qoder"],
+            common_paths: &["Qoder\\Qoder.exe"],
+            supports_multi_instance: true,
+        }),
+        "trae" => Some(WindowsAppLaunchSignature {
+            label: "Trae",
+            exe_names: &["Trae.exe"],
+            command_names: &["trae"],
+            protocol_names: &["trae"],
+            display_keywords: &["trae"],
+            common_paths: &["Trae\\Trae.exe"],
+            supports_multi_instance: true,
+        }),
+        "workbuddy" => Some(WindowsAppLaunchSignature {
+            label: "WorkBuddy",
+            exe_names: &["WorkBuddy.exe"],
+            command_names: &["workbuddy"],
+            protocol_names: &["workbuddy"],
+            display_keywords: &["workbuddy"],
+            common_paths: &["WorkBuddy\\WorkBuddy.exe"],
+            supports_multi_instance: true,
+        }),
+        "zed" => Some(WindowsAppLaunchSignature {
+            label: "Zed",
+            exe_names: &["Zed.exe", "zed.exe"],
+            command_names: &["zed"],
+            protocol_names: &["zed"],
+            display_keywords: &["zed"],
+            common_paths: &["Zed\\Zed.exe", "Zed\\bin\\zed.exe"],
+            supports_multi_instance: true,
+        }),
+        "opencode" => Some(WindowsAppLaunchSignature {
+            label: "OpenCode",
+            exe_names: &["OpenCode.exe", "opencode.exe"],
+            command_names: &["opencode"],
+            protocol_names: &["opencode"],
+            display_keywords: &["opencode", "open code"],
+            common_paths: &["OpenCode\\OpenCode.exe"],
+            supports_multi_instance: true,
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn push_app_launch_candidate(
+    candidates: &mut Vec<AppLaunchCandidate>,
+    seen: &mut HashSet<String>,
+    path: &std::path::Path,
+    signature: WindowsAppLaunchSignature,
+    source: &str,
+) {
+    if candidates.len() >= WINDOWS_APP_SCAN_CANDIDATE_LIMIT || !path.is_file() {
+        return;
+    }
+
+    let exe_names_lower: HashSet<String> = signature
+        .exe_names
+        .iter()
+        .map(|value| value.to_lowercase())
+        .collect();
+    let keywords_lower: Vec<String> = signature
+        .display_keywords
+        .iter()
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty())
+        .collect();
+    if score_windows_candidate(path, &exe_names_lower, &keywords_lower).is_none() {
+        return;
+    }
+
+    let normalized_path = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+    let target = normalized_path.to_string_lossy().to_string();
+    let dedupe_key = target.to_lowercase();
+    if !seen.insert(dedupe_key) {
+        return;
+    }
+
+    let file_name = normalized_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    let label = if file_name.is_empty() {
+        signature.label.to_string()
+    } else {
+        format!("{} ({})", signature.label, file_name)
+    };
+
+    candidates.push(AppLaunchCandidate {
+        target_type: "exe".to_string(),
+        label,
+        target,
+        source: source.to_string(),
+        supports_multi_instance: signature.supports_multi_instance,
+    });
+}
+
+#[cfg(target_os = "windows")]
+fn windows_common_install_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+        roots.push(std::path::PathBuf::from(local_appdata).join("Programs"));
+    }
+    if let Ok(user_profile) = std::env::var("USERPROFILE") {
+        roots.push(
+            std::path::PathBuf::from(user_profile)
+                .join("AppData")
+                .join("Local")
+                .join("Programs"),
+        );
+    }
+    if let Ok(program_files) = std::env::var("PROGRAMFILES") {
+        roots.push(std::path::PathBuf::from(program_files));
+    }
+    if let Ok(program_files_x86) = std::env::var("PROGRAMFILES(X86)") {
+        roots.push(std::path::PathBuf::from(program_files_x86));
+    }
+
+    let mut seen = HashSet::new();
+    roots
+        .into_iter()
+        .filter(|root| root.is_dir())
+        .filter(|root| seen.insert(root.to_string_lossy().to_lowercase()))
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn collect_common_windows_app_launch_candidates(
+    candidates: &mut Vec<AppLaunchCandidate>,
+    seen: &mut HashSet<String>,
+    signature: WindowsAppLaunchSignature,
+) {
+    for root in windows_common_install_roots() {
+        for relative in signature.common_paths {
+            let candidate = root.join(relative);
+            push_app_launch_candidate(candidates, seen, &candidate, signature, "common_path");
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_scan_root(raw: &str) -> Option<std::path::PathBuf> {
+    let mut value = raw
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim()
+        .to_string();
+    if value.is_empty() {
+        return None;
+    }
+    if value.len() == 2 && value.as_bytes().get(1) == Some(&b':') {
+        value.push('\\');
+    }
+    let path = std::path::PathBuf::from(value);
+    if path.is_dir() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn parse_windows_scan_roots(scan_roots: Option<&str>) -> Vec<std::path::PathBuf> {
+    let Some(scan_roots) = scan_roots else {
+        return Vec::new();
+    };
+    let mut seen = HashSet::new();
+    scan_roots
+        .split(|ch| matches!(ch, '\n' | '\r' | ';' | ','))
+        .filter_map(normalize_windows_scan_root)
+        .filter(|root| seen.insert(root.to_string_lossy().to_lowercase()))
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_drive_root(path: &std::path::Path) -> bool {
+    let value = path.to_string_lossy().replace('/', "\\");
+    let trimmed = value.trim_end_matches('\\');
+    trimmed.len() == 2
+        && trimmed.as_bytes().get(1) == Some(&b':')
+        && trimmed.as_bytes()[0].is_ascii_alphabetic()
+}
+
+#[cfg(target_os = "windows")]
+fn expand_windows_scan_roots(roots: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    let mut expanded = Vec::new();
+    for root in roots {
+        if is_windows_drive_root(&root) {
+            expanded.push(root.join("Program Files"));
+            expanded.push(root.join("Program Files (x86)"));
+            expanded.push(root.join("WindowsApps"));
+            let users_dir = root.join("Users");
+            if let Ok(entries) = std::fs::read_dir(users_dir) {
+                for entry in entries.flatten() {
+                    let user_programs = entry
+                        .path()
+                        .join("AppData")
+                        .join("Local")
+                        .join("Programs");
+                    expanded.push(user_programs);
+                }
+            }
+        } else {
+            expanded.push(root);
+        }
+    }
+
+    let mut seen = HashSet::new();
+    expanded
+        .into_iter()
+        .filter(|root| root.is_dir())
+        .filter(|root| seen.insert(root.to_string_lossy().to_lowercase()))
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn should_skip_windows_scan_dir(path: &std::path::Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "$recycle.bin"
+            | ".git"
+            | "node_modules"
+            | "system volume information"
+            | "windows"
+            | "winsxs"
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn scan_windows_app_launch_candidates_under_root(
+    root: &std::path::Path,
+    candidates: &mut Vec<AppLaunchCandidate>,
+    seen: &mut HashSet<String>,
+    signature: WindowsAppLaunchSignature,
+) {
+    if candidates.len() >= WINDOWS_APP_SCAN_CANDIDATE_LIMIT || !root.is_dir() {
+        return;
+    }
+
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    let mut visited_dirs = 0usize;
+    while let Some((dir, depth)) = stack.pop() {
+        if candidates.len() >= WINDOWS_APP_SCAN_CANDIDATE_LIMIT
+            || visited_dirs >= WINDOWS_APP_SCAN_DIR_LIMIT
+        {
+            break;
+        }
+        visited_dirs += 1;
+
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            if candidates.len() >= WINDOWS_APP_SCAN_CANDIDATE_LIMIT {
+                break;
+            }
+            let file_type = match entry.file_type() {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            let path = entry.path();
+            if file_type.is_file() {
+                push_app_launch_candidate(candidates, seen, &path, signature, "scan_root");
+            } else if file_type.is_dir()
+                && depth < WINDOWS_APP_SCAN_MAX_DEPTH
+                && !should_skip_windows_scan_dir(&path)
+            {
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn scan_windows_app_launch_targets(
+    app: &str,
+    scan_roots: Option<&str>,
+) -> Result<Vec<AppLaunchCandidate>, String> {
+    let Some(signature) = windows_app_launch_signature(app) else {
+        return Err("未知应用类型".to_string());
+    };
+
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    collect_common_windows_app_launch_candidates(&mut candidates, &mut seen, signature);
+
+    if app == "codex" {
+        if let Some(path) = detect_codex_exec_path_by_windowsapps_scan() {
+            push_app_launch_candidate(
+                &mut candidates,
+                &mut seen,
+                &path,
+                signature,
+                "windows_apps",
+            );
+        }
+        if let Some(path) = detect_codex_exec_path_by_appx_install_location() {
+            push_app_launch_candidate(
+                &mut candidates,
+                &mut seen,
+                &path,
+                signature,
+                "windows_appx",
+            );
+        }
+    }
+
+    if let Some(path) = detect_windows_exec_path_by_signatures(
+        signature.label,
+        signature.exe_names,
+        signature.command_names,
+        signature.protocol_names,
+        signature.display_keywords,
+    ) {
+        push_app_launch_candidate(
+            &mut candidates,
+            &mut seen,
+            &path,
+            signature,
+            "windows_registry_shortcut_command",
+        );
+    }
+
+    let scan_roots = expand_windows_scan_roots(parse_windows_scan_roots(scan_roots));
+    for root in scan_roots {
+        scan_windows_app_launch_candidates_under_root(
+            &root,
+            &mut candidates,
+            &mut seen,
+            signature,
+        );
+    }
+
+    Ok(candidates)
+}
+
+pub fn scan_app_launch_targets(
+    app: &str,
+    scan_roots: Option<&str>,
+) -> Result<Vec<AppLaunchCandidate>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        return scan_windows_app_launch_targets(app, scan_roots);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, scan_roots);
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(target_os = "windows")]

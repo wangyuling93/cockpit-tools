@@ -1143,8 +1143,8 @@
       "claudeAutoRefreshDesc": "后台自动更新 Claude 账号配额缓存",
       "claudeAppPath": "Claude Desktop 启动目标",
       "claudeAppPathDesc": "默认实例可使用 Microsoft Store 应用目标；多开实例请选择真实 Claude.exe。",
-      "antigravityLaunchOnSwitch": "切换时启动 Antigravity IDE",
-      "antigravityLaunchOnSwitchDesc": "关闭后切号只写入 Antigravity IDE 默认账号数据，不会关闭、启动或重启应用。"
+      "antigravityLaunchOnSwitch": "切换时启动 Antigravity",
+      "antigravityLaunchOnSwitchDesc": "关闭后切号只写入 Antigravity 默认账号数据，不会关闭、启动或重启应用。"
     },
     "network": {
       "apiTitle": "反重力驾驶舱 API",

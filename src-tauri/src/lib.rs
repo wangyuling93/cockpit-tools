@@ -503,6 +503,7 @@ pub fn run() {
             commands::system::set_codex_local_access_entry_visible,
             commands::system::detect_app_path,
             commands::system::scan_claude_desktop_launch_targets,
+            commands::system::scan_app_launch_targets,
             commands::system::get_antigravity_installed_version_info,
             commands::system::set_wakeup_override,
             commands::system::handle_window_close,

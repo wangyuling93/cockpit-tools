@@ -2970,6 +2970,39 @@ pub fn scan_claude_desktop_launch_targets(
 }
 
 #[tauri::command]
+pub fn scan_app_launch_targets(
+    app: String,
+    scan_roots: Option<String>,
+) -> Result<Vec<modules::process::AppLaunchCandidate>, String> {
+    match app.as_str() {
+        "antigravity" | "antigravity_ide" | "antigravity_legacy" | "codex" | "claude"
+        | "vscode" | "windsurf" | "kiro" | "cursor" | "codebuddy" | "codebuddy_cn"
+        | "qoder" | "trae" | "workbuddy" | "zed" | "opencode" => {}
+        _ => return Err("未知应用类型".to_string()),
+    }
+
+    let roots = scan_roots
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if app == "claude" {
+        return Ok(modules::claude_instance::scan_claude_desktop_launch_targets(roots)
+            .into_iter()
+            .map(|candidate| modules::process::AppLaunchCandidate {
+                target_type: candidate.target_type,
+                label: candidate.label,
+                target: candidate.target,
+                source: candidate.source,
+                supports_multi_instance: candidate.supports_multi_instance,
+            })
+            .collect());
+    }
+
+    modules::process::scan_app_launch_targets(app.as_str(), roots)
+}
+
+#[tauri::command]
 pub async fn get_antigravity_installed_version_info(
     target: Option<String>,
     scan_mode: Option<String>,
