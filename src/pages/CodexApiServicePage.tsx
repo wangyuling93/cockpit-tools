@@ -3928,9 +3928,11 @@ export function CodexApiServicePage() {
                     </div>
                   )}
                   {requestLogEvents.map((event, index) => {
-                    const errorDetail = truncateRequestLogErrorDetail(
-                      cleanRequestLogErrorDetail(event.errorMessage),
+                    const fullErrorDetail = cleanRequestLogErrorDetail(
+                      event.errorMessage,
                     );
+                    const errorDetail =
+                      truncateRequestLogErrorDetail(fullErrorDetail);
                     return (
                       <div
                         key={`${event.timestamp}-${event.requestId || event.apiKeyId}-${index}`}
@@ -3993,7 +3995,7 @@ export function CodexApiServicePage() {
                           {errorDetail ? (
                             <span
                               className="codex-api-service-log-error-detail"
-                              title={errorDetail}
+                              title={fullErrorDetail}
                             >
                               {errorDetail}
                             </span>
