@@ -7,6 +7,14 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [1.3.4] - 2026-07-13
+
+### Changed
+
+- **Gateway mode shows “API Service” plus the “New” badge**: the title and API Service card share the same service name and new-gateway indicator.
+- **Removed CLI quick-launch from the API Service card**: fewer low-frequency actions on the card.
+
+---
 ## [1.3.3] - 2026-07-13
 
 ### Changed

@@ -280,6 +280,22 @@
   min-width: 0;
 }
 
+.codex-local-access-gateway-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.codex-local-access-gateway-mode-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
 .codex-local-access-gateway-mode-label {
   display: inline-flex;
   align-items: center;

@@ -2815,10 +2815,15 @@ export function CodexApiServicePage() {
                       : t("codex.localAccess.statusDisabled", "已停用")}
                   </span>
                   <span
-                    className="codex-api-service-gateway-mode-label"
+                    className="codex-api-service-gateway-mode"
                     title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
                   >
-                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    <span className="codex-api-service-gateway-mode-name">
+                      {t("codex.localAccess.gatewayModeServiceLabel", "API 服务")}
+                    </span>
+                    <span className="codex-api-service-gateway-mode-label">
+                      {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    </span>
                   </span>
                 </div>
               </div>

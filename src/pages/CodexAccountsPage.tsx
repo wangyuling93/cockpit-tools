@@ -5215,46 +5215,6 @@ export function CodexAccountsPage() {
     });
   };
 
-  const resolveCodexCliInstanceForApiService = async (
-    workingDir: string,
-  ): Promise<InstanceProfile> => {
-    const normalizedWorkingDir = normalizePathForCompare(workingDir);
-    const instances = await codexInstanceService.listInstances();
-    const existing = instances.find(
-      (instance) =>
-        !instance.isDefault &&
-        (instance.launchMode ?? "app") === "cli" &&
-        instance.bindAccountId === CODEX_API_SERVICE_BIND_ID &&
-        normalizePathForCompare(instance.workingDir) === normalizedWorkingDir,
-    );
-    if (existing) {
-      return existing;
-    }
-
-    const defaults = await codexInstanceService.getInstanceDefaults();
-    const instanceHash = md5(
-      `${CODEX_API_SERVICE_BIND_ID}|${normalizedWorkingDir}`,
-    ).substring(0, 12);
-    const instanceName = sanitizeCodexCliInstanceName(
-      `${t("codex.localAccess.title", "API 服务")} CLI ${instanceHash.substring(0, 6)}`,
-    );
-    const userDataDir = joinFilePath(
-      defaults.rootDir,
-      `cli-api-service-${instanceHash}`,
-    );
-
-    return await codexInstanceService.createInstance({
-      name: instanceName,
-      userDataDir,
-      workingDir: normalizedWorkingDir,
-      extraArgs: "",
-      bindAccountId: CODEX_API_SERVICE_BIND_ID,
-      launchMode: "cli",
-      copySourceInstanceId: "__default__",
-      initMode: "copy",
-    });
-  };
-
   const handleLaunchCodexCli = async (account: CodexAccount) => {
     if (cliLaunchingAccountId) return;
     setMessage(null);
@@ -5273,55 +5233,6 @@ export function CodexAccountsPage() {
         account,
         selected,
       );
-      const prepared = await codexInstanceService.startInstance(instance.id);
-      if (prepared.codexLaunchCredentialChange) {
-        handleCodexInstanceLaunchCredentialChange(
-          prepared.codexLaunchCredentialChange,
-        );
-      }
-      const result =
-        await codexInstanceService.executeCodexInstanceLaunchCommand(
-          prepared.id,
-        );
-      await codexInstanceStore.refreshInstances();
-      setMessage({
-        text: result || t("codex.cli.launchSuccess", "已启动 Codex CLI"),
-      });
-    } catch (e) {
-      setMessage({
-        text: t(
-          "codex.cli.launchFailed",
-          "启动 Codex CLI 失败: {{error}}",
-        ).replace("{{error}}", String(e).replace(/^Error:\s*/, "")),
-        tone: "error",
-      });
-    } finally {
-      setCliLaunchingAccountId(null);
-    }
-  };
-
-  const handleLaunchLocalAccessCli = async () => {
-    if (cliLaunchingAccountId) return;
-    if (!localAccessCollection) {
-      setMessage({
-        text: t("codex.localAccess.testUnavailable", "当前 API 服务地址不可用"),
-        tone: "error",
-      });
-      return;
-    }
-    setMessage(null);
-    setCliLaunchingAccountId(CODEX_API_SERVICE_BIND_ID);
-    try {
-      const selected = await openFileDialog({
-        directory: true,
-        multiple: false,
-        title: t("codex.cli.selectWorkingDir", "选择 Codex CLI 工作目录"),
-      });
-      if (!selected || typeof selected !== "string") {
-        return;
-      }
-
-      const instance = await resolveCodexCliInstanceForApiService(selected);
       const prepared = await codexInstanceService.startInstance(instance.id);
       if (prepared.codexLaunchCredentialChange) {
         handleCodexInstanceLaunchCredentialChange(
@@ -9960,10 +9871,18 @@ export function CodexAccountsPage() {
               <div className="folder-inline-info">
                 <div className="codex-local-access-title-row">
                   <span
-                    className="codex-local-access-gateway-mode-label"
+                    className="codex-local-access-gateway-mode"
                     title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
                   >
-                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    <span className="codex-local-access-gateway-mode-name">
+                      {t(
+                        "codex.localAccess.gatewayModeServiceLabel",
+                        "API 服务",
+                      )}
+                    </span>
+                    <span className="codex-local-access-gateway-mode-label">
+                      {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -9990,10 +9909,18 @@ export function CodexAccountsPage() {
               <div className="folder-inline-info">
                 <div className="codex-local-access-title-row">
                   <span
-                    className="codex-local-access-gateway-mode-label"
+                    className="codex-local-access-gateway-mode"
                     title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
                   >
-                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    <span className="codex-local-access-gateway-mode-name">
+                      {t(
+                        "codex.localAccess.gatewayModeServiceLabel",
+                        "API 服务",
+                      )}
+                    </span>
+                    <span className="codex-local-access-gateway-mode-label">
+                      {t("codex.localAccess.gatewayModeNewShort", "新")}
+                    </span>
                   </span>
                   <span className="codex-local-access-summary-text">
                     {localAccessMemberCountLabel}
@@ -10408,22 +10335,6 @@ export function CodexAccountsPage() {
                     disabled={localAccessBusy}
                   >
                     <FolderPlus size={14} />
-                  </button>
-                  <button
-                    className="card-action-btn"
-                    onClick={() => void handleLaunchLocalAccessCli()}
-                    title={t("codex.cli.quickLaunch", "CLI 快速启动")}
-                    disabled={
-                      localAccessBusy ||
-                      !localAccessCollection ||
-                      cliLaunchingAccountId === CODEX_API_SERVICE_BIND_ID
-                    }
-                  >
-                    {cliLaunchingAccountId === CODEX_API_SERVICE_BIND_ID ? (
-                      <RefreshCw size={14} className="loading-spinner" />
-                    ) : (
-                      <Terminal size={14} />
-                    )}
                   </button>
                   <button
                     className="card-action-btn"
