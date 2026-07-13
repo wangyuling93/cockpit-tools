@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEscClose } from '../../hooks/useEscClose';
+import { useAutoDismissMessage } from '../../hooks/useAutoDismissMessage';
 import {
   CodexAccount,
   getCodexEffectiveQuotaPercentages,
@@ -1041,7 +1042,7 @@ export function CodexWakeupContent({
     state.model_presets,
   ]);
 
-  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [notice, setNotice] = useAutoDismissMessage<{ tone: 'success' | 'error'; text: string }>();
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskDraft, setTaskDraft] = useState<TaskDraft>(createEmptyTaskDraft(defaultModelPreset));
   const {

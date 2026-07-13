@@ -28,6 +28,7 @@ import {
 } from '../utils/privacy';
 import { useModalErrorState } from '../components/ModalErrorMessage';
 import { useExportJsonModal } from './useExportJsonModal';
+import { useAutoDismissMessage } from './useAutoDismissMessage';
 import { parseFileCorruptedError } from '../components/FileCorruptedModal';
 import {
   emitAccountsChanged,
@@ -1157,7 +1158,7 @@ export function useProviderAccountsPage<TAccount extends ProviderAccountBase>(
     set: setDeleteConfirmError,
   } = useModalErrorState();
   const [deleting, setDeleting] = useState(false);
-  const [message, setMessage] = useState<{ text: string; tone?: 'error' | 'success' } | null>(null);
+  const [message, setMessage] = useAutoDismissMessage<{ text: string; tone?: 'error' | 'success' }>();
   const setDeleteConfirm = useCallback((value: { ids: string[]; message: string } | null) => {
     setDeleteConfirmError(null);
     rawSetDeleteConfirm(value);

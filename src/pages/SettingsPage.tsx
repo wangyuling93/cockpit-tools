@@ -82,6 +82,7 @@ import { ALL_PLATFORM_IDS, PlatformId } from '../types/platform';
 import { SettingsAccountTransferSection } from '../components/SettingsAccountTransferSection';
 import { SettingsWebdavSyncSection } from '../components/SettingsWebdavSyncSection';
 import { useEscClose } from '../hooks/useEscClose';
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
 import './settings/Settings.css';
 import { 
   Github, User, Rocket, Save, FolderOpen,
@@ -653,10 +654,10 @@ export function SettingsPage() {
   
   const [appVersion, setAppVersion] = useState('');
   const [updateChecking, setUpdateChecking] = useState(false);
-  const [updateCheckMessage, setUpdateCheckMessage] = useState<{
+  const [updateCheckMessage, setUpdateCheckMessage] = useAutoDismissMessage<{
     text: string;
     tone?: 'error' | 'success';
-  } | null>(null);
+  }>();
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [releaseHistoryLoading, setReleaseHistoryLoading] = useState(false);
   const [releaseHistoryError, setReleaseHistoryError] = useState('');

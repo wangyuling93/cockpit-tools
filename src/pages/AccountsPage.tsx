@@ -63,6 +63,7 @@ import { GroupAccountPickerModal } from '../components/GroupAccountPickerModal'
 import { ModalErrorMessage, useModalErrorState } from '../components/ModalErrorMessage'
 import { MfaQuickCodeSelect } from '../components/MfaQuickCodeSelect'
 import { useEscClose } from '../hooks/useEscClose'
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage'
 import {
   AccountGroup,
   getAccountGroups,
@@ -453,10 +454,10 @@ export function AccountsPage({ onNavigate }: AccountsPageProps) {
     Record<string, { kind: 'auth' | 'error'; message: string }>
   >({})
   const [refreshResult, setRefreshResult] = useState<Record<string, 'success' | 'error'>>({})
-  const [message, setMessage] = useState<{
+  const [message, setMessage] = useAutoDismissMessage<{
     text: string
     tone?: 'error'
-  } | null>(null)
+  }>()
   const [showSwitchHistoryModal, setShowSwitchHistoryModal] = useState(false)
   const [switchHistoryLoading, setSwitchHistoryLoading] = useState(false)
   const [switchHistoryClearing, setSwitchHistoryClearing] = useState(false)

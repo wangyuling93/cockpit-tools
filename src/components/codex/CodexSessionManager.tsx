@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronRight, Copy, Download, Eye, Folder, FolderOp
 import { ModalErrorMessage, useModalErrorState } from '../ModalErrorMessage';
 import { SingleSelectDropdown, type SingleSelectOption } from '../SingleSelectDropdown';
 import { useEscClose } from '../../hooks/useEscClose';
+import { useAutoDismissMessage } from '../../hooks/useAutoDismissMessage';
 import type {
   CodexSessionImportPreview,
   CodexSessionImportPreviewItem,
@@ -274,7 +275,7 @@ export function CodexSessionManager() {
   const [importing, setImporting] = useState(false);
   const [transferTask, setTransferTask] = useState<SessionTransferTask | null>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [message, setMessage] = useState<MessageState | null>(null);
+  const [message, setMessage] = useAutoDismissMessage<MessageState>();
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [tokenStatsBySessionId, setTokenStatsBySessionId] = useState<SessionTokenStatsMap>({});
   const [loadingTokenGroupCwds, setLoadingTokenGroupCwds] = useState<string[]>([]);

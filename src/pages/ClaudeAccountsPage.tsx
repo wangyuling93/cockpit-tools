@@ -51,6 +51,7 @@ import { ClaudeIcon } from '../components/icons/ClaudeIcon';
 import { ModelProviderUsagePanel } from '../components/model-provider/ModelProviderUsagePanel';
 import { PlatformGroupSwitcher } from '../components/platform/PlatformGroupSwitcher';
 import { useEscClose } from '../hooks/useEscClose';
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
 import { useExportJsonModal } from '../hooks/useExportJsonModal';
 import { useLaunchTerminalOptions } from '../hooks/useLaunchTerminalOptions';
 import { getProviderCurrentAccountId, type ProviderCurrentPlatform } from '../services/providerCurrentAccountService';
@@ -788,7 +789,7 @@ export function ClaudeAccountsPage({ subPlatform = 'desktop' }: ClaudeAccountsPa
   const [viewMode, setViewMode] = useState<ViewMode>(readInitialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
   const [privacyModeEnabled, setPrivacyModeEnabled] = useState(isPrivacyModeEnabledByDefault);
-  const [message, setMessage] = useState<{ text: string; tone?: 'error' | 'success' } | null>(null);
+  const [message, setMessage] = useAutoDismissMessage<{ text: string; tone?: 'error' | 'success' }>();
   const [isFlowNoticeCollapsed, setIsFlowNoticeCollapsed] = useState(() => {
     try {
       return localStorage.getItem(CLAUDE_FLOW_NOTICE_COLLAPSED_KEY) === 'true';

@@ -7,6 +7,7 @@ import { ChevronLeft, ShieldCheck, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ModalErrorMessage, useModalErrorState } from '../components/ModalErrorMessage';
 import { useEscClose } from '../hooks/useEscClose';
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
 import { OverviewTabsHeader } from '../components/OverviewTabsHeader';
 import { MultiSelectFilterDropdown, type MultiSelectFilterOption } from '../components/MultiSelectFilterDropdown';
 import { useAccountStore } from '../stores/useAccountStore';
@@ -190,7 +191,7 @@ export function WakeupVerificationPage({ onNavigate }: WakeupVerificationPagePro
   const locale = i18n.language || 'zh-CN';
 
   const [running, setRunning] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; tone: 'success' | 'warning' | 'error' } | null>(null);
+  const [notice, setNotice] = useAutoDismissMessage<{ text: string; tone: 'success' | 'warning' | 'error' }>();
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   const [historyBatches, setHistoryBatches] = useState<WakeupVerificationBatchHistoryItem[]>([]);
   const [liveStates, setLiveStates] = useState<Record<string, WakeupVerificationStateItem>>({});

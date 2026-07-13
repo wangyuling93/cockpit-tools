@@ -46,6 +46,7 @@ import {
 import { ModalErrorMessage, useModalErrorState } from "./ModalErrorMessage";
 import { scrollElementIntoView } from "../utils/reducedMotion";
 import { useEscClose } from "../hooks/useEscClose";
+import { useAutoDismissMessage } from "../hooks/useAutoDismissMessage";
 import type { InstanceStoreState } from "../stores/createInstanceStore";
 import { showInstanceFloatingCardWindow } from "../services/floatingCardService";
 import {
@@ -667,7 +668,7 @@ export function InstancesManager<TAccount extends AccountLike>({
     closeAllInstances,
   } = instanceStore;
 
-  const [message, setMessage] = useState<MessageState | null>(null);
+  const [message, setMessage] = useAutoDismissMessage<MessageState>();
   const [fileCorruptedError, setFileCorruptedError] =
     useState<FileCorruptedError | null>(null);
   const [refreshing, setRefreshing] = useState(false);

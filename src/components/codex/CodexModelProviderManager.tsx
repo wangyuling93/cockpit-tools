@@ -45,6 +45,7 @@ import { SingleSelectFilterDropdown } from "../SingleSelectFilterDropdown";
 import { AccountTagFilterDropdown } from "../AccountTagFilterDropdown";
 import { PaginationControls } from "../PaginationControls";
 import { useEscClose } from "../../hooks/useEscClose";
+import { useAutoDismissMessage } from "../../hooks/useAutoDismissMessage";
 import type { CodexAccount } from "../../types/codex";
 import type { InstanceProfile } from "../../types/instance";
 import {
@@ -566,10 +567,10 @@ export function CodexModelProviderManager({
   const [providers, setProviders] = useState<CodexModelProvider[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{
+  const [notice, setNotice] = useAutoDismissMessage<{
     text: string;
     tone: "success" | "error";
-  } | null>(null);
+  }>();
   const [showModal, setShowModal] = useState(false);
   const [showQuickConfigModal, setShowQuickConfigModal] = useState(false);
   const [saving, setSaving] = useState(false);

@@ -7,6 +7,13 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [1.3.5] - 2026-07-13
+
+### Changed
+
+- **Action toasts auto-dismiss after 3 seconds**: success and info banners such as “refresh succeeded” clear themselves; error messages still stay until closed manually.
+
+---
 ## [1.3.4] - 2026-07-13
 
 ### Changed

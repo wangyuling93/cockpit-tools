@@ -31,6 +31,7 @@ import {
   resolveCodexApiProviderPresetId,
 } from "../utils/codexProviderPresets";
 import { useEscClose } from "../hooks/useEscClose";
+import { useAutoDismissMessage } from "../hooks/useAutoDismissMessage";
 
 /**
  * Codex 应用多开内容组件（不包含 header）
@@ -81,10 +82,10 @@ export function CodexInstancesContent({
   const [syncingAllRecords, setSyncingAllRecords] = useState(false);
   const [autoSyncUpdating, setAutoSyncUpdating] = useState(false);
   const [showSyncSettingsModal, setShowSyncSettingsModal] = useState(false);
-  const [syncRecordsMessage, setSyncRecordsMessage] = useState<{
+  const [syncRecordsMessage, setSyncRecordsMessage] = useAutoDismissMessage<{
     text: string;
     tone?: "error";
-  } | null>(null);
+  }>();
 
   useEscClose(!!launchModal, () => setLaunchModal(null));
   useEscClose(showSyncSettingsModal, () => setShowSyncSettingsModal(false));

@@ -37,6 +37,7 @@ import { QuickSettingsPopover } from '../components/QuickSettingsPopover';
 import { MultiSelectFilterDropdown, type MultiSelectFilterOption } from '../components/MultiSelectFilterDropdown';
 import { SingleSelectFilterDropdown } from '../components/SingleSelectFilterDropdown';
 import { useEscClose } from '../hooks/useEscClose';
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
 import {
   PlatformOverviewTab,
   PlatformOverviewTabsHeader,
@@ -314,7 +315,7 @@ export function QoderAccountsPage() {
   const oauthCompletingLoginIdRef = useRef<string | null>(null);
   const oauthAttemptSeqRef = useRef(0);
   const handlePrepareOauthRef = useRef<(() => Promise<void>) | undefined>(undefined);
-  const [message, setMessage] = useState<{ text: string; tone?: 'error' } | null>(null);
+  const [message, setMessage] = useAutoDismissMessage<{ text: string; tone?: 'error' }>();
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [injecting, setInjecting] = useState<string | null>(null);

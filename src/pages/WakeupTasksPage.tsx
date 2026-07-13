@@ -36,6 +36,7 @@ import {
 } from '../utils/wakeupOfficialLsVersion';
 import { ModalErrorMessage, useModalErrorState } from '../components/ModalErrorMessage';
 import { useEscClose } from '../hooks/useEscClose';
+import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
 import { OverviewTabsHeader } from '../components/OverviewTabsHeader';
 import { useAntigravityRuntimeTarget } from '../hooks/useAntigravityRuntimeTarget';
 
@@ -678,7 +679,7 @@ export function WakeupTasksPage({ onNavigate }: WakeupPageProps) {
   });
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; tone?: NoticeTone } | null>(null);
+  const [notice, setNotice] = useAutoDismissMessage<{ text: string; tone?: NoticeTone }>();
   const [historyRecords, setHistoryRecords] = useState<WakeupHistoryRecord[]>([]);
   const [testing, setTesting] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
