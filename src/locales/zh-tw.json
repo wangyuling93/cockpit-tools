@@ -3120,11 +3120,11 @@
       "openPage": "進入 API 服務",
       "openFullPage": "檢視全部功能",
       "tabs": {
-        "overview": "服務總覽",
-        "keys": "用戶端 Key",
-        "accounts": "帳號池",
-        "models": "模型與能力",
-        "logs": "統計與日誌"
+        "overview": "總覽",
+        "keys": "Key",
+        "accounts": "帳號",
+        "models": "模型",
+        "logs": "日誌"
       },
       "healthTitle": "服務健康",
       "compat": {

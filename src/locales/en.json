@@ -3331,11 +3331,11 @@
       "openPage": "Open API Service",
       "openFullPage": "View All Features",
       "tabs": {
-        "overview": "Service Overview",
-        "keys": "Client Keys",
-        "accounts": "Account Pool",
-        "models": "Models & Capabilities",
-        "logs": "Stats & Logs"
+        "overview": "Overview",
+        "keys": "Key",
+        "accounts": "Accounts",
+        "models": "Models",
+        "logs": "Logs"
       },
       "healthTitle": "Service Health",
       "compat": {

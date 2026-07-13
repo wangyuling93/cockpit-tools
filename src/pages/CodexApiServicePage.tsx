@@ -62,7 +62,6 @@ import type {
   CodexLocalAccessImageGenerationMode,
   CodexLocalAccessModelAlias,
   CodexLocalAccessModelPricing,
-  CodexLocalAccessRequestKind,
   CodexLocalAccessRoutingStrategy,
   CodexLocalAccessScope,
   CodexLocalAccessState,
@@ -95,9 +94,6 @@ type CopyField =
   | "modelId"
   | `compat:${string}`
   | `apiKey:${string}`;
-type RequestLogKindFilter = "all" | CodexLocalAccessRequestKind;
-type RequestLogStatusFilter = "all" | "success" | "failed";
-type RequestLogGatewayModeFilter = "all" | CodexLocalAccessGatewayMode;
 type BuiltinTimeoutPresetId = "long_wait" | "short_wait";
 type TimeoutPresetId = BuiltinTimeoutPresetId | string;
 
@@ -666,16 +662,6 @@ export function CodexApiServicePage() {
     useState<CodexLocalAccessUsageEventPage | null>(null);
   const [requestLogLoading, setRequestLogLoading] = useState(false);
   const [requestLogError, setRequestLogError] = useState("");
-  const [requestLogKindFilter, setRequestLogKindFilter] =
-    useState<RequestLogKindFilter>("all");
-  const [requestLogStatusFilter, setRequestLogStatusFilter] =
-    useState<RequestLogStatusFilter>("all");
-  const [requestLogGatewayModeFilter, setRequestLogGatewayModeFilter] =
-    useState<RequestLogGatewayModeFilter>("all");
-  const [requestLogModelQuery, setRequestLogModelQuery] = useState("");
-  const [requestLogAccountQuery, setRequestLogAccountQuery] = useState("");
-  const [requestLogApiKeyQuery, setRequestLogApiKeyQuery] = useState("");
-  const [requestLogErrorQuery, setRequestLogErrorQuery] = useState("");
   const mountedRef = useRef(true);
   const testChatScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -1159,45 +1145,25 @@ export function CodexApiServicePage() {
 
   useEffect(() => {
     setRequestLogPage(1);
-  }, [
-    statsRange,
-    requestLogPageSize,
-    requestLogKindFilter,
-    requestLogStatusFilter,
-    requestLogGatewayModeFilter,
-    requestLogModelQuery,
-    requestLogAccountQuery,
-    requestLogApiKeyQuery,
-    requestLogErrorQuery,
-  ]);
+  }, [statsRange, requestLogPageSize]);
 
   useEffect(() => {
     if (activeTab !== "logs" || statsLogTab !== "logs") return;
     let disposed = false;
     setRequestLogLoading(true);
     setRequestLogError("");
-    const success =
-      requestLogStatusFilter === "success"
-        ? true
-        : requestLogStatusFilter === "failed"
-          ? false
-          : null;
     void codexLocalAccessService
       .queryCodexLocalAccessRequestLogs({
         page: requestLogPage,
         pageSize: requestLogPageSize,
         statsRange,
-        modelQuery: requestLogModelQuery,
-        accountQuery: requestLogAccountQuery,
-        apiKeyQuery: requestLogApiKeyQuery,
-        gatewayMode:
-          requestLogGatewayModeFilter === "all"
-            ? null
-            : requestLogGatewayModeFilter,
-        requestKind:
-          requestLogKindFilter === "all" ? null : requestLogKindFilter,
-        success,
-        errorCategory: requestLogErrorQuery,
+        modelQuery: "",
+        accountQuery: "",
+        apiKeyQuery: "",
+        gatewayMode: null,
+        requestKind: null,
+        success: null,
+        errorCategory: "",
       })
       .then((result) => {
         if (disposed) return;
@@ -1225,13 +1191,6 @@ export function CodexApiServicePage() {
     statsRange,
     requestLogPage,
     requestLogPageSize,
-    requestLogKindFilter,
-    requestLogStatusFilter,
-    requestLogGatewayModeFilter,
-    requestLogModelQuery,
-    requestLogAccountQuery,
-    requestLogApiKeyQuery,
-    requestLogErrorQuery,
     stats?.updatedAt,
   ]);
 
@@ -2698,50 +2657,6 @@ export function CodexApiServicePage() {
       label: t("codex.localAccess.statsRange.monthly", "月"),
     },
   ];
-  const requestLogKindOptions: Array<{
-    value: RequestLogKindFilter;
-    label: string;
-  }> = [
-    { value: "all", label: t("codex.apiService.logs.allKinds", "全部类型") },
-    { value: "text", label: t("codex.localAccess.requestKind.text", "文本") },
-    {
-      value: "image_generation",
-      label: t("codex.localAccess.requestKind.imageGeneration", "生图"),
-    },
-    {
-      value: "image_edit",
-      label: t("codex.localAccess.requestKind.imageEdit", "改图"),
-    },
-    { value: "other", label: t("codex.localAccess.requestKind.other", "其他") },
-  ];
-  const requestLogStatusOptions: Array<{
-    value: RequestLogStatusFilter;
-    label: string;
-  }> = [
-    { value: "all", label: t("codex.apiService.logs.allStatuses", "全部状态") },
-    {
-      value: "success",
-      label: t("codex.localAccess.requestLogSuccess", "成功"),
-    },
-    { value: "failed", label: t("codex.localAccess.requestLogFailed", "失败") },
-  ];
-  const requestLogGatewayModeOptions: Array<{
-    value: RequestLogGatewayModeFilter;
-    label: string;
-  }> = [
-    {
-      value: "all",
-      label: t("codex.apiService.logs.allGatewayModes", "全部模式"),
-    },
-    {
-      value: "sidecar",
-      label: t("codex.localAccess.gatewayModeNewLabel", "API 服务-新"),
-    },
-    {
-      value: "legacy",
-      label: t("codex.localAccess.gatewayModeOldLabel", "API 服务-旧"),
-    },
-  ];
   const gatewayModeOptions: Array<{
     value: CodexLocalAccessGatewayMode;
     label: string;
@@ -2762,27 +2677,27 @@ export function CodexApiServicePage() {
   }> = [
     {
       key: "overview",
-      label: t("codex.apiService.tabs.overview", "服务总览"),
+      label: t("codex.apiService.tabs.overview", "总览"),
       icon: <CodexIcon className="tab-icon" />,
     },
     {
       key: "keys",
-      label: t("codex.apiService.tabs.keys", "客户端 Key"),
+      label: t("codex.apiService.tabs.keys", "Key"),
       icon: <KeyRound className="tab-icon" />,
     },
     {
       key: "accounts",
-      label: t("codex.apiService.tabs.accounts", "账号池"),
+      label: t("codex.apiService.tabs.accounts", "账号"),
       icon: <Users className="tab-icon" />,
     },
     {
       key: "models",
-      label: t("codex.apiService.tabs.models", "模型与能力"),
+      label: t("codex.apiService.tabs.models", "模型"),
       icon: <Image className="tab-icon" />,
     },
     {
       key: "logs",
-      label: t("codex.apiService.tabs.logs", "统计与日志"),
+      label: t("codex.apiService.tabs.logs", "日志"),
       icon: <Activity className="tab-icon" />,
     },
   ];
@@ -2863,24 +2778,6 @@ export function CodexApiServicePage() {
     requestLogTotal === 0
       ? 0
       : Math.min(requestLogTotal, requestLogCurrentPage * requestLogPageSize);
-  const hasRequestLogFilters = Boolean(
-    requestLogKindFilter !== "all" ||
-    requestLogStatusFilter !== "all" ||
-    requestLogGatewayModeFilter !== "all" ||
-    requestLogModelQuery.trim() ||
-    requestLogAccountQuery.trim() ||
-    requestLogApiKeyQuery.trim() ||
-    requestLogErrorQuery.trim(),
-  );
-  const clearRequestLogFilters = () => {
-    setRequestLogKindFilter("all");
-    setRequestLogStatusFilter("all");
-    setRequestLogGatewayModeFilter("all");
-    setRequestLogModelQuery("");
-    setRequestLogAccountQuery("");
-    setRequestLogApiKeyQuery("");
-    setRequestLogErrorQuery("");
-  };
 
   return (
     <div className="codex-api-service-page">
@@ -3976,7 +3873,7 @@ export function CodexApiServicePage() {
               <div
                 className="codex-api-service-subtabs"
                 role="tablist"
-                aria-label={t("codex.apiService.tabs.logs", "统计与日志")}
+                aria-label={t("codex.apiService.tabs.logs", "日志")}
               >
                 {statsLogTabs.map((tab) => (
                   <button
@@ -4166,123 +4063,6 @@ export function CodexApiServicePage() {
 
             {statsLogTab === "logs" && (
               <>
-                <div className="codex-api-service-log-filters">
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.modelFilter", "模型")}
-                    </span>
-                    <input
-                      value={requestLogModelQuery}
-                      onChange={(event) =>
-                        setRequestLogModelQuery(event.target.value)
-                      }
-                      placeholder={t(
-                        "codex.apiService.logs.modelPlaceholder",
-                        "模型 ID",
-                      )}
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.accountFilter", "账号")}
-                    </span>
-                    <input
-                      value={requestLogAccountQuery}
-                      onChange={(event) =>
-                        setRequestLogAccountQuery(event.target.value)
-                      }
-                      placeholder={t(
-                        "codex.apiService.logs.accountPlaceholder",
-                        "邮箱或账号 ID",
-                      )}
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.apiKeyFilter", "API Key")}
-                    </span>
-                    <input
-                      value={requestLogApiKeyQuery}
-                      onChange={(event) =>
-                        setRequestLogApiKeyQuery(event.target.value)
-                      }
-                      placeholder={t(
-                        "codex.apiService.logs.apiKeyPlaceholder",
-                        "名称或 ID",
-                      )}
-                    />
-                  </label>
-                  <label>
-                    <span>{t("codex.apiService.logs.kindFilter", "类型")}</span>
-                    <SingleSelectDropdown
-                      value={requestLogKindFilter}
-                      options={requestLogKindOptions}
-                      onChange={(value) =>
-                        setRequestLogKindFilter(value as RequestLogKindFilter)
-                      }
-                      ariaLabel={t("codex.apiService.logs.kindFilter", "类型")}
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.statusFilter", "状态")}
-                    </span>
-                    <SingleSelectDropdown
-                      value={requestLogStatusFilter}
-                      options={requestLogStatusOptions}
-                      onChange={(value) =>
-                        setRequestLogStatusFilter(
-                          value as RequestLogStatusFilter,
-                        )
-                      }
-                      ariaLabel={t(
-                        "codex.apiService.logs.statusFilter",
-                        "状态",
-                      )}
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.gatewayModeFilter", "模式")}
-                    </span>
-                    <SingleSelectDropdown
-                      value={requestLogGatewayModeFilter}
-                      options={requestLogGatewayModeOptions}
-                      onChange={(value) =>
-                        setRequestLogGatewayModeFilter(
-                          value as RequestLogGatewayModeFilter,
-                        )
-                      }
-                      ariaLabel={t(
-                        "codex.apiService.logs.gatewayModeFilter",
-                        "模式",
-                      )}
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {t("codex.apiService.logs.errorFilter", "错误")}
-                    </span>
-                    <input
-                      value={requestLogErrorQuery}
-                      onChange={(event) =>
-                        setRequestLogErrorQuery(event.target.value)
-                      }
-                      placeholder={t(
-                        "codex.apiService.logs.errorPlaceholder",
-                        "错误分类",
-                      )}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={clearRequestLogFilters}
-                    disabled={!hasRequestLogFilters}
-                  >
-                    {t("codex.apiService.logs.clearFilters", "清除筛选")}
-                  </button>
-                </div>
                 <div className="codex-api-service-log-list">
                   {requestLogError && (
                     <div className="codex-api-service-message error">

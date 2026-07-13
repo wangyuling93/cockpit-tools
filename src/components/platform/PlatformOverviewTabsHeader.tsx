@@ -202,7 +202,7 @@ export function PlatformOverviewTabsHeader({
   const tabLabels: Record<PlatformOverviewTab, TabSpec> = {
     overview: {
       key: 'overview',
-      label: t('overview.title', '账号总览'),
+      label: t('overview.title', '官方'),
       icon: config.overviewIcon,
     },
     wakeup: {
@@ -215,17 +215,17 @@ export function PlatformOverviewTabsHeader({
     },
     instances: {
       key: 'instances',
-      label: t('instances.title', '应用多开'),
+      label: t('instances.title', '多开'),
       icon: <Layers className="tab-icon" />,
     },
     sessions: {
       key: 'sessions',
-      label: t('codex.sessionManager.title', '会话管理'),
+      label: t('codex.sessionManager.title', '会话'),
       icon: <FolderOpen className="tab-icon" />,
     },
     providers: {
       key: 'providers',
-      label: t('codex.modelProviders.tab', '模型供应商'),
+      label: t('codex.modelProviders.tab', '三方'),
       icon: <Server className="tab-icon" />,
     },
   };

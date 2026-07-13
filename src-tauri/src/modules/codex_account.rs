@@ -5821,8 +5821,12 @@ fn extract_codex_session_candidate_from_value(
 
 fn extract_refresh_token_only_from_value(value: &serde_json::Value) -> Option<String> {
     match value {
+        // Plain list lines may embed an at-* personal access token (e.g. email + token).
+        // Those must not be swallowed as refresh tokens before access-token extraction.
         serde_json::Value::String(raw) => normalize_optional_ref(Some(raw)).filter(|token| {
-            decode_jwt_payload_value(token).is_none() && !is_opaque_access_token(token)
+            decode_jwt_payload_value(token).is_none()
+                && !is_opaque_access_token(token)
+                && extract_opaque_access_token_from_text(token).is_none()
         }),
         serde_json::Value::Object(_) => first_json_string(
             value,

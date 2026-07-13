@@ -7,6 +7,21 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [1.3.2] - 2026-07-13
+
+### Changed
+
+- **Shortened Codex-related tab labels**: overview becomes Official, multi-instance becomes Multi-open, session manager becomes Sessions, model providers becomes Third-party; Codex API Service tabs become Overview / Key / Accounts / Models / Logs.
+- **Hid the Codex API Service request-log filter bar**: model, account, API key, kind, status, mode, error, and clear-filter controls are no longer shown; logs load for the selected time range only.
+- **Simplified several Codex toolbars**: search/filter controls were removed from model providers, session manager, and Codex multi-instance views; some low-frequency account-card actions were removed for a tighter layout.
+- **Lowered the main window minimum width to 640**: easier to use on narrow screens and split layouts.
+
+### Fixed
+
+- **Fixed macOS native-menu static library linking under newer Xcode / SPM layouts**: add the SPM config product directory after `swift-rs` linking so `libMacosNativeMenuSwift.a` can still be found.
+- **Fixed Codex list-line `at-*` access-token import being treated as a refresh token**: prefer embedded personal access tokens before falling back to refresh-token-only parsing.
+
+---
 ## [1.3.1] - 2026-07-13
 
 ### Added

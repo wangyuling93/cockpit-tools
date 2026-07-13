@@ -9,7 +9,7 @@
         "title": "Cockpit Tools Dev",
         "width": 1280,
         "height": 800,
-        "minWidth": 900,
+        "minWidth": 640,
         "minHeight": 600,
         "center": true,
         "titleBarStyle": "Overlay",

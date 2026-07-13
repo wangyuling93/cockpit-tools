@@ -164,6 +164,33 @@ fn build_cockpit_cliproxy_sidecar() {
     }
 }
 
+/// `swift-rs` 1.0.7 hardcodes a pre-Xcode-27 SPM product path. SPM still exposes
+/// `{debug|release}` at the build root on both old and new layouts; emit that as
+/// an extra `-L` after `SwiftLinker::link()`. Remove when `swift-rs` is fixed.
+#[cfg(target_os = "macos")]
+fn link_macos_native_menu_product_search_path() {
+    const PACKAGE: &str = "MacosNativeMenuSwift";
+    const LIB_NAME: &str = "libMacosNativeMenuSwift.a";
+
+    let package_out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR is required"))
+        .join("swift-rs")
+        .join(PACKAGE);
+    let config = if std::env::var("DEBUG").ok().as_deref() == Some("true") {
+        "debug"
+    } else {
+        "release"
+    };
+    let dir = package_out.join(config);
+    if !dir.join(LIB_NAME).is_file() {
+        panic!(
+            "could not locate {LIB_NAME} at {} after swift-rs build \
+             (SPM config product dir missing; Xcode/SPM layout may have changed)",
+            dir.display()
+        );
+    }
+    println!("cargo:rustc-link-search=native={}", dir.display());
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     build_cockpit_cliproxy_sidecar();
@@ -173,6 +200,7 @@ fn main() {
         SwiftLinker::new("12.0")
             .with_package("MacosNativeMenuSwift", "native/macos-native-menu")
             .link();
+        link_macos_native_menu_product_search_path();
         link_macos_swift_runtime_rpaths();
     }
 

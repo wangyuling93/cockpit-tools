@@ -602,7 +602,7 @@ export function CodexModelProviderManager({
   >(() => readProviderUsageCache());
   const [providerUsageRefreshingAll, setProviderUsageRefreshingAll] =
     useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = "";
   const [providerDetailId, setProviderDetailId] = useState<string | null>(null);
   const [selectedProviderApiKeyMap, setSelectedProviderApiKeyMap] = useState<
     Record<string, string>
@@ -658,9 +658,7 @@ export function CodexModelProviderManager({
     providerCustomSortDropTargetId,
     setProviderCustomSortDropTargetId,
   ] = useState<string | null>(null);
-  const [providerNameFilter, setProviderNameFilter] = useState<
-    string[]
-  >([]);
+  const providerNameFilter: string[] = [];
   const [batchTestModalOpen, setBatchTestModalOpen] = useState(false);
   const [batchTestStep, setBatchTestStep] = useState<"select" | "results">("select");
   const [batchTestSearchQuery, setBatchTestSearchQuery] = useState("");
@@ -766,28 +764,7 @@ export function CodexModelProviderManager({
     searchQuery,
   ]);
 
-  const providerFilterOptions = useMemo<MultiSelectFilterOption[]>(
-    () => {
-      const counts = new Map<string, { label: string; count: number }>();
-      providers.forEach((provider) => {
-        const label = provider.name.trim() || t("common.unknown", "未知");
-        const value = label.toLowerCase();
-        const previous = counts.get(value);
-        counts.set(value, {
-          label: previous?.label ?? label,
-          count: (previous?.count ?? 0) + 1,
-        });
-      });
-      return [...counts.entries()]
-        .map(([value, item]) => ({
-          value,
-          label: item.label,
-          count: item.count,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label));
-    },
-    [providers, t],
-  );
+
 
   const filteredProviderIds = useMemo(
     () => filteredProviders.map((item) => item.id),
@@ -2969,15 +2946,6 @@ export function CodexModelProviderManager({
 
       <div className="toolbar">
         <div className="toolbar-left">
-          <div className="search-box">
-            <Search className="search-icon" size={16} />
-            <input
-              type="text"
-              placeholder={t("common.search", "搜索...")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
           <div className="view-switcher">
             <button
               className={`view-btn ${providerViewMode === "compact" ? "active" : ""}`}
@@ -2994,25 +2962,6 @@ export function CodexModelProviderManager({
               <LayoutGrid size={16} />
             </button>
           </div>
-          <MultiSelectFilterDropdown
-            options={providerFilterOptions}
-            selectedValues={providerNameFilter}
-            allLabel={t("common.shared.filter.all", {
-              count: providers.length,
-            })}
-            filterLabel={t("common.shared.filterLabel", "筛选")}
-            clearLabel={t("accounts.clearFilter", "清空筛选")}
-            emptyLabel={t("common.none", "暂无")}
-            ariaLabel={t("common.shared.filterLabel", "筛选")}
-            onToggleValue={(value) =>
-              setProviderNameFilter((previous) =>
-                previous.includes(value)
-                  ? previous.filter((item) => item !== value)
-                  : [...previous, value],
-              )
-            }
-            onClear={() => setProviderNameFilter([])}
-          />
           <SingleSelectFilterDropdown
             value={providerSortBy}
             options={[

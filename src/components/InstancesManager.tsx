@@ -2344,15 +2344,17 @@ export function InstancesManager<TAccount extends AccountLike>({
 
       <div className="toolbar instances-toolbar">
         <div className="toolbar-left">
-          <div className="search-box">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              placeholder={t("instances.search", "搜索实例")}
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </div>
+          {appType !== "codex" && (
+            <div className="search-box">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder={t("instances.search", "搜索实例")}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+          )}
           <div className="sort-select">
             <ArrowDownWideNarrow size={14} className="sort-icon" />
             <select

@@ -41,7 +41,8 @@ sidecars/cockpit-cliproxy/bin/
 src-tauri/resources/electron/*
 !src-tauri/resources/electron/.gitkeep
 
-# Swift native menu build artifacts
+# Swift Package Manager / native menu build artifacts
+.build/
 src-tauri/native/macos-native-menu/.build/
 .tmp/
 

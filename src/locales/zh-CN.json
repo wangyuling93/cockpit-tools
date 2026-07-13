@@ -123,7 +123,7 @@
           "inline": "内嵌建议"
         },
         "subtitle": "多实例独立配置，多账号并行运行。",
-        "title": "应用多开"
+        "title": "多开"
       },
       "noMatch": {
         "desc": "请尝试调整搜索或筛选条件",
@@ -177,7 +177,7 @@
         "token": "Token / JSON"
       },
       "overview": {
-        "title": "账号总览"
+        "title": "官方"
       },
       "quota": {
         "noData": "暂无配额数据",
@@ -528,7 +528,7 @@
     "showSensitive": "显示邮箱"
   },
   "instances": {
-    "title": "应用多开",
+    "title": "多开",
     "subtitle": "多实例独立配置，多账号并行运行。",
     "defaultName": "默认实例",
     "search": "搜索实例",
@@ -1513,7 +1513,7 @@
     }
   },
   "overview": {
-    "title": "账号总览",
+    "title": "官方",
     "subtitle": "实时监控所有账号的模型配额状态。",
     "total": "共 {{count}} 个账号",
     "accountDisabled": "账号已禁用",
@@ -2487,7 +2487,7 @@
       "dailyStats": "每日统计"
     },
     "modelProviders": {
-      "tab": "模型供应商",
+      "tab": "三方",
       "desc": "统一管理模型供应商与多个 API Key，添加 Codex API Key 账号时可直接复用。",
       "add": "新增供应商",
       "managePresets": "模型预设",
@@ -3093,7 +3093,7 @@
       }
     },
     "sessionManager": {
-      "title": "会话管理",
+      "title": "会话",
       "desc": "同步、可见性修复、清理与恢复统一放在这里：顶部可一键同步会话、修复会话可见性或从废纸篓恢复，下面按项目展开查看会话并移到废纸篓。",
       "actions": {
         "moveToTrash": "移到废纸篓",
@@ -3331,11 +3331,11 @@
       "openPage": "进入 API 服务",
       "openFullPage": "查看全部功能",
       "tabs": {
-        "overview": "服务总览",
-        "keys": "客户端 Key",
-        "accounts": "账号池",
-        "models": "模型与能力",
-        "logs": "统计与日志"
+        "overview": "总览",
+        "keys": "Key",
+        "accounts": "账号",
+        "models": "模型",
+        "logs": "日志"
       },
       "healthTitle": "服务健康",
       "compat": {

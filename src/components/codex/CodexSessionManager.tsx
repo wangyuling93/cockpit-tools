@@ -279,7 +279,7 @@ export function CodexSessionManager() {
   const [tokenStatsBySessionId, setTokenStatsBySessionId] = useState<SessionTokenStatsMap>({});
   const [loadingTokenGroupCwds, setLoadingTokenGroupCwds] = useState<string[]>([]);
   const [loadedTokenGroupCwds, setLoadedTokenGroupCwds] = useState<string[]>([]);
-  const [titleSearchInput, setTitleSearchInput] = useState('');
+  const titleSearchInput = '';
   const [appliedTitleSearch, setAppliedTitleSearch] = useState('');
   const {
     message: restoreModalError,
@@ -452,7 +452,6 @@ export function CodexSessionManager() {
   const trashBusy = restoring || purgingTrash || loadingTrash;
   const instanceCount = instances.length;
   const hasAppliedSearch = Boolean(appliedTitleSearch);
-  const hasSearchInput = Boolean(titleSearchInput.trim());
   const transferProgress = transferTask?.progress ?? null;
   const transferPercent = clampPercent(transferProgress?.percent);
   const transferRunning = transferTask?.status === 'running';
@@ -850,17 +849,6 @@ export function CodexSessionManager() {
     } catch (error) {
       setMessage({ text: String(error), tone: 'error' });
     }
-  };
-
-  const handleClearSearch = () => {
-    setTitleSearchInput('');
-    setMessage(null);
-
-    if (!appliedTitleSearch) {
-      return;
-    }
-
-    setAppliedTitleSearch('');
   };
 
   const handleRepairVisibility = async () => {
@@ -1410,29 +1398,6 @@ export function CodexSessionManager() {
   return (
     <section className="codex-session-manager">
       <div className="codex-session-manager__header">
-        <div className="codex-session-manager__search">
-          <label className="codex-session-search-field">
-            <div className="codex-session-search-field__control">
-              <Search size={14} />
-              <input
-                type="text"
-                value={titleSearchInput}
-                onChange={(event) => setTitleSearchInput(event.target.value)}
-                placeholder={t('codex.sessionManager.search.titlePlaceholder', '按标题搜索')}
-                disabled={loading}
-              />
-            </div>
-          </label>
-          <button
-            className="btn btn-secondary codex-session-manager__search-button"
-            type="button"
-            onClick={handleClearSearch}
-            disabled={loading || (!hasSearchInput && !hasAppliedSearch)}
-          >
-            <X size={14} />
-            {t('codex.sessionManager.search.clear', '清空')}
-          </button>
-        </div>
         <div className="codex-session-manager__actions">
           <button
             className="btn btn-secondary codex-session-manager__action-button"

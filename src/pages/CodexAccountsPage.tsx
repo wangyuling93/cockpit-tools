@@ -12,7 +12,6 @@ import {
   Plus,
   RefreshCw,
   Download,
-  Upload,
   Trash2,
   X,
   Globe,
@@ -36,7 +35,6 @@ import {
   GripVertical,
   Clock,
   Calendar,
-  Tag,
   Star,
   Eye,
   EyeOff,
@@ -894,8 +892,7 @@ export function CodexAccountsPage() {
     useState<CodexExportFormat>("cockpit_tools");
   const [includeExportSensitiveNotes, setIncludeExportSensitiveNotes] =
     useState(false);
-  const [exportFileNameBase, setExportFileNameBase] =
-    useState("codex_accounts");
+  const exportFileNameBase = "codex_accounts";
   const [formattedExportJsonCopied, setFormattedExportJsonCopied] =
     useState(false);
   const [formattedSavingExportJson, setFormattedSavingExportJson] =
@@ -1325,8 +1322,6 @@ export function CodexAccountsPage() {
   const {
     t,
     maskAccountText,
-    privacyModeEnabled,
-    togglePrivacyMode,
     viewMode,
     setViewMode,
     searchQuery,
@@ -1343,12 +1338,8 @@ export function CodexAccountsPage() {
     toggleSelectAll,
     tagFilter,
     groupByTag,
-    setGroupByTag,
-    showTagFilter,
-    setShowTagFilter,
     showTagModal,
     setShowTagModal,
-    tagFilterRef,
     availableTags,
     toggleTagFilterValue,
     clearTagFilter,
@@ -1357,9 +1348,7 @@ export function CodexAccountsPage() {
     tagDeleteConfirmErrorScrollKey,
     setTagDeleteConfirm,
     deletingTag,
-    requestDeleteTag,
     confirmDeleteTag,
-    openTagModal,
     handleSaveTags,
     refreshing,
     refreshingAll,
@@ -1372,10 +1361,6 @@ export function CodexAccountsPage() {
     setDeleteConfirm,
     message,
     setMessage,
-    exporting,
-    handleExport: handleBaseExport,
-    handleExportByIds: handleBaseExportByIds,
-    getScopedSelectedCount,
     showExportModal,
     closeExportModal,
     exportJsonContent,
@@ -2110,22 +2095,6 @@ export function CodexAccountsPage() {
     }
     return formattedExportContent.documents;
   }, [formattedExportContent]);
-
-  const handleExportByIds = useCallback(
-    async (ids: string[], fileNameBase?: string) => {
-      setExportFileNameBase(fileNameBase || "codex_accounts");
-      await handleBaseExportByIds(ids, fileNameBase);
-    },
-    [handleBaseExportByIds],
-  );
-
-  const handleExport = useCallback(
-    async (scopeIds?: string[]) => {
-      setExportFileNameBase("codex_accounts");
-      await handleBaseExport(scopeIds);
-    },
-    [handleBaseExport],
-  );
 
   const handleCloseExportModal = useCallback(() => {
     closeExportModal();
@@ -7540,17 +7509,6 @@ export function CodexAccountsPage() {
     [t],
   );
 
-  const resolveSingleExportBaseName = useCallback(
-    (account: CodexAccount) => {
-      const display = (
-        resolvePresentation(account).displayName || account.id
-      ).trim();
-      const atIndex = display.indexOf("@");
-      return atIndex > 0 ? display.slice(0, atIndex) : display;
-    },
-    [resolvePresentation],
-  );
-
   const resolvePlanKey = useCallback(
     (account: CodexAccount) => getCodexPlanFilterKey(account),
     [],
@@ -8885,7 +8843,6 @@ export function CodexAccountsPage() {
       defaultSortDirection: "desc",
     });
   }, [hasDetectableFullQuotaWakeupAccounts, setMessage, t]);
-  const exportSelectionCount = getScopedSelectedCount(filteredIds);
   const pagination = usePagination({
     items: filteredAccounts,
     storageKey: buildPaginationPageSizeStorageKey("Codex"),
@@ -9905,18 +9862,6 @@ export function CodexAccountsPage() {
             {renderAccountSpeedSelect(account)}
             <div className="card-footer">
               <div className="card-actions">
-                <button
-                  className="card-action-btn"
-                  onClick={() => void handleLaunchCodexCli(account)}
-                  disabled={cliLaunchingAccountId === account.id}
-                  title={t("codex.cli.quickLaunch", "CLI 快速启动")}
-                >
-                  {cliLaunchingAccountId === account.id ? (
-                    <RefreshCw size={14} className="loading-spinner" />
-                  ) : (
-                    <Terminal size={14} />
-                  )}
-                </button>
                 {isNewApiAccount && (
                   <button
                     className="card-action-btn"
@@ -9935,13 +9880,6 @@ export function CodexAccountsPage() {
                     <Database size={14} />
                   </button>
                 )}
-                <button
-                  className="card-action-btn"
-                  onClick={() => openTagModal(account.id)}
-                  title={t("accounts.editTags", "编辑标签")}
-                >
-                  <Tag size={14} />
-                </button>
                 {!isApiKeyAccount && !isNewApiAccount && (
                   <button
                     className={`card-action-btn ${hasCodexAccountNoteDetails(account) ? "active" : ""}`}
@@ -10008,18 +9946,6 @@ export function CodexAccountsPage() {
                     />
                   </button>
                 )}
-                <button
-                  className="card-action-btn export-btn"
-                  onClick={() =>
-                    handleExportByIds(
-                      [account.id],
-                      resolveSingleExportBaseName(account),
-                    )
-                  }
-                  title={t("common.shared.export.title", "导出")}
-                >
-                  <Upload size={14} />
-                </button>
                 <button
                   className="card-action-btn danger"
                   onClick={() => handleDelete(account.id)}
@@ -11317,18 +11243,6 @@ export function CodexAccountsPage() {
           </td>
           <td className="sticky-action-cell table-action-cell">
             <div className="action-buttons">
-              <button
-                className="action-btn"
-                onClick={() => void handleLaunchCodexCli(account)}
-                disabled={cliLaunchingAccountId === account.id}
-                title={t("codex.cli.quickLaunch", "CLI 快速启动")}
-              >
-                {cliLaunchingAccountId === account.id ? (
-                  <RefreshCw size={14} className="loading-spinner" />
-                ) : (
-                  <Terminal size={14} />
-                )}
-              </button>
               {isNewApiAccount && (
                 <button
                   className="action-btn"
@@ -11347,13 +11261,6 @@ export function CodexAccountsPage() {
                   <Database size={14} />
                 </button>
               )}
-              <button
-                className="action-btn"
-                onClick={() => openTagModal(account.id)}
-                title={t("accounts.editTags", "编辑标签")}
-              >
-                <Tag size={14} />
-              </button>
               {!isApiKeyAccount && !isNewApiAccount && (
                 <button
                   className={`action-btn ${hasCodexAccountNoteDetails(account) ? "active" : ""}`}
@@ -11420,18 +11327,6 @@ export function CodexAccountsPage() {
                   />
                 </button>
               )}
-              <button
-                className="action-btn"
-                onClick={() =>
-                  handleExportByIds(
-                    [account.id],
-                    resolveSingleExportBaseName(account),
-                  )
-                }
-                title={t("common.shared.export.title", "导出")}
-              >
-                <Upload size={14} />
-              </button>
               <button
                 className="action-btn danger"
                 onClick={() => handleDelete(account.id)}
@@ -11543,7 +11438,10 @@ export function CodexAccountsPage() {
   const hasGroupEntryCards = Boolean(
     inlineFolderCards && inlineFolderCards.length > 0,
   );
-  const showOverviewSelectionBar = paginatedAccounts.length > 0;
+  // Bulk select/delete chrome is intentionally hidden on the overview toolbar.
+  const showOverviewBulkSelection = false;
+  const showOverviewSelectionBar =
+    showOverviewBulkSelection && paginatedAccounts.length > 0;
   const externalImportRunning = [
     "receiving",
     "fetching",
@@ -12197,7 +12095,7 @@ export function CodexAccountsPage() {
       <CodexOverviewTabsHeader
         active={activeTab}
         onTabChange={setActiveTab}
-        tabs={["overview", "providers", "wakeup", "instances", "sessions"]}
+        tabs={["overview", "providers", "instances", "sessions"]}
       />
 
       {batchImportOpen && (
@@ -12807,15 +12705,6 @@ export function CodexAccountsPage() {
 
           <div className="toolbar">
             <div className="toolbar-left">
-              <div className="search-box">
-                <Search size={16} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder={t("common.shared.search", "搜索账号...")}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
               <div className="view-switcher">
                 <button
                   className={`view-btn ${overviewLayoutMode === "compact" ? "active" : ""}`}
@@ -12838,97 +12727,6 @@ export function CodexAccountsPage() {
                 >
                   <LayoutGrid size={16} />
                 </button>
-              </div>
-              <MultiSelectFilterDropdown
-                options={tierFilterOptions}
-                selectedValues={filterTypes}
-                allLabel={t("codex.filters.allPlans", {
-                  count: tierCounts.all,
-                  defaultValue: "全部套餐 ({{count}})",
-                })}
-                filterLabel={t("common.shared.filterLabel", "筛选")}
-                clearLabel={t("accounts.clearFilter", "清空筛选")}
-                emptyLabel={t("common.none", "暂无")}
-                ariaLabel={t("common.shared.filterLabel", "筛选")}
-                onToggleValue={toggleFilterTypeValue}
-                onClear={clearFilterTypes}
-              />
-              <div className="tag-filter" ref={tagFilterRef}>
-                <button
-                  type="button"
-                  className={`tag-filter-btn ${tagFilter.length > 0 ? "active" : ""}`}
-                  onClick={() => setShowTagFilter((prev) => !prev)}
-                  aria-label={t("accounts.filterTags", "标签筛选")}
-                >
-                  <Tag size={14} />
-                  {tagFilter.length > 0
-                    ? `${t("accounts.filterTagsCount", "标签")}(${tagFilter.length})`
-                    : t("accounts.filterTags", "标签筛选")}
-                </button>
-                {showTagFilter && (
-                  <div
-                    ref={page.tagFilterPanelRef}
-                    className={`tag-filter-panel ${page.tagFilterPanelPlacement === "top" ? "open-top" : ""}`}
-                  >
-                    {availableTags.length === 0 ? (
-                      <div className="tag-filter-empty">
-                        {t("accounts.noAvailableTags", "暂无可用标签")}
-                      </div>
-                    ) : (
-                      <div
-                        className="tag-filter-options"
-                        style={page.tagFilterScrollContainerStyle}
-                      >
-                        {availableTags.map((tag) => (
-                          <label
-                            key={tag}
-                            className={`tag-filter-option ${tagFilter.includes(tag) ? "selected" : ""}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={tagFilter.includes(tag)}
-                              onChange={() => toggleTagFilterValue(tag)}
-                            />
-                            <span className="tag-filter-name">{tag}</span>
-                            <button
-                              type="button"
-                              className="tag-filter-delete"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                requestDeleteTag(tag);
-                              }}
-                              aria-label={t("accounts.deleteTagAria", {
-                                tag,
-                                defaultValue: "删除标签 {{tag}}",
-                              })}
-                            >
-                              <X size={12} />
-                            </button>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    <div className="tag-filter-divider" />
-                    <label className="tag-filter-group-toggle">
-                      <input
-                        type="checkbox"
-                        checked={groupByTag}
-                        onChange={(e) => setGroupByTag(e.target.checked)}
-                      />
-                      <span>{t("accounts.groupByTag", "按标签分组展示")}</span>
-                    </label>
-                    {tagFilter.length > 0 && (
-                      <button
-                        type="button"
-                        className="tag-filter-clear"
-                        onClick={clearTagFilter}
-                      >
-                        {t("accounts.clearFilter", "清空筛选")}
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
               <SingleSelectFilterDropdown
@@ -12985,42 +12783,6 @@ export function CodexAccountsPage() {
                   className={refreshingAll ? "loading-spinner" : ""}
                 />
               </button>
-              <button
-                className="btn btn-secondary icon-only"
-                onClick={togglePrivacyMode}
-                title={
-                  privacyModeEnabled
-                    ? t("privacy.showSensitive", "显示邮箱")
-                    : t("privacy.hideSensitive", "隐藏邮箱")
-                }
-              >
-                {privacyModeEnabled ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-              <button
-                className="btn btn-secondary export-btn icon-only"
-                onClick={() => void handleExport(filteredIds)}
-                disabled={exporting || filteredIds.length === 0}
-                title={
-                  exportSelectionCount > 0
-                    ? `${t("common.shared.export.title", "导出")} (${exportSelectionCount})`
-                    : t("common.shared.export.title", "导出")
-                }
-              >
-                <Upload size={14} />
-              </button>
-              {!activeGroupId && (
-                <button
-                  className={`btn btn-secondary icon-only ${groupFilter.length > 0 ? "btn-filter-active" : ""}`}
-                  onClick={() => setShowCodexGroupModal(true)}
-                  title={
-                    groupFilter.length > 0
-                      ? `${t("accounts.groups.manageTitle", "分组管理")} (${groupFilter.length})`
-                      : t("accounts.groups.manageTitle", "分组管理")
-                  }
-                >
-                  <FolderOpen size={14} />
-                </button>
-              )}
               <QuickSettingsPopover type="codex" />
             </div>
           </div>
@@ -13393,7 +13155,8 @@ export function CodexAccountsPage() {
                 </>
               ) : viewMode === "grid" ? (
                 <div className="grid-view-container">
-                  {!showOverviewSelectionBar &&
+                  {showOverviewBulkSelection &&
+                    !showOverviewSelectionBar &&
                     paginatedAccounts.length > 0 && (
                       <div
                         className="grid-view-header"
@@ -13464,13 +13227,14 @@ export function CodexAccountsPage() {
                       <thead>
                         <tr>
                           <th style={{ width: 40 }}>
-                            {showOverviewSelectionBar ? null : (
+                            {showOverviewBulkSelection &&
+                            !showOverviewSelectionBar ? (
                               <input
                                 type="checkbox"
                                 checked={isAllPaginatedSelected}
                                 onChange={handleToggleSelectAllPaginated}
                               />
-                            )}
+                            ) : null}
                           </th>
                           <th style={{ width: 260 }}>
                             {t("common.shared.columns.email", "账号")}
@@ -13523,13 +13287,14 @@ export function CodexAccountsPage() {
                       <thead>
                         <tr>
                           <th style={{ width: 40 }}>
-                            {showOverviewSelectionBar ? null : (
+                            {showOverviewBulkSelection &&
+                            !showOverviewSelectionBar ? (
                               <input
                                 type="checkbox"
                                 checked={isAllPaginatedSelected}
                                 onChange={handleToggleSelectAllPaginated}
                               />
-                            )}
+                            ) : null}
                           </th>
                           <th style={{ width: 260 }}>
                             {t("common.shared.columns.email", "账号")}
