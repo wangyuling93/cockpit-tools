@@ -577,10 +577,10 @@ function gatewayModeLabel(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   if (mode === "legacy") {
-    return t("codex.localAccess.gatewayModeOldLabel", "API 服务-旧");
+    return t("codex.localAccess.gatewayModeOldShort", "旧");
   }
   if (mode === "sidecar") {
-    return t("codex.localAccess.gatewayModeNewLabel", "API 服务-新");
+    return t("codex.localAccess.gatewayModeNewShort", "新");
   }
   return t("codex.apiService.logs.gatewayModeUnknown", "模式未知");
 }
@@ -1573,22 +1573,6 @@ export function CodexApiServicePage() {
         setState(next);
       },
       t("codex.localAccess.routingSaveSuccess", "API 服务调度策略已更新"),
-    );
-  };
-
-  const handleUpdateGatewayMode = async (
-    value: CodexLocalAccessGatewayMode,
-  ) => {
-    if (!collection || value === gatewayMode) return;
-    await runAction(
-      async () => {
-        const next =
-          await codexLocalAccessService.updateCodexLocalAccessGatewayMode(
-            value,
-          );
-        setState(next);
-      },
-      t("codex.localAccess.gatewayModeSaveSuccess", "API 服务网关模式已更新"),
     );
   };
 
@@ -2657,19 +2641,6 @@ export function CodexApiServicePage() {
       label: t("codex.localAccess.statsRange.monthly", "月"),
     },
   ];
-  const gatewayModeOptions: Array<{
-    value: CodexLocalAccessGatewayMode;
-    label: string;
-  }> = [
-    {
-      value: "sidecar",
-      label: t("codex.localAccess.gatewayModeNewLabel", "API 服务-新"),
-    },
-    {
-      value: "legacy",
-      label: t("codex.localAccess.gatewayModeOldLabel", "API 服务-旧"),
-    },
-  ];
   const serviceTabs: Array<{
     key: ServiceTab;
     label: string;
@@ -2725,19 +2696,6 @@ export function CodexApiServicePage() {
       detail: formatRequestResultDetail(totals),
     },
     {
-      key: "images",
-      label: t("codex.localAccess.stats.images", "图片请求"),
-      value: formatCompactNumber(totals?.imageRequestCount ?? 0),
-      detail: t("codex.localAccess.stats.imagesDetail", {
-        generate: formatCompactNumber(totals?.imageGenerationRequestCount ?? 0),
-        edit: formatCompactNumber(totals?.imageEditRequestCount ?? 0),
-        blocked: formatCompactNumber(
-          totals?.imageGenerationCapabilityFailureCount ?? 0,
-        ),
-        defaultValue: "生成 {{generate}} / 编辑 {{edit}} / 权限 {{blocked}}",
-      }),
-    },
-    {
       key: "tokens",
       label: t("codex.localAccess.stats.tokens", "总 Token 数"),
       value: formatCompactNumber(totals?.totalTokens ?? 0),
@@ -2763,6 +2721,19 @@ export function CodexApiServicePage() {
       detail: t("codex.localAccess.stats.successRate", {
         rate: successRate,
         defaultValue: "成功率 {{rate}}%",
+      }),
+    },
+    {
+      key: "images",
+      label: t("codex.localAccess.stats.images", "图片请求"),
+      value: formatCompactNumber(totals?.imageRequestCount ?? 0),
+      detail: t("codex.localAccess.stats.imagesDetail", {
+        generate: formatCompactNumber(totals?.imageGenerationRequestCount ?? 0),
+        edit: formatCompactNumber(totals?.imageEditRequestCount ?? 0),
+        blocked: formatCompactNumber(
+          totals?.imageGenerationCapabilityFailureCount ?? 0,
+        ),
+        defaultValue: "生成 {{generate}} / 编辑 {{edit}} / 权限 {{blocked}}",
       }),
     },
   ];
@@ -2843,24 +2814,12 @@ export function CodexApiServicePage() {
                         : t("codex.localAccess.statusStopped", "未运行")
                       : t("codex.localAccess.statusDisabled", "已停用")}
                   </span>
-                  <SingleSelectDropdown
-                    value={gatewayMode}
-                    options={gatewayModeOptions}
-                    onChange={(value) =>
-                      void handleUpdateGatewayMode(
-                        value as CodexLocalAccessGatewayMode,
-                      )
-                    }
-                    className="codex-api-service-title-mode-select"
-                    menuClassName="codex-local-access-title-mode-menu"
-                    menuWidth={116}
-                    menuMaxHeight={120}
-                    disabled={busy || testDialogRunning || !collection}
-                    ariaLabel={t(
-                      "codex.localAccess.gatewayModeLabel",
-                      "网关模式",
-                    )}
-                  />
+                  <span
+                    className="codex-api-service-gateway-mode-label"
+                    title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
+                  >
+                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                  </span>
                 </div>
               </div>
             </div>

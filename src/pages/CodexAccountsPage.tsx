@@ -157,7 +157,6 @@ import type {
   CodexLocalAccessAddressKind,
   CodexLocalAccessAccountHealth,
   CodexLocalAccessCustomRoutingRule,
-  CodexLocalAccessGatewayMode,
   CodexLocalAccessOAuthQuotaReserve,
   CodexLocalAccessRoutingStrategy,
   CodexLocalAccessScope,
@@ -346,8 +345,6 @@ const CODEX_LOCAL_ACCESS_EXPANDED_KEY =
   "agtools.codex.local_access_entry_expanded.v1";
 const CODEX_LOCAL_ACCESS_ADDRESS_KIND_KEY =
   "agtools.codex.local_access_address_kind.v1";
-const CODEX_LOCAL_ACCESS_GATEWAY_GUIDE_DISMISSED_KEY =
-  "agtools.codex.api_service.gateway_guide.dismissed.v1";
 const DEFAULT_CODEX_API_PROVIDER_ID = OPENAI_OFFICIAL_PRESET_ID;
 const DEFAULT_CODEX_API_BASE_URL = OPENAI_OFFICIAL_BASE_URL;
 const CODEX_LOCAL_ACCESS_FALLBACK_PORT = 54140;
@@ -541,25 +538,6 @@ function persistLocalAccessAddressKind(
 ): void {
   try {
     localStorage.setItem(CODEX_LOCAL_ACCESS_ADDRESS_KIND_KEY, value);
-  } catch {
-    // ignore storage write failures
-  }
-}
-
-function readLocalAccessGatewayGuideDismissed(): boolean {
-  try {
-    return (
-      localStorage.getItem(CODEX_LOCAL_ACCESS_GATEWAY_GUIDE_DISMISSED_KEY) ===
-      "1"
-    );
-  } catch {
-    return false;
-  }
-}
-
-function persistLocalAccessGatewayGuideDismissed(): void {
-  try {
-    localStorage.setItem(CODEX_LOCAL_ACCESS_GATEWAY_GUIDE_DISMISSED_KEY, "1");
   } catch {
     // ignore storage write failures
   }
@@ -1168,11 +1146,6 @@ export function CodexAccountsPage() {
     [],
   );
 
-  const dismissLocalAccessGatewayGuide = useCallback(() => {
-    persistLocalAccessGatewayGuideDismissed();
-    setLocalAccessGatewayGuideDismissed(true);
-  }, []);
-
   const toggleGroupFilterValue = useCallback((groupId: string) => {
     setGroupFilter((prev) => {
       if (prev.includes(groupId)) return prev.filter((id) => id !== groupId);
@@ -1211,11 +1184,6 @@ export function CodexAccountsPage() {
       }
       return "grid";
     });
-  const [
-    localAccessGatewayGuideDismissed,
-    setLocalAccessGatewayGuideDismissed,
-  ] = useState(readLocalAccessGatewayGuideDismissed);
-
   const store = useCodexAccountStore();
   const codexInstanceStore = useCodexInstanceStore();
   const [cliLaunchingAccountId, setCliLaunchingAccountId] = useState<
@@ -7773,11 +7741,6 @@ export function CodexAccountsPage() {
     [setMessage, t],
   );
 
-  const openLocalAccessPanel = useCallback(() => {
-    setLocalAccessModalMode("panel");
-    setShowLocalAccessModal(true);
-  }, []);
-
   const openCodexApiServicePage = useCallback(() => {
     setShowLocalAccessModal(false);
     window.dispatchEvent(
@@ -8453,39 +8416,6 @@ export function CodexAccountsPage() {
       }
     },
     [setMessage, t],
-  );
-
-  const handleUpdateLocalAccessGatewayMode = useCallback(
-    async (gatewayMode: CodexLocalAccessGatewayMode) => {
-      if (
-        !localAccessCollection ||
-        localAccessCollection.gatewayMode === gatewayMode
-      ) {
-        return;
-      }
-      setLocalAccessSaving(true);
-      try {
-        const nextState =
-          await codexLocalAccessService.updateCodexLocalAccessGatewayMode(
-            gatewayMode,
-          );
-        setLocalAccessState(nextState);
-        setMessage({
-          text: t(
-            "codex.localAccess.gatewayModeSaveSuccess",
-            "API 服务网关模式已更新",
-          ),
-        });
-        dismissLocalAccessGatewayGuide();
-        return nextState;
-      } catch (error) {
-        console.error("Failed to update local access gateway mode:", error);
-        throw new Error(String(error).replace(/^Error:\s*/, ""));
-      } finally {
-        setLocalAccessSaving(false);
-      }
-    },
-    [dismissLocalAccessGatewayGuide, localAccessCollection, setMessage, t],
   );
 
   const handleToggleLocalAccessEnabled = useCallback(async () => {
@@ -9862,24 +9792,6 @@ export function CodexAccountsPage() {
             {renderAccountSpeedSelect(account)}
             <div className="card-footer">
               <div className="card-actions">
-                {isNewApiAccount && (
-                  <button
-                    className="card-action-btn"
-                    onClick={() => setCockpitApiPanelAccountId(account.id)}
-                    title={t("codex.cockpitApi.servicePanel", "服务面板")}
-                  >
-                    <Database size={14} />
-                  </button>
-                )}
-                {isSponsorApiKeyAccount && showApiKeyUsagePanel && (
-                  <button
-                    className="card-action-btn"
-                    onClick={() => setApiKeyUsageDetailAccountId(account.id)}
-                    title={t("codex.cockpitApi.servicePanel", "服务面板")}
-                  >
-                    <Database size={14} />
-                  </button>
-                )}
                 {!isApiKeyAccount && !isNewApiAccount && (
                   <button
                     className={`card-action-btn ${hasCodexAccountNoteDetails(account) ? "active" : ""}`}
@@ -10030,60 +9942,10 @@ export function CodexAccountsPage() {
       count: localAccessState?.memberCount ?? 0,
       defaultValue: "{{count}} 个账号",
     });
-    const localAccessGatewayMode =
-      localAccessCollection?.gatewayMode ?? "sidecar";
-    const localAccessGatewayModeOptions = [
-      {
-        value: "sidecar",
-        label: t("codex.localAccess.gatewayModeNewLabel", "API 服务-新"),
-      },
-      {
-        value: "legacy",
-        label: t("codex.localAccess.gatewayModeOldLabel", "API 服务-旧"),
-      },
-    ];
     const localAccessEmptyMessage = t(
       "codex.localAccess.emptyMembers",
       "当前集合暂无账号",
     );
-    const showLocalAccessGatewayGuide = !localAccessGatewayGuideDismissed;
-    const renderLocalAccessGatewayGuide = () =>
-      showLocalAccessGatewayGuide ? (
-        <div
-          className="codex-local-access-gateway-guide"
-          role="dialog"
-          aria-label={t(
-            "codex.localAccess.gatewayGuideTitle",
-            "这里可以切换网关",
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="codex-local-access-gateway-guide-close"
-            onClick={dismissLocalAccessGatewayGuide}
-            aria-label={t("common.close", "关闭")}
-          >
-            <X size={12} />
-          </button>
-          <div className="codex-local-access-gateway-guide-title">
-            {t("codex.localAccess.gatewayGuideTitle", "这里可以切换网关")}
-          </div>
-          <p>
-            {t(
-              "codex.localAccess.gatewayGuideDesc",
-              "默认使用新网关。如果遇到兼容性问题或客户端请求异常，可以在这里切换到旧网关。",
-            )}
-          </p>
-          <button
-            type="button"
-            className="codex-local-access-gateway-guide-action"
-            onClick={dismissLocalAccessGatewayGuide}
-          >
-            {t("codex.localAccess.gatewayGuideAction", "我知道了")}
-          </button>
-        </div>
-      ) : null;
 
     return (
       <div
@@ -10097,29 +9959,12 @@ export function CodexAccountsPage() {
             <>
               <div className="folder-inline-info">
                 <div className="codex-local-access-title-row">
-                  <div
-                    className="codex-local-access-title-mode-select"
-                    onClick={(event) => event.stopPropagation()}
+                  <span
+                    className="codex-local-access-gateway-mode-label"
+                    title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
                   >
-                    <SingleSelectDropdown
-                      value={localAccessGatewayMode}
-                      options={localAccessGatewayModeOptions}
-                      onChange={(value) =>
-                        void handleUpdateLocalAccessGatewayMode(
-                          value as CodexLocalAccessGatewayMode,
-                        )
-                      }
-                      disabled={!localAccessCollection || localAccessBusy}
-                      menuClassName="codex-local-access-title-mode-menu"
-                      menuWidth={116}
-                      menuMaxHeight={120}
-                      ariaLabel={t(
-                        "codex.localAccess.gatewayModeLabel",
-                        "网关模式",
-                      )}
-                    />
-                    {renderLocalAccessGatewayGuide()}
-                  </div>
+                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                  </span>
                 </div>
               </div>
             </>
@@ -10144,29 +9989,12 @@ export function CodexAccountsPage() {
             >
               <div className="folder-inline-info">
                 <div className="codex-local-access-title-row">
-                  <div
-                    className="codex-local-access-title-mode-select"
-                    onClick={(event) => event.stopPropagation()}
+                  <span
+                    className="codex-local-access-gateway-mode-label"
+                    title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
                   >
-                    <SingleSelectDropdown
-                      value={localAccessGatewayMode}
-                      options={localAccessGatewayModeOptions}
-                      onChange={(value) =>
-                        void handleUpdateLocalAccessGatewayMode(
-                          value as CodexLocalAccessGatewayMode,
-                        )
-                      }
-                      disabled={!localAccessCollection || localAccessBusy}
-                      menuClassName="codex-local-access-title-mode-menu"
-                      menuWidth={116}
-                      menuMaxHeight={120}
-                      ariaLabel={t(
-                        "codex.localAccess.gatewayModeLabel",
-                        "网关模式",
-                      )}
-                    />
-                    {renderLocalAccessGatewayGuide()}
-                  </div>
+                    {t("codex.localAccess.gatewayModeNewShort", "新")}
+                  </span>
                   <span className="codex-local-access-summary-text">
                     {localAccessMemberCountLabel}
                   </span>
@@ -10596,14 +10424,6 @@ export function CodexAccountsPage() {
                     ) : (
                       <Terminal size={14} />
                     )}
-                  </button>
-                  <button
-                    className="card-action-btn"
-                    onClick={openLocalAccessPanel}
-                    title={t("codex.localAccess.dashboardAction", "服务面板")}
-                    disabled={localAccessBusy}
-                  >
-                    <Database size={14} />
                   </button>
                   <button
                     className="card-action-btn"
@@ -11243,24 +11063,6 @@ export function CodexAccountsPage() {
           </td>
           <td className="sticky-action-cell table-action-cell">
             <div className="action-buttons">
-              {isNewApiAccount && (
-                <button
-                  className="action-btn"
-                  onClick={() => setCockpitApiPanelAccountId(account.id)}
-                  title={t("codex.cockpitApi.servicePanel", "服务面板")}
-                >
-                  <Database size={14} />
-                </button>
-              )}
-              {isSponsorApiKeyAccount && showApiKeyUsagePanel && (
-                <button
-                  className="action-btn"
-                  onClick={() => setApiKeyUsageDetailAccountId(account.id)}
-                  title={t("codex.cockpitApi.servicePanel", "服务面板")}
-                >
-                  <Database size={14} />
-                </button>
-              )}
               {!isApiKeyAccount && !isNewApiAccount && (
                 <button
                   className={`action-btn ${hasCodexAccountNoteDetails(account) ? "active" : ""}`}

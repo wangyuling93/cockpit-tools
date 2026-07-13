@@ -3405,13 +3405,6 @@ export function CodexModelProviderManager({
                     <div className="card-actions">
                       <button
                         className="card-action-btn"
-                        onClick={() => setProviderDetailId(provider.id)}
-                        title={t("codex.modelProviders.usage.detailTitle", "服务面板")}
-                      >
-                        <Database size={14} />
-                      </button>
-                      <button
-                        className="card-action-btn"
                         disabled={!primaryApiKey || usageState?.loading}
                         onClick={() =>
                           primaryApiKey &&

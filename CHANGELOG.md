@@ -7,6 +7,16 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [1.3.3] - 2026-07-13
+
+### Changed
+
+- **Removed the drop shadow from the Codex API Service tab bar**: Overview / Key / Accounts / Models / Logs use a flatter header.
+- **Reordered summary cards**: the Images card is now last in the overview stats row.
+- **Gateway mode shows only “New”**: the New/Old API Service dropdown and switch guide are gone; the UI always displays New.
+- **Hid Service Panel entry points**: service-panel buttons are no longer shown on account cards, table actions, the API Service entry card, or model-provider cards.
+
+---
 ## [1.3.2] - 2026-07-13
 
 ### Changed
