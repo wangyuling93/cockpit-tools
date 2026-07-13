@@ -71,6 +71,7 @@ import {
 } from './utils/externalProviderImport';
 import { runAutoBackupCycle } from './services/scheduledBackupService';
 import { prepareCodexLocalAccessForRestart } from './services/codexLocalAccessService';
+import { applyReducedMotion } from './utils/reducedMotion';
 import {
   emitActivePlatformFocus,
   resolvePlatformIdFromPage,
@@ -319,6 +320,7 @@ function normalizeStoredActivePage(value: string | null): Page | null {
 
 interface GeneralConfigTheme {
   theme: string;
+  reduced_motion_enabled: boolean;
   ui_scale?: number;
 }
 
@@ -1980,6 +1982,7 @@ function MainApp() {
 
   useEffect(() => {
     let cleanup: (() => void) | null = null;
+    let disposed = false;
 
     const applyTheme = (newTheme: string) => {
       if (newTheme === 'system') {
@@ -2019,11 +2022,17 @@ function MainApp() {
       };
     };
 
-    const initTheme = async () => {
+    const syncVisualConfig = async () => {
       try {
         const config = await invoke<GeneralConfigTheme>('get_general_config');
+        if (disposed) {
+          return;
+        }
         applyTheme(config.theme);
+        applyReducedMotion(config.reduced_motion_enabled);
         void applyUiScale(config.ui_scale);
+        cleanup?.();
+        cleanup = null;
         if (config.theme === 'system') {
           cleanup = watchSystemTheme();
         }
@@ -2032,12 +2041,13 @@ function MainApp() {
       }
     };
 
-    initTheme();
+    void syncVisualConfig();
+    window.addEventListener('config-updated', syncVisualConfig);
 
     return () => {
-      if (cleanup) {
-        cleanup();
-      }
+      disposed = true;
+      window.removeEventListener('config-updated', syncVisualConfig);
+      cleanup?.();
     };
   }, []);
 

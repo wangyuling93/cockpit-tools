@@ -1000,6 +1000,11 @@
   transform: rotate(180deg);
 }
 
+html[data-reduced-motion="true"] .codex-api-service-summary-card:hover,
+html[data-reduced-motion="true"] .codex-api-service-key-advanced-toggle[aria-expanded="true"] .codex-api-service-key-advanced-state svg {
+  transform: none;
+}
+
 .codex-api-service-key-policy {
   display: grid;
   gap: 9px;
@@ -1829,8 +1834,15 @@
   min-width: 0;
 }
 
-.codex-api-service-log-row > div:first-child {
-  justify-content: space-between;
+.codex-api-service-log-row:not(.codex-api-service-stat-row) {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 2fr);
+}
+
+.codex-api-service-log-row:not(.codex-api-service-stat-row) > div:first-child {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
 }
 
 .codex-api-service-log-row strong {
@@ -1998,6 +2010,16 @@
 
   .codex-api-service-log-row {
     grid-template-columns: 1fr;
+  }
+
+  .codex-api-service-log-row:not(.codex-api-service-stat-row) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .codex-api-service-log-row:not(.codex-api-service-stat-row) > div:first-child {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .codex-api-service-pricing-overlay {
