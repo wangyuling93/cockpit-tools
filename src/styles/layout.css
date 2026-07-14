@@ -923,8 +923,118 @@ html[data-theme="dark"] .side-nav-classic-handle:hover {
   to { opacity: 1; transform: translate(0, -50%); }
 }
 
+@keyframes slideInTop {
+  from { opacity: 0; transform: translate(-50%, -16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Narrow window (app minWidth 640): original capsule nav → top horizontal center */
 @media (max-width: 640px) {
-  .side-nav-update-entry {
-    bottom: calc(100% + 8px);
+  .side-nav:not(.side-nav-classic) {
+    inset-inline-start: 50%;
+    top: 52px;
+    bottom: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100vw - 24px);
+    height: auto;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    gap: 10px;
+    animation: slideInTop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-brand {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+  }
+
+  .side-nav:not(.side-nav-classic) .brand-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-items {
+    flex-direction: row;
+    flex: 0 1 auto;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-item {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-footer {
+    margin-top: 0;
+    flex: 0 0 auto;
+  }
+
+  /* Update chip sits under the bar so it clears the titlebar */
+  .side-nav:not(.side-nav-classic) .side-nav-update-entry {
+    bottom: auto;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-item .tooltip {
+    inset-inline-start: 50%;
+    top: calc(100% + 8px);
+    bottom: auto;
+    transform: translateX(-50%) translateY(-6px);
+  }
+
+  .side-nav:not(.side-nav-classic) .nav-item:hover .tooltip {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .side-nav:not(.side-nav-classic) .side-nav-layout-switch-trigger {
+    position: static;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    width: 24px;
+    height: 28px;
+    flex: 0 0 auto;
+  }
+
+  .side-nav:not(.side-nav-classic) .side-nav-layout-switch-trigger .tooltip {
+    top: calc(100% + 8px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(-6px);
+  }
+
+  .side-nav:not(.side-nav-classic) .side-nav-layout-switch-trigger:hover .tooltip {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .side-nav:not(.side-nav-classic) .side-nav-more-popover {
+    left: 50%;
+    right: auto;
+    top: calc(100% + 10px);
+    transform: translateX(-50%);
+    width: min(240px, calc(100vw - 32px));
+  }
+
+  /* Free horizontal space previously reserved for the left capsule */
+  .app-container:not(.app-container-side-nav-classic) .main-wrapper {
+    margin-inline-start: 0;
+    padding: 118px 18px 24px;
+    padding-inline-end: 18px;
+  }
+
+  .app-container:not(.app-container-side-nav-classic) .app-global-promo-layer {
+    top: 118px;
+    right: 18px;
   }
 }

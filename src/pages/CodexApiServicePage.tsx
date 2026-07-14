@@ -82,6 +82,7 @@ import { SingleSelectDropdown } from "../components/SingleSelectDropdown";
 import { CodexLocalAccessModal } from "../components/CodexLocalAccessModal";
 import { PaginationControls } from "../components/PaginationControls";
 import { useCodexAccountOverviewMemberView } from "../hooks/useCodexAccountOverviewMemberView";
+import { useAutoDismissText } from "../hooks/useAutoDismissMessage";
 import "./CodexApiServicePage.css";
 
 type ServiceTab = "overview" | "keys" | "accounts" | "models" | "logs";
@@ -610,7 +611,7 @@ export function CodexApiServicePage() {
   const [testDialogError, setTestDialogError] = useState("");
   const [portKilling, setPortKilling] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useAutoDismissText();
   const [copiedField, setCopiedField] = useState<CopyField | null>(null);
   const [keyVisible, setKeyVisible] = useState(false);
   const [portInput, setPortInput] = useState("");
@@ -1027,14 +1028,16 @@ export function CodexApiServicePage() {
     [currentGroup, t],
   );
 
-  const reloadState = useCallback(async () => {
+  const reloadState = useCallback(async (options?: { preserveDrafts?: boolean }) => {
     const nextState = await codexLocalAccessService.getCodexLocalAccessState();
     if (!mountedRef.current) return nextState;
     setState(nextState);
-    setPortInput(
-      nextState.collection?.port ? String(nextState.collection.port) : "",
-    );
-    setProxyInput(nextState.collection?.upstreamProxyUrl ?? "");
+    if (!options?.preserveDrafts) {
+      setPortInput(
+        nextState.collection?.port ? String(nextState.collection.port) : "",
+      );
+      setProxyInput(nextState.collection?.upstreamProxyUrl ?? "");
+    }
     return nextState;
   }, []);
 
@@ -1072,6 +1075,17 @@ export function CodexApiServicePage() {
       window.removeEventListener("codex-local-access-state-updated", onUpdated);
     };
   }, [fetchAccounts, fetchCurrentAccount, reloadState]);
+
+  // Auto-refresh stats every 10s while the API service is running.
+  useEffect(() => {
+    if (!state?.running) return;
+    const timer = window.setInterval(() => {
+      void reloadState({ preserveDrafts: true }).catch(() => {
+        // Keep silent on background refresh failures.
+      });
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [state?.running, reloadState]);
 
   useEffect(() => {
     let disposed = false;
@@ -2871,6 +2885,14 @@ export function CodexApiServicePage() {
               <div className="codex-api-service-message error">
                 <CircleAlert size={15} />
                 <span>{error}</span>
+                <button
+                  type="button"
+                  className="codex-api-service-message-close"
+                  onClick={() => setError("")}
+                  aria-label={t("common.close", "关闭")}
+                >
+                  <X size={14} />
+                </button>
               </div>
             )}
             {state?.lastError && (
@@ -2892,6 +2914,14 @@ export function CodexApiServicePage() {
               <div className="codex-api-service-message success">
                 <Check size={15} />
                 <span>{notice}</span>
+                <button
+                  type="button"
+                  className="codex-api-service-message-close"
+                  onClick={() => setNotice("")}
+                  aria-label={t("common.close", "关闭")}
+                >
+                  <X size={14} />
+                </button>
               </div>
             )}
             {pricingRepriceActive && (

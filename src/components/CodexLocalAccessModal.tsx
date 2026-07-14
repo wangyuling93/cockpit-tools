@@ -72,6 +72,7 @@ import {
 import { SingleSelectDropdown } from "./SingleSelectDropdown";
 import { PaginationControls } from "./PaginationControls";
 import { useEscClose } from "../hooks/useEscClose";
+import { useAutoDismissText } from "../hooks/useAutoDismissMessage";
 import {
   buildPaginationPageSizeStorageKey,
   usePagination,
@@ -352,7 +353,7 @@ export function CodexLocalAccessModal({
   const [restrictFreeAccounts, setRestrictFreeAccounts] = useState(true);
   const [membersDraftDirty, setMembersDraftDirty] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useAutoDismissText();
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testDialogRunning, setTestDialogRunning] = useState(false);
   const [testChatMessages, setTestChatMessages] = useState<TestChatMessage[]>(
@@ -2198,6 +2199,14 @@ export function CodexLocalAccessModal({
               <div className="codex-local-access-inline-error">
                 <CircleAlert size={14} />
                 <span>{error}</span>
+                <button
+                  type="button"
+                  className="codex-local-access-inline-close"
+                  onClick={() => setError("")}
+                  aria-label={t("common.close", "关闭")}
+                >
+                  <X size={14} />
+                </button>
               </div>
             )}
 
@@ -2205,6 +2214,14 @@ export function CodexLocalAccessModal({
               <div className="codex-local-access-inline-success">
                 <Check size={14} />
                 <span>{notice}</span>
+                <button
+                  type="button"
+                  className="codex-local-access-inline-close"
+                  onClick={() => setNotice("")}
+                  aria-label={t("common.close", "关闭")}
+                >
+                  <X size={14} />
+                </button>
               </div>
             )}
 

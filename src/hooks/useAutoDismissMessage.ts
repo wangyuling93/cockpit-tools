@@ -24,3 +24,21 @@ export function useAutoDismissMessage<T extends MessageLike = MessageLike>(
 
   return [message, setMessage];
 }
+
+/**
+ * String notice state (e.g. API Service success banners) that auto-clears after a delay.
+ * Empty string is treated as “no notice”.
+ */
+export function useAutoDismissText(
+  delayMs: number = DEFAULT_DISMISS_MS,
+): [string, Dispatch<SetStateAction<string>>] {
+  const [text, setText] = useState('');
+
+  useEffect(() => {
+    if (!text) return;
+    const timer = window.setTimeout(() => setText(''), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [text, delayMs]);
+
+  return [text, setText];
+}

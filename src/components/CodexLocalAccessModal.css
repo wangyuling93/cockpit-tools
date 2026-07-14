@@ -545,6 +545,26 @@
   line-height: 1.55;
 }
 
+.codex-local-access-inline-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.06);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.codex-local-access-inline-close:hover {
+  background: rgba(15, 23, 42, 0.12);
+}
+
 .codex-local-access-inline-error-with-action {
   align-items: center;
 }

@@ -277,12 +277,33 @@
 }
 
 .codex-api-service-message span {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .codex-api-service-message svg {
   flex: 0 0 auto;
+}
+
+.codex-api-service-message-close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.06);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.codex-api-service-message-close:hover {
+  background: rgba(15, 23, 42, 0.12);
 }
 
 .codex-api-service-message.error {
