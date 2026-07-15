@@ -409,3 +409,107 @@ sha256: A3B3BA20255F7702040D9D99593756D22AFABF539C047365766D459453987870
 - Unauthenticated `GET /v1/models`: HTTP `401`, confirming the restarted
   API service is reachable and enforces authentication without exposing a
   client API Key in the verification record.
+
+## Upstream 1.3.2 Sync And Archive
+
+Sync completed on 2026-07-15:
+
+- Fetched official `origin/main` at `0a5a1d46` and release tag `v1.3.2` at
+  `a84a97cb`.
+- Merged `origin/main` into `feature/api-key-routing-usage` as `b6c2b054`
+  (`merge: sync upstream 1.3.2`).
+- Adopted version `1.3.2` consistently in the npm, Cargo, and Tauri metadata.
+- Preserved the pre-merge line-ending-only worktree state in the stash named
+  `pre-v1.3.2 worktree line-ending state`; those files had no text diff.
+- Resolved the only content conflicts in
+  `src-tauri/src/modules/codex_local_access.rs` and `src/types/codex.ts`.
+
+The merged branch retains all downstream behavior:
+
+- Per-client-Key inherited or explicit Codex account pools.
+- Ordered per-Key account priorities, immediate priority hot reload, existing
+  session affinity, and fallback to the next usable account.
+- Per-Key request, token, success-rate, and estimated-cost reporting.
+- Local calendar periods: today begins at local midnight, the week begins on
+  Monday, and the month begins on its first day.
+- Spark quota visibility, Spark model selection, and a complete local Codex
+  profile model catalog containing `gpt-5.3-codex-spark`.
+
+The branch also retains official 1.3.2 behavior, including random routing,
+immediate SSE response configuration, current model pricing and historical
+repricing, Codex local import changes, and the Windsurf-to-Devin path update.
+During the merge, official historical-repricing code still referenced rolling
+24-hour, 7-day, and 30-day constants removed by the calendar-period fix. It
+was changed to use `calendar_stats_window_starts` so repriced costs use the
+same day/week/month boundaries as the visible Key statistics.
+
+GitHub thread `#1470` records the maintainer response that the contribution
+had merge conflicts and required time to review and validate. This sync
+addresses the requested first step: the contribution is now based on the
+latest official code and has fresh verification evidence. Do not merge PR
+`#1540` wholesale into this branch; its useful Spark quota visibility change
+is already present here, while its broader history is unrelated to the Key
+routing feature and it does not solve Codex profile model-catalog discovery.
+
+Verification after the 1.3.2 merge:
+
+- `npm run typecheck`: passed.
+- `go test ./...` in `sidecars/cockpit-cliproxy`: passed.
+- `custom_api_key_scope_filters_duplicates_and_updates_manifest_scope`: passed.
+- `api_key_priority_queue_respects_custom_scope_session_affinity_and_fallbacks`:
+  passed.
+- `api_key_usage_stats_are_isolated_by_time_window`: passed.
+- `local_access_takeover_writes_a_complete_model_catalog`: passed.
+- `random_routing_serializes_and_keeps_all_candidates`: passed.
+- `cargo fmt --all -- --check` reports formatting differences in official
+  1.3.2 files. It did not modify the worktree and is not a functional failure.
+- Tauri release build with `COCKPIT_SKIP_CLIPROXY_BUILD=1` and
+  `src-tauri/tauri.ci.conf.json`: passed.
+
+Go `1.26.5` is now available on this machine. The Windows sidecar was rebuilt
+from the merged source instead of reusing the older binary:
+
+```text
+sidecars/cockpit-cliproxy/bin/cockpit-cliproxy-x86_64-pc-windows-msvc.exe
+size: 19335680 bytes
+time: 2026-07-15 10:10:12 +08:00
+sha256: E29B90B89D0242D8BFB4A568411A9E6F4BF967BC884EC96BE57D8DC0F0DD786B
+```
+
+Packaged artifacts:
+
+```text
+target/release/bundle/nsis/Cockpit Tools_1.3.2_x64-setup.exe
+size: 27919295 bytes
+time: 2026-07-15 10:26:22 +08:00
+sha256: FA6F70FCA47D1E74D03C848B91E1E8247E66D99204262C1E685B542F715C57AD
+
+target/release/bundle/msi/Cockpit Tools_1.3.2_x64_en-US.msi
+size: 38150144 bytes
+time: 2026-07-15 10:25:30 +08:00
+sha256: 328A55A13C4A3BF5C0C0148FF71E45BBE06D444F41B8DA90372B17596143FC00
+
+target/release/cockpit-tools.exe
+size: 83955200 bytes
+time: 2026-07-15 10:25:14 +08:00
+sha256: C927C4C260F17C180A9B249BF4BAB1BEF6574CA8ABC0311F1AC0C38CC80BE69E
+```
+
+The 1.3.2 package was built but not installed during this archive operation,
+so the running Cockpit Tools process and active API sessions were not stopped.
+
+The full downstream delta from official commit `0a5a1d46` is archived at:
+
+```text
+docs/maintenance/patches/cockpit-tools-1.3.2-api-key-routing-usage.patch
+```
+
+Restore that snapshot on the exact official base with:
+
+```powershell
+git switch -c recover/api-key-routing-1.3.2 0a5a1d46
+git apply --3way docs/maintenance/patches/cockpit-tools-1.3.2-api-key-routing-usage.patch
+```
+
+Preferred recovery remains fetching the complete feature branch from the
+personal fork because it preserves commit history and merge decisions.
