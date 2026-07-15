@@ -62,6 +62,7 @@ import {
 import {
   getCodexLocalAccessAccountIneligibleReason,
   isCodexLocalAccessEligibleAccount,
+  resolveCodexLocalAccessInitialAccountIds,
 } from "../utils/codexLocalAccessAccounts";
 import { isBlockingCodexQuotaError } from "../utils/codexQuotaError";
 import { AccountTagFilterDropdown } from "./AccountTagFilterDropdown";
@@ -71,6 +72,13 @@ import {
 } from "./MultiSelectFilterDropdown";
 import { SingleSelectDropdown } from "./SingleSelectDropdown";
 import { PaginationControls } from "./PaginationControls";
+import { CodexStatsRangePicker } from "./CodexStatsRangePicker";
+import { queryCodexLocalAccessStats } from "../services/codexLocalAccessService";
+import {
+  buildCodexStatsTimeRange,
+  type CodexStatsRangeKey,
+  type CodexStatsTimeRange,
+} from "../utils/codexStatsRange";
 import { useEscClose } from "../hooks/useEscClose";
 import { useAutoDismissText } from "../hooks/useAutoDismissMessage";
 import {
@@ -109,6 +117,7 @@ interface CodexLocalAccessModalProps {
   addressOptions: Array<{ value: string; label: string }>;
   onAddressKindChange: (value: string) => void;
   accounts: CodexAccount[];
+  accountsLoaded: boolean;
   accountGroups: CodexAccountGroup[];
   memberView?: CodexLocalAccessMemberViewConfig;
   initialSelectedIds: string[];
@@ -150,7 +159,6 @@ interface CodexLocalAccessModalProps {
   portCleanupBusy: boolean;
 }
 
-type StatsRangeKey = "daily" | "weekly" | "monthly";
 type CopyableField = "apiPortUrl" | "baseUrl" | "apiKey" | "modelId";
 
 interface AccountPoolHealthSummary {
@@ -196,7 +204,7 @@ function normalizeAccessScope(value: string): CodexLocalAccessScope {
 
 function normalizeStatsRangeKey(
   value: string | null | undefined,
-): StatsRangeKey {
+): CodexStatsRangeKey {
   if (value === "weekly" || value === "monthly") {
     return value;
   }
@@ -224,7 +232,7 @@ function normalizeCustomRoutingWeight(value: number): number {
   );
 }
 
-function readStoredStatsRange(): StatsRangeKey {
+function readStoredStatsRange(): CodexStatsRangeKey {
   try {
     return normalizeStatsRangeKey(
       localStorage.getItem(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY),
@@ -234,7 +242,7 @@ function readStoredStatsRange(): StatsRangeKey {
   }
 }
 
-function persistStatsRange(value: StatsRangeKey): void {
+function persistStatsRange(value: CodexStatsRangeKey): void {
   try {
     localStorage.setItem(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY, value);
   } catch {
@@ -253,6 +261,14 @@ function formatLatencyMs(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "--";
   if (value >= 1000) return `${(value / 1000).toFixed(2)}s`;
   return `${Math.round(value)}ms`;
+}
+
+function formatUsdCost(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0.00";
+  if (value < 0.000001) return "<$0.000001";
+  if (value < 0.01) return `$${value.toFixed(6)}`;
+  if (value < 1) return `$${value.toFixed(4)}`;
+  return `$${value.toFixed(2)}`;
 }
 
 function createTestChatMessage(
@@ -320,6 +336,7 @@ export function CodexLocalAccessModal({
   addressOptions,
   onAddressKindChange,
   accounts,
+  accountsLoaded,
   accountGroups,
   memberView,
   initialSelectedIds,
@@ -366,9 +383,16 @@ export function CodexLocalAccessModal({
   const [keyVisible, setKeyVisible] = useState(false);
   const [copiedField, setCopiedField] = useState<CopyableField | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [statsRange, setStatsRange] = useState<StatsRangeKey>(() =>
+  const [statsRange, setStatsRange] = useState<CodexStatsRangeKey>(() =>
     readStoredStatsRange(),
   );
+  const [statsTimeRange, setStatsTimeRange] = useState<CodexStatsTimeRange>(() =>
+    buildCodexStatsTimeRange(readStoredStatsRange()),
+  );
+  const [filteredStatsWindow, setFilteredStatsWindow] =
+    useState<CodexLocalAccessStatsWindow | null>(null);
+  const [statsRangeError, setStatsRangeError] = useState("");
+  const statsRequestSeqRef = useRef(0);
   const [customRoutingOpen, setCustomRoutingOpen] = useState(false);
   const [customRoutingQuery, setCustomRoutingQuery] = useState("");
   const [customRoutingFilterTypes, setCustomRoutingFilterTypes] = useState<
@@ -406,21 +430,6 @@ export function CodexLocalAccessModal({
     addressKind === "lan" && state?.lanBaseUrl ? state.lanBaseUrl : baseUrl;
   const modelIds = state?.modelIds ?? [];
   const stats = state?.stats;
-  const statsRangeOptions = useMemo(
-    () =>
-      [
-        { key: "daily", label: t("codex.localAccess.statsRange.daily", "日") },
-        {
-          key: "weekly",
-          label: t("codex.localAccess.statsRange.weekly", "周"),
-        },
-        {
-          key: "monthly",
-          label: t("codex.localAccess.statsRange.monthly", "月"),
-        },
-      ] satisfies Array<{ key: StatsRangeKey; label: string }>,
-    [t],
-  );
   const quotaPoolLabels = useMemo(
     () => ({
       hourly: t("codex.localAccess.quotaPool.hourlyShort", "5h"),
@@ -431,9 +440,10 @@ export function CodexLocalAccessModal({
   );
   const selectedStatsWindow =
     useMemo<CodexLocalAccessStatsWindow | null>(() => {
-      if (!stats) return null;
+      if (filteredStatsWindow) return filteredStatsWindow;
+      if (!stats || statsRange === "custom") return null;
       return stats[statsRange];
-    }, [stats, statsRange]);
+    }, [filteredStatsWindow, stats, statsRange]);
   const selectedTotals = selectedStatsWindow?.totals;
   const routingStrategy = collection?.routingStrategy ?? "auto";
   const accessScope = collection?.accessScope ?? "localhost";
@@ -481,6 +491,7 @@ export function CodexLocalAccessModal({
     });
   const testDialogBusy = testDialogRunning || testing;
   const actionBusy = saving || testing || starting || portCleanupBusy;
+  const membersInteractionDisabled = actionBusy || !accountsLoaded;
   const summaryStats = useMemo(
     () => [
       {
@@ -511,6 +522,15 @@ export function CodexLocalAccessModal({
           reasoning: formatCompactNumber(selectedTotals?.reasoningTokens ?? 0),
           defaultValue: "缓存 {{cached}} / 思考 {{reasoning}}",
         }),
+      },
+      {
+        key: "cost",
+        label: t("codex.localAccess.stats.estimatedCost", "估算价值"),
+        value: formatUsdCost(selectedTotals?.estimatedCostUsd ?? 0),
+        detail: t(
+          "codex.localAccess.stats.estimatedCostDetail",
+          "按当前请求价格快照累计",
+        ),
       },
       {
         key: "latency",
@@ -583,19 +603,21 @@ export function CodexLocalAccessModal({
     return summary;
   }, [collection?.accountIds, localAccessAccounts, state?.accountHealth]);
   const initialRestrictFreeAccounts = collection?.restrictFreeAccounts ?? true;
-  const normalizedInitialSelectedIds = useMemo(() => {
-    const accountById = new Map(
-      localAccessAccounts.map((account) => [account.id, account]),
-    );
-    return initialSelectedIds.filter((accountId) => {
-      const account = accountById.get(accountId);
-      if (!account) return false;
-      return isCodexLocalAccessEligibleAccount(
-        account,
+  const normalizedInitialSelectedIds = useMemo(
+    () =>
+      resolveCodexLocalAccessInitialAccountIds(
+        initialSelectedIds,
+        localAccessAccounts,
         initialRestrictFreeAccounts,
-      );
-    });
-  }, [initialSelectedIds, initialRestrictFreeAccounts, localAccessAccounts]);
+        accountsLoaded,
+      ),
+    [
+      accountsLoaded,
+      initialSelectedIds,
+      initialRestrictFreeAccounts,
+      localAccessAccounts,
+    ],
+  );
 
   useEffect(() => {
     if (!isOpen || mode !== "members") {
@@ -686,6 +708,34 @@ export function CodexLocalAccessModal({
   useEffect(() => {
     persistStatsRange(statsRange);
   }, [statsRange]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const requestSeq = ++statsRequestSeqRef.current;
+    setStatsRangeError("");
+    void queryCodexLocalAccessStats(statsTimeRange.startAt, statsTimeRange.endAt)
+      .then((window) => {
+        if (requestSeq === statsRequestSeqRef.current) setFilteredStatsWindow(window);
+      })
+      .catch((err) => {
+        if (requestSeq === statsRequestSeqRef.current) {
+          setStatsRangeError(String(err).replace(/^Error:\s*/, ""));
+        }
+      });
+  }, [isOpen, stats?.updatedAt, statsTimeRange.endAt, statsTimeRange.startAt]);
+
+  const handleStatsPresetChange = (
+    key: Exclude<CodexStatsRangeKey, "custom">,
+    range: CodexStatsTimeRange,
+  ) => {
+    setStatsRange(key);
+    setStatsTimeRange(range);
+  };
+
+  const handleCustomStatsRangeApply = (range: CodexStatsTimeRange) => {
+    setStatsRange("custom");
+    setStatsTimeRange(range);
+  };
 
   useEffect(() => {
     if (!testDialogOpen) return;
@@ -1349,7 +1399,9 @@ export function CodexLocalAccessModal({
   };
 
   const toggleSelectAllVisible = () => {
-    if (actionBusy || visibleEnabledAccounts.length === 0) return;
+    if (membersInteractionDisabled || visibleEnabledAccounts.length === 0) {
+      return;
+    }
     setMembersDraftDirty(true);
     setSelected((prev) => {
       const next = new Set(prev);
@@ -1367,13 +1419,13 @@ export function CodexLocalAccessModal({
   };
 
   const handleToggleRestrictFreeAccounts = async () => {
-    if (actionBusy) return;
+    if (membersInteractionDisabled) return;
     setMembersDraftDirty(true);
     setRestrictFreeAccounts((prev) => !prev);
   };
 
   const toggleSelect = (accountId: string) => {
-    if (actionBusy) return;
+    if (membersInteractionDisabled) return;
     const account = localAccessAccountById.get(accountId);
     if (!account) return;
     const isSelectionBlocked =
@@ -1395,6 +1447,7 @@ export function CodexLocalAccessModal({
   };
 
   const handleSaveMembers = async () => {
+    if (!accountsLoaded) return;
     setError("");
     setNotice("");
     try {
@@ -1526,7 +1579,7 @@ export function CodexLocalAccessModal({
   };
 
   const toggleMemberBackup = (accountId: string) => {
-    if (actionBusy) return;
+    if (membersInteractionDisabled) return;
     if (!selected.has(accountId)) {
       setMembersDraftDirty(true);
       setSelected((prev) => {
@@ -1557,7 +1610,7 @@ export function CodexLocalAccessModal({
 
   const confirmMemberBackup = () => {
     const accountId = backupConfirmAccountId;
-    if (!accountId || actionBusy) return;
+    if (!accountId || membersInteractionDisabled) return;
     setMembersDraftDirty(true);
     setCustomRoutingDraft((prev) => {
       const current = prev[accountId] ??
@@ -2233,30 +2286,15 @@ export function CodexLocalAccessModal({
                     <span>{t("codex.localAccess.statsTitle", "总量统计")}</span>
                   </div>
                   <div className="codex-local-access-summary-actions">
-                    <div
-                      className="codex-local-access-stats-range-tabs"
-                      role="tablist"
-                      aria-label={t(
-                        "codex.localAccess.statsRange.label",
-                        "统计范围",
-                      )}
-                    >
-                      {statsRangeOptions.map((option) => (
-                        <button
-                          key={option.key}
-                          type="button"
-                          role="tab"
-                          className={`codex-local-access-stats-range-tab${
-                            statsRange === option.key ? " is-active" : ""
-                          }`}
-                          aria-selected={statsRange === option.key}
-                          onClick={() => setStatsRange(option.key)}
-                          disabled={actionBusy}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
+                    <CodexStatsRangePicker
+                      value={statsRange}
+                      range={statsTimeRange}
+                      onPresetChange={handleStatsPresetChange}
+                      onCustomApply={handleCustomStatsRangeApply}
+                      disabled={actionBusy}
+                      error={statsRangeError}
+                      compact
+                    />
                     <button
                       type="button"
                       className="btn btn-danger btn-sm"
@@ -2760,7 +2798,7 @@ export function CodexLocalAccessModal({
                         type="checkbox"
                         checked={restrictFreeAccounts}
                         onChange={() => void handleToggleRestrictFreeAccounts()}
-                        disabled={actionBusy}
+                        disabled={membersInteractionDisabled}
                       />
                       <span>
                         {t(
@@ -2911,13 +2949,20 @@ export function CodexLocalAccessModal({
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
-                    disabled={actionBusy || visibleEnabledAccounts.length === 0}
+                    disabled={
+                      membersInteractionDisabled ||
+                      visibleEnabledAccounts.length === 0
+                    }
                   />
                   <div className="group-account-main" />
                 </div>
 
                 <div className="group-account-list codex-local-access-member-list">
-                  {localAccessAccounts.length === 0 ? (
+                  {!accountsLoaded ? (
+                    <div className="group-account-empty">
+                      {t("common.loading", "加载中...")}
+                    </div>
+                  ) : localAccessAccounts.length === 0 ? (
                     <div className="group-account-empty">
                       {t(
                         "codex.localAccess.modal.empty",
@@ -2963,7 +3008,8 @@ export function CodexLocalAccessModal({
                             className="codex-local-access-member-select"
                             checked={isChecked}
                             disabled={
-                              actionBusy || isChatCompletionsApiKeyUnsupported
+                              membersInteractionDisabled ||
+                              isChatCompletionsApiKeyUnsupported
                             }
                             onChange={() => toggleSelect(account.id)}
                             aria-label={maskAccountText(
@@ -2979,7 +3025,7 @@ export function CodexLocalAccessModal({
                                   presentation.displayName,
                                 )}
                                 disabled={
-                                  actionBusy ||
+                                  membersInteractionDisabled ||
                                   isChatCompletionsApiKeyUnsupported
                                 }
                                 onClick={() => toggleSelect(account.id)}
@@ -3002,7 +3048,7 @@ export function CodexLocalAccessModal({
                                       "codex.localAccess.customRoutingBackupTitle",
                                       "备用账号",
                                     )}
-                                    disabled={actionBusy}
+                                    disabled={membersInteractionDisabled}
                                     onClick={(event) => {
                                       event.preventDefault();
                                       event.stopPropagation();
@@ -3081,14 +3127,13 @@ export function CodexLocalAccessModal({
                 <button
                   className="btn btn-secondary"
                   onClick={onClose}
-                  disabled={actionBusy}
                 >
                   {t("common.cancel")}
                 </button>
                 <button
                   className="btn btn-primary"
                   onClick={() => void handleSaveMembers()}
-                  disabled={actionBusy || !selectionDirty}
+                  disabled={membersInteractionDisabled || !selectionDirty}
                 >
                   {saving
                     ? t("common.saving")
@@ -3099,7 +3144,6 @@ export function CodexLocalAccessModal({
               <button
                 className="btn btn-secondary"
                 onClick={onClose}
-                disabled={actionBusy}
               >
                 {t("common.close")}
               </button>

@@ -44,6 +44,7 @@ import {
   isCodexNewApiAccount,
   isCodexPendingOAuthAccount,
 } from "../types/codex";
+import { withCodexPlanBadgeStyle } from "../utils/codexPreferences";
 import {
   formatClaudeResetTime,
   getClaudeAccountDisplayEmail,
@@ -775,7 +776,7 @@ export function buildCodexAccountPresentation(
     id: account.id,
     displayName,
     planLabel: planBadge.label,
-    planClass: planBadge.className,
+    planClass: withCodexPlanBadgeStyle(planBadge.className),
     quotaItems,
   };
 }

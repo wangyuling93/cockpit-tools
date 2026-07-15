@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum CodexLocalAccessRoutingStrategy {
     Auto,
+    Random,
     SingleAccount,
     QuotaHighFirst,
     QuotaLowFirst,
@@ -482,6 +483,8 @@ pub struct CodexLocalAccessCollection {
     pub restrict_free_accounts: bool,
     #[serde(default = "default_true")]
     pub debug_logs: bool,
+    #[serde(default)]
+    pub immediate_sse_response: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bound_oauth_account_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

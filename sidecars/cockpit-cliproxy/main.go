@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -88,6 +89,7 @@ type manifest struct {
 	ExcludedModels     []string            `json:"excludedModels"`
 	RoutingStrategy    string              `json:"routingStrategy"`
 	CustomRoutingRules []customRoutingRule `json:"customRoutingRules"`
+	ImmediateSSEResponse bool              `json:"immediateSseResponse"`
 	DebugLogs          *bool               `json:"debugLogs,omitempty"`
 
 	apiKeyByValue     map[string]*apiKeySpec
@@ -1945,6 +1947,13 @@ func (s *cockpitSelector) orderAuths(auths []*coreauth.Auth, start int) []*corea
 		return auths
 	}
 	strategy := strings.TrimSpace(strings.ToLower(s.manifest.RoutingStrategy))
+	if strategy == "random" {
+		out := append([]*coreauth.Auth(nil), auths...)
+		rand.Shuffle(len(out), func(i, j int) {
+			out[i], out[j] = out[j], out[i]
+		})
+		return out
+	}
 	if strategy == "custom" {
 		return s.orderCustom(auths, start)
 	}
@@ -3053,6 +3062,9 @@ func (s *relayServer) router() *gin.Engine {
 	router.GET("/v1/models", s.handleModels)
 	router.POST("/v1/responses", s.handleResponses)
 	router.POST("/v1/responses/compact", s.handleResponsesCompact)
+	// Compatibility: some clients set chat-completions base and still append /v1/responses.
+	router.POST("/v1/chat/completions/v1/responses", s.handleResponses)
+	router.POST("/v1/chat/completions/v1/responses/compact", s.handleResponsesCompact)
 	router.POST("/v1/chat/completions", s.handleChatCompletions)
 	router.POST(anthropicMessagesPath, s.handleAnthropicMessages)
 	router.POST(anthropicCountTokensPath, s.handleAnthropicCountTokens)
@@ -4446,6 +4458,20 @@ func (s *relayServer) handleStream(c *gin.Context, body []byte, model string, so
 	req, opts := buildExecutorRequest(c, body, model, sourceFormat, alt, true)
 	startedAt := time.Now()
 	timeouts := s.streamTimeoutsForRequest(c.Request, body, model)
+	immediateSSE := s.manifest != nil && s.manifest.ImmediateSSEResponse
+	var immediateFlusher http.Flusher
+	if immediateSSE {
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			writeAPIError(c, http.StatusInternalServerError, "streaming not supported", "streaming_not_supported")
+			return
+		}
+		setEventStreamHeaders(c.Writer.Header())
+		c.Status(http.StatusOK)
+		_, _ = c.Writer.Write([]byte(": accepted\n\n"))
+		flusher.Flush()
+		immediateFlusher = flusher
+	}
 	s.emitExecutorDiagnostic(c, "executor_started", model, "execute_stream", startedAt, "")
 	stopWaitLogger := s.startExecutorWaitLogger(c, model, "execute_stream", startedAt)
 	streamCtx, cancelStream := context.WithCancel(relayContext(c))
@@ -4454,12 +4480,22 @@ func (s *relayServer) handleStream(c *gin.Context, body []byte, model string, so
 	stopWaitLogger()
 	if err != nil {
 		s.emitExecutorDiagnostic(c, "executor_failed", model, "execute_stream", startedAt, err.Error())
+		if immediateSSE {
+			writeStreamTerminalError(c, err)
+			immediateFlusher.Flush()
+			return
+		}
 		s.writeExecutorError(c, err)
 		return
 	}
 	if result == nil || result.Chunks == nil {
 		s.emitExecutorDiagnostic(c, "executor_failed", model, "execute_stream", startedAt, "upstream stream is unavailable")
-		writeAPIError(c, http.StatusBadGateway, "upstream stream is unavailable", "bad_gateway")
+		if immediateSSE {
+			writeStreamTerminalError(c, relayStatusError{status: http.StatusBadGateway, message: "upstream stream is unavailable"})
+			immediateFlusher.Flush()
+		} else {
+			writeAPIError(c, http.StatusBadGateway, "upstream stream is unavailable", "bad_gateway")
+		}
 		return
 	}
 	s.emitExecutorDiagnostic(c, "stream_opened", model, "execute_stream", startedAt, "")
@@ -4469,9 +4505,11 @@ func (s *relayServer) handleStream(c *gin.Context, body []byte, model string, so
 		return
 	}
 
-	setEventStreamHeaders(c.Writer.Header())
-	writeUpstreamHeaders(c.Writer.Header(), result.Headers)
-	c.Status(http.StatusOK)
+	if !immediateSSE {
+		setEventStreamHeaders(c.Writer.Header())
+		writeUpstreamHeaders(c.Writer.Header(), result.Headers)
+		c.Status(http.StatusOK)
+	}
 
 	framer := newRelayStreamFramer(sourceFormat, requestPath(c.Request))
 	keepAlive := streamKeepAliveInterval(s.cfg)

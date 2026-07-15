@@ -7,7 +7,6 @@ import type {
   CodexLocalAccessAppendAccountsResult,
   CodexLocalAccessClientBaseUrlHost,
   CodexLocalAccessGatewayMode,
-  CodexLocalAccessImageGenerationMode,
   CodexLocalAccessModelAlias,
   CodexLocalAccessModelPricing,
   CodexLocalAccessOAuthQuotaReserve,
@@ -16,6 +15,7 @@ import type {
   CodexLocalAccessRoutingStrategy,
   CodexLocalAccessScope,
   CodexLocalAccessState,
+  CodexLocalAccessStatsWindow,
   CodexLocalAccessTestResult,
   CodexLocalAccessTimeoutPreset,
   CodexLocalAccessTimeouts,
@@ -56,12 +56,10 @@ export async function rotateCodexLocalAccessApiKey(): Promise<CodexLocalAccessSt
 
 export async function updateCodexLocalAccessBoundOAuthAccount(
   boundOauthAccountId: string | null,
-  boundOauthUseLocalGateway = false,
   boundOauthQuotaReserve: CodexLocalAccessOAuthQuotaReserve | null = null,
 ): Promise<CodexLocalAccessState> {
   return await invoke("codex_local_access_update_bound_oauth_account", {
     boundOauthAccountId,
-    boundOauthUseLocalGateway,
     boundOauthQuotaReserve,
   });
 }
@@ -77,6 +75,8 @@ export async function queryCodexLocalAccessRequestLogs(
     page: query.page,
     pageSize: query.pageSize,
     statsRange: query.statsRange ?? null,
+    startAt: query.startAt ?? null,
+    endAt: query.endAt ?? null,
     modelQuery: query.modelQuery ?? null,
     accountQuery: query.accountQuery ?? null,
     apiKeyQuery: query.apiKeyQuery ?? null,
@@ -85,6 +85,13 @@ export async function queryCodexLocalAccessRequestLogs(
     success: query.success ?? null,
     errorCategory: query.errorCategory ?? null,
   });
+}
+
+export async function queryCodexLocalAccessStats(
+  startAt: number,
+  endAt: number,
+): Promise<CodexLocalAccessStatsWindow> {
+  return await invoke("codex_local_access_query_stats", { startAt, endAt });
 }
 
 export async function prepareCodexLocalAccessForRestart(): Promise<CodexLocalAccessState> {
@@ -151,6 +158,7 @@ export async function updateCodexLocalAccessRoutingOptions(payload: {
   maxRetryCredentials: number;
   maxRetryIntervalMs: number;
   disableCooling: boolean;
+  immediateSseResponse: boolean;
 }): Promise<CodexLocalAccessState> {
   return await invoke("codex_local_access_update_routing_options", payload);
 }
@@ -212,14 +220,6 @@ export async function updateCodexLocalAccessClientBaseUrlHost(
 ): Promise<CodexLocalAccessState> {
   return await invoke("codex_local_access_update_client_base_url_host", {
     clientBaseUrlHost,
-  });
-}
-
-export async function updateCodexLocalAccessImageGenerationMode(
-  imageGenerationMode: CodexLocalAccessImageGenerationMode,
-): Promise<CodexLocalAccessState> {
-  return await invoke("codex_local_access_update_image_generation_mode", {
-    imageGenerationMode,
   });
 }
 

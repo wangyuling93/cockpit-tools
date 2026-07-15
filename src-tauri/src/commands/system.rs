@@ -70,6 +70,12 @@ pub struct GeneralConfig {
     pub default_terminal: String,
     /// 应用主题: "light", "dark", "system"
     pub theme: String,
+    /// 主题色套件 id
+    pub theme_color: String,
+    /// 是否允许外连
+    pub external_network_enabled: bool,
+    /// WebDAV 允许域名（逗号分隔）
+    pub webdav_allowed_domains: String,
     /// 是否减少界面动画
     pub reduced_motion_enabled: bool,
     /// 界面缩放比例（WebView Zoom）
@@ -94,6 +100,8 @@ pub struct GeneralConfig {
     pub cursor_auto_refresh_minutes: i32,
     /// Grok CLI 自动刷新间隔（分钟），-1 表示禁用
     pub grok_auto_refresh_minutes: i32,
+    /// 默认实例切号时是否同步写入官方 ~/.grok/auth.json
+    pub grok_sync_official_auth_on_switch: bool,
     /// Claude 自动刷新间隔（分钟），-1 表示禁用
     pub claude_auto_refresh_minutes: i32,
     /// CodeBuddy 自动刷新间隔（分钟），-1 表示禁用
@@ -123,6 +131,8 @@ pub struct GeneralConfig {
     pub floating_card_show_on_startup: bool,
     /// 是否在启动后自动最小化主窗口
     pub startup_minimized: bool,
+    /// 启动默认页面：`last` 或具体页面 id
+    pub startup_page: String,
     /// 悬浮卡片是否默认置顶
     pub floating_card_always_on_top: bool,
     /// 是否启用应用开机自启动
@@ -195,6 +205,7 @@ pub struct GeneralConfig {
     pub ghcp_launch_on_switch: bool,
     /// 切换 Codex 时是否覆盖 OpenClaw 登录信息
     pub openclaw_auth_overwrite_on_switch: bool,
+    pub hermes_auth_overwrite_on_switch: bool,
     /// 切换 Codex 时是否自动启动/重启 Codex App
     pub codex_launch_on_switch: bool,
     /// 切换 Antigravity IDE 时是否自动启动/重启应用
@@ -1003,6 +1014,9 @@ fn is_general_config_patch_field(key: &str) -> bool {
         "language"
             | "default_terminal"
             | "theme"
+            | "theme_color"
+            | "external_network_enabled"
+            | "webdav_allowed_domains"
             | "reduced_motion_enabled"
             | "ui_scale"
             | "auto_refresh_minutes"
@@ -1015,6 +1029,7 @@ fn is_general_config_patch_field(key: &str) -> bool {
             | "kiro_auto_refresh_minutes"
             | "cursor_auto_refresh_minutes"
             | "grok_auto_refresh_minutes"
+            | "grok_sync_official_auth_on_switch"
             | "claude_auto_refresh_minutes"
             | "codebuddy_auto_refresh_minutes"
             | "codebuddy_cn_auto_refresh_minutes"
@@ -1031,6 +1046,7 @@ fn is_general_config_patch_field(key: &str) -> bool {
             | "tray_icon_style"
             | "floating_card_show_on_startup"
             | "startup_minimized"
+            | "startup_page"
             | "floating_card_always_on_top"
             | "app_auto_launch_enabled"
             | "token_keeper_enabled"
@@ -1070,6 +1086,7 @@ fn is_general_config_patch_field(key: &str) -> bool {
             | "ghcp_opencode_auth_overwrite_on_switch"
             | "ghcp_launch_on_switch"
             | "openclaw_auth_overwrite_on_switch"
+            | "hermes_auth_overwrite_on_switch"
             | "codex_launch_on_switch"
             | "antigravity_launch_on_switch"
             | "codex_restart_specified_app_on_switch"
@@ -1173,6 +1190,21 @@ fn apply_general_config_updates(
     if updates.contains_key("codex_startup_wakeup_delay_seconds") {
         next.codex_startup_wakeup_delay_seconds =
             sanitize_startup_wakeup_delay_seconds(next.codex_startup_wakeup_delay_seconds);
+    }
+    if updates.contains_key("startup_page") {
+        next.startup_page = config::normalize_startup_page(&next.startup_page);
+    }
+    if updates.contains_key("theme_color") {
+        next.theme_color = config::normalize_theme_color(&next.theme_color);
+    }
+    if updates.contains_key("webdav_allowed_domains") {
+        next.webdav_allowed_domains = next
+            .webdav_allowed_domains
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(",");
     }
 
     macro_rules! trim_string_field {
@@ -1757,6 +1789,15 @@ fn open_path_in_system(path: &Path) -> Result<(), String> {
 pub async fn open_data_folder() -> Result<(), String> {
     let path = modules::account::get_data_dir()?;
     open_path_in_system(path.as_path())
+}
+
+#[tauri::command]
+pub fn open_local_path(path: String) -> Result<(), String> {
+    let p = std::path::PathBuf::from(path.trim());
+    if !p.exists() {
+        return Err(format!("路径不存在: {}", p.display()));
+    }
+    open_path_in_system(p.as_path())
 }
 
 /// 保存文本文件
@@ -2434,6 +2475,9 @@ pub fn get_general_config(app: tauri::AppHandle) -> Result<GeneralConfig, String
         language: user_config.language,
         default_terminal: user_config.default_terminal,
         theme: user_config.theme,
+        theme_color: config::normalize_theme_color(&user_config.theme_color),
+        external_network_enabled: user_config.external_network_enabled,
+        webdav_allowed_domains: user_config.webdav_allowed_domains,
         reduced_motion_enabled: user_config.reduced_motion_enabled,
         ui_scale: user_config.ui_scale,
         auto_refresh_minutes: user_config.auto_refresh_minutes,
@@ -2446,6 +2490,7 @@ pub fn get_general_config(app: tauri::AppHandle) -> Result<GeneralConfig, String
         kiro_auto_refresh_minutes: user_config.kiro_auto_refresh_minutes,
         cursor_auto_refresh_minutes: user_config.cursor_auto_refresh_minutes,
         grok_auto_refresh_minutes: user_config.grok_auto_refresh_minutes,
+        grok_sync_official_auth_on_switch: user_config.grok_sync_official_auth_on_switch,
         claude_auto_refresh_minutes: user_config.claude_auto_refresh_minutes,
         codebuddy_auto_refresh_minutes: user_config.codebuddy_auto_refresh_minutes,
         codebuddy_cn_auto_refresh_minutes: user_config.codebuddy_cn_auto_refresh_minutes,
@@ -2462,6 +2507,7 @@ pub fn get_general_config(app: tauri::AppHandle) -> Result<GeneralConfig, String
         tray_icon_style: user_config.tray_icon_style.as_str().to_string(),
         floating_card_show_on_startup: user_config.floating_card_show_on_startup,
         startup_minimized: user_config.startup_minimized,
+        startup_page: config::normalize_startup_page(&user_config.startup_page),
         floating_card_always_on_top: user_config.floating_card_always_on_top,
         app_auto_launch_enabled,
         token_keeper_enabled: user_config.token_keeper_enabled,
@@ -2505,6 +2551,7 @@ pub fn get_general_config(app: tauri::AppHandle) -> Result<GeneralConfig, String
         ghcp_opencode_auth_overwrite_on_switch: user_config.ghcp_opencode_auth_overwrite_on_switch,
         ghcp_launch_on_switch: user_config.ghcp_launch_on_switch,
         openclaw_auth_overwrite_on_switch: user_config.openclaw_auth_overwrite_on_switch,
+        hermes_auth_overwrite_on_switch: user_config.hermes_auth_overwrite_on_switch,
         codex_launch_on_switch: user_config.codex_launch_on_switch,
         antigravity_launch_on_switch: user_config.antigravity_launch_on_switch,
         codex_restart_specified_app_on_switch: user_config.codex_restart_specified_app_on_switch,
@@ -2729,6 +2776,60 @@ pub async fn scan_auto_local_import(
     modules::auto_local_import::scan_now(app).await
 }
 
+
+// --- Codex SSH sync (#1404 vertical slice) ---
+#[tauri::command]
+pub fn codex_ssh_list_servers(
+) -> Result<modules::codex_ssh::CodexSshListResult, String> {
+    let (servers, selected_id) = modules::codex_ssh::list_servers()?;
+    Ok(modules::codex_ssh::CodexSshListResult {
+        servers,
+        selected_id,
+    })
+}
+
+#[tauri::command]
+pub fn codex_ssh_upsert_server(
+    server: modules::codex_ssh::CodexSshServer,
+) -> Result<modules::codex_ssh::CodexSshServer, String> {
+    modules::codex_ssh::upsert_server(server)
+}
+
+#[tauri::command]
+pub fn codex_ssh_delete_server(id: String) -> Result<(), String> {
+    modules::codex_ssh::delete_server(&id)
+}
+
+#[tauri::command]
+pub fn codex_ssh_select_server(id: String) -> Result<(), String> {
+    modules::codex_ssh::select_server(&id)
+}
+
+#[tauri::command]
+pub fn codex_ssh_test_connection(id: String) -> Result<String, String> {
+    modules::codex_ssh::test_connection(&id)
+}
+
+#[tauri::command]
+pub fn codex_ssh_sync_current(id: String) -> Result<String, String> {
+    modules::codex_ssh::sync_current_account(&id)
+}
+
+/// Managed provider id for local API LB (#980 vertical slice).
+#[tauri::command]
+pub fn codex_managed_lb_provider_id() -> String {
+    "cockpit-codex-lb".to_string()
+}
+
+#[tauri::command]
+pub fn codebuddy_list_local_session_files(
+    limit: Option<u32>,
+) -> Result<Vec<modules::codebuddy_session_list::CodebuddySessionFileEntry>, String> {
+    Ok(modules::codebuddy_session_list::list_local_session_files(
+        limit.unwrap_or(100) as usize,
+    ))
+}
+
 /// 保存完整通用设置配置（兼容旧前端调用）。
 #[tauri::command]
 pub fn save_general_config(
@@ -2736,6 +2837,9 @@ pub fn save_general_config(
     language: String,
     default_terminal: Option<String>,
     theme: String,
+    theme_color: Option<String>,
+    external_network_enabled: Option<bool>,
+    webdav_allowed_domains: Option<String>,
     ui_scale: Option<f64>,
     auto_refresh_minutes: i32,
     codex_auto_refresh_minutes: i32,
@@ -2747,6 +2851,7 @@ pub fn save_general_config(
     kiro_auto_refresh_minutes: Option<i32>,
     cursor_auto_refresh_minutes: Option<i32>,
     grok_auto_refresh_minutes: Option<i32>,
+    grok_sync_official_auth_on_switch: Option<bool>,
     claude_auto_refresh_minutes: Option<i32>,
     codebuddy_auto_refresh_minutes: Option<i32>,
     codebuddy_cn_auto_refresh_minutes: Option<i32>,
@@ -2763,6 +2868,7 @@ pub fn save_general_config(
     tray_icon_style: Option<String>,
     floating_card_show_on_startup: Option<bool>,
     startup_minimized: Option<bool>,
+    startup_page: Option<String>,
     floating_card_always_on_top: Option<bool>,
     app_auto_launch_enabled: Option<bool>,
     token_keeper_enabled: Option<bool>,
@@ -2802,6 +2908,7 @@ pub fn save_general_config(
     ghcp_opencode_auth_overwrite_on_switch: Option<bool>,
     ghcp_launch_on_switch: Option<bool>,
     openclaw_auth_overwrite_on_switch: Option<bool>,
+    hermes_auth_overwrite_on_switch: Option<bool>,
     codex_launch_on_switch: bool,
     antigravity_launch_on_switch: Option<bool>,
     codex_restart_specified_app_on_switch: Option<bool>,
@@ -2965,6 +3072,9 @@ pub fn save_general_config(
         if let Some(value) = grok_auto_refresh_minutes {
             current.grok_auto_refresh_minutes = value;
         }
+        if let Some(value) = grok_sync_official_auth_on_switch {
+            current.grok_sync_official_auth_on_switch = value;
+        }
         if let Some(value) = claude_auto_refresh_minutes {
             current.claude_auto_refresh_minutes = value;
         }
@@ -3011,6 +3121,18 @@ pub fn save_general_config(
         }
         if let Some(value) = startup_minimized {
             current.startup_minimized = value;
+        }
+        if let Some(value) = startup_page {
+            current.startup_page = config::normalize_startup_page(&value);
+        }
+        if let Some(value) = theme_color {
+            current.theme_color = config::normalize_theme_color(&value);
+        }
+        if let Some(value) = external_network_enabled {
+            current.external_network_enabled = value;
+        }
+        if let Some(value) = webdav_allowed_domains {
+            current.webdav_allowed_domains = value.trim().to_string();
         }
         if let Some(value) = floating_card_always_on_top {
             current.floating_card_always_on_top = value;
@@ -3130,6 +3252,9 @@ pub fn save_general_config(
         }
         if let Some(value) = openclaw_auth_overwrite_on_switch {
             current.openclaw_auth_overwrite_on_switch = value;
+        }
+        if let Some(value) = hermes_auth_overwrite_on_switch {
+            current.hermes_auth_overwrite_on_switch = value;
         }
         current.codex_launch_on_switch = codex_launch_on_switch;
         if let Some(value) = antigravity_launch_on_switch {
@@ -3490,18 +3615,46 @@ pub fn detect_app_path(app: String, force: Option<bool>) -> Result<Option<String
 }
 
 #[tauri::command]
-pub fn scan_claude_desktop_launch_targets(
+pub async fn scan_claude_desktop_launch_targets(
     scan_roots: Option<String>,
 ) -> Result<Vec<modules::claude_instance::ClaudeDesktopLaunchCandidate>, String> {
-    let roots = scan_roots
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    Ok(modules::claude_instance::scan_claude_desktop_launch_targets(roots))
+    #[cfg(target_os = "windows")]
+    {
+        let _ = scan_roots;
+        let task = tauri::async_runtime::spawn_blocking(|| {
+            modules::process::scan_app_launch_targets("claude", None)
+        });
+        let candidates = match tokio::time::timeout(Duration::from_secs(2), task).await {
+            Ok(Ok(result)) => result?,
+            Ok(Err(error)) => return Err(format!("检测运行中的 Claude 任务失败: {error}")),
+            Err(_) => return Err("检测运行中的 Claude 超时，请重试".to_string()),
+        };
+        return Ok(candidates
+            .into_iter()
+            .map(
+                |candidate| modules::claude_instance::ClaudeDesktopLaunchCandidate {
+                    target_type: candidate.target_type,
+                    label: candidate.label,
+                    target: candidate.target,
+                    source: candidate.source,
+                    supports_multi_instance: candidate.supports_multi_instance,
+                },
+            )
+            .collect());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let roots = scan_roots
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        Ok(modules::claude_instance::scan_claude_desktop_launch_targets(roots))
+    }
 }
 
 #[tauri::command]
-pub fn scan_app_launch_targets(
+pub async fn scan_app_launch_targets(
     app: String,
     scan_roots: Option<String>,
 ) -> Result<Vec<modules::process::AppLaunchCandidate>, String> {
@@ -3512,28 +3665,16 @@ pub fn scan_app_launch_targets(
         | "opencode" => {}
         _ => return Err("未知应用类型".to_string()),
     }
+    let _ = scan_roots;
 
-    let roots = scan_roots
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
-    if app == "claude" {
-        return Ok(
-            modules::claude_instance::scan_claude_desktop_launch_targets(roots)
-                .into_iter()
-                .map(|candidate| modules::process::AppLaunchCandidate {
-                    target_type: candidate.target_type,
-                    label: candidate.label,
-                    target: candidate.target,
-                    source: candidate.source,
-                    supports_multi_instance: candidate.supports_multi_instance,
-                })
-                .collect(),
-        );
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        modules::process::scan_app_launch_targets(app.as_str(), None)
+    });
+    match tokio::time::timeout(Duration::from_secs(2), task).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => Err(format!("检测运行中的应用任务失败: {error}")),
+        Err(_) => Err("检测运行中的应用超时，请重试".to_string()),
     }
-
-    modules::process::scan_app_launch_targets(app.as_str(), roots)
 }
 
 #[tauri::command]
@@ -3602,10 +3743,18 @@ pub fn handle_window_close(
     // 执行操作
     match action.as_str() {
         "minimize" => {
-            let _ = window.hide();
-            modules::logger::log_info("[Window] 窗口已最小化到托盘");
+            if let Err(err) = modules::floating_card_window::destroy_main_window_to_tray(&window) {
+                modules::logger::log_warn(&format!(
+                    "[Window] 销毁主窗口失败，回退隐藏: {}",
+                    err
+                ));
+                let _ = window.hide();
+                modules::process_memory::trim_idle_process_memory();
+            }
+            modules::logger::log_info("[Window] 窗口已关闭到托盘");
         }
         "quit" => {
+            modules::floating_card_window::request_app_exit();
             window.app_handle().exit(0);
         }
         _ => {
@@ -3614,6 +3763,11 @@ pub fn handle_window_close(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn main_window_take_pending_navigation() -> Result<Option<String>, String> {
+    modules::floating_card_window::take_pending_main_window_navigation()
 }
 
 #[tauri::command]

@@ -2,6 +2,8 @@
   "common": {
     "confirm": "تأكيد",
     "cancel": "إلغاء",
+    "cancelling": "جارٍ الإلغاء...",
+    "cancelled": "تم الإلغاء",
     "save": "حفظ",
     "saving": "جارِ الحفظ...",
     "delete": "حذف",
@@ -287,7 +289,7 @@
     "settings": "الإعدادات",
     "codex": "Codex​",
     "githubCopilot": "GitHub Copilot​",
-    "windsurf": "Windsurf​",
+    "windsurf": "Devin​",
     "dashboard": "لوحة التحكم",
     "morePlatforms": "المزيد من المنصات",
     "instances": "مثيلات متعددة",
@@ -317,7 +319,9 @@
     "switchClassicLayoutConfirm": "التبديل الآن",
     "2faManager": "إدارة 2FA",
     "apiRelay": "الترحيل",
-    "claude": "Claude"
+    "claude": "Claude",
+    "openrouter": "OpenRouter",
+    "opencode": "OpenCode"
   },
   "sponsors": {
     "pageTitle": "الرعاة",
@@ -707,10 +711,10 @@
       "githubCopilotSettingsTitle": "إعدادات GitHub Copilot",
       "ghcpAutoRefresh": "تحديث حصة GitHub Copilot تلقائيا",
       "ghcpAutoRefreshDesc": "تكرار التحديث في الخلفية",
-      "windsurfSettingsTitle": "إعدادات Windsurf",
-      "windsurfAutoRefresh": "تحديث تلقائي لحصة Windsurf",
+      "windsurfSettingsTitle": "إعدادات Devin",
+      "windsurfAutoRefresh": "تحديث تلقائي لحصة Devin",
       "windsurfAutoRefreshDesc": "تردد التحديث التلقائي في الخلفية",
-      "windsurfAppPath": "مسار تطبيق Windsurf",
+      "windsurfAppPath": "مسار تطبيق Devin",
       "windsurfAppPathDesc": "اتركه فارغًا لاستخدام المسار الافتراضي",
       "windsurfAppPathPlaceholder": "المسار الافتراضي",
       "windsurfPathSelect": "اختيار",
@@ -863,7 +867,25 @@
       "autoImportFromLocalScanEmpty": "اكتمل: لا يوجد تسجيل دخول للاستيراد",
       "autoImportFromLocalScanPartial": "اكتمل: فشل جزئي؛ يمكن الاستيراد يدوياً",
       "autoImportFromLocalScanFailed": "فشل الفحص: {{error}}",
-      "autoImportFromLocalScanCancelled": "تم الإيقاف؛ سيتم تجاهل الفحص الجاري"
+      "autoImportFromLocalScanCancelled": "تم الإيقاف؛ سيتم تجاهل الفحص الجاري",
+      "startupPage": "صفحة البدء",
+      "startupPageDesc": "الصفحة عند التشغيل البارد. «تذكر الأخيرة» يستعيد الصفحة السابقة.",
+      "startupPageLast": "تذكر الأخيرة",
+      "startupPageCodexApi": "خدمة Codex API",
+      "hermesAuthOverwrite": "مزامنة Hermes عند تبديل Codex",
+      "hermesAuthOverwriteDesc": "OAuth فقط: يكتب openai-codex إلى ~/.hermes/auth.json (معطّل افتراضيًا)",
+      "themeColor": "حزمة الألوان",
+      "themeColorDesc": "طبق حزمة ألوان فوق الفاتح/الداكن",
+      "themeColorDefault": "افتراضي",
+      "themeColorNord": "Nord",
+      "themeColorTokyoNight": "Tokyo Night",
+      "themeColorCatppuccin": "Catppuccin",
+      "themeColorGruvbox": "Gruvbox",
+      "themeColorEverforest": "Everforest",
+      "externalNetwork": "السماح بالشبكة الخارجية",
+      "externalNetworkDesc": "عند الإيقاف: يمنع WebDAV واستخدام OpenRouter والإعلانات وفحص التحديث التلقائي (المحلي يستمر).",
+      "webdavAllowedDomains": "قائمة نطاقات WebDAV",
+      "webdavAllowedDomainsDesc": "مفصولة بفواصل؛ فارغ = بلا حد"
     },
     "network": {
       "apiTitle": "واجهة برمجة تطبيقات قمرة القيادة المضادة للجاذبية",
@@ -928,6 +950,7 @@
       "releaseHistoryLoading": "جارٍ تحميل ملاحظات الإصدار...",
       "releaseHistoryEmpty": "لا توجد ملاحظات الإصدار حتى الآن",
       "releaseHistoryLoadFailed": "فشل التحميل: {{error}}",
+      "releaseHistorySectionHighlights": "أهم التحديثات",
       "releaseHistorySectionAdded": "تمت الإضافة",
       "releaseHistorySectionChanged": "تغيرت",
       "releaseHistorySectionFixed": "مُثَبَّت",
@@ -1092,6 +1115,19 @@
       "retentionUnit": "days",
       "collapseAll": "Collapse remote backups",
       "expandAll": "Expand all remote backups ({{count}} more)"
+    },
+    "keysVault": {
+      "title": "OpenRouter / OpenCode Key",
+      "desc": "يخزّن مفاتيح API محليًا. يحدّث استخدام OpenRouter عند السماح بالشبكة الخارجية. ليس منصة كاملة.",
+      "openRouter": "OpenRouter",
+      "openCode": "OpenCode Go / Zen",
+      "label": "تسمية",
+      "empty": "لا مفاتيح",
+      "added": "تمت الإضافة",
+      "deleted": "تم الحذف",
+      "refreshed": "تم تحديث الاستخدام",
+      "usage": "الاستخدام",
+      "tierOther": "أخرى"
     }
   },
   "appPath": {
@@ -1788,7 +1824,8 @@
       "title": "إضافة حساب Codex",
       "oauth": "تفويض OAuth",
       "token": "استيراد JSON",
-      "local": "استيراد محلي"
+      "local": "استيراد محلي",
+      "accessToken": "رمز الوصول"
     },
     "oauth": {
       "desc": "انقر أدناه وأكمل تفويض OpenAI في المتصفح",
@@ -1964,6 +2001,7 @@
         "planHighFirst": "الأعلى باقة أولاً",
         "planLowFirst": "الأقل باقة أولاً",
         "expirySoonFirst": "الأقرب انتهاءً أولاً",
+        "random": "عشوائي",
         "custom": "مخصص"
       },
       "statusUnconfigured": "غير مُعدّ",
@@ -1986,7 +2024,12 @@
         "label": "نطاق الإحصاءات",
         "daily": "يوم",
         "weekly": "أسبوع",
-        "monthly": "شهر"
+        "monthly": "شهر",
+        "custom": "مخصص",
+        "start": "البداية",
+        "end": "النهاية",
+        "apply": "تطبيق",
+        "invalid": "لا يمكن أن يسبق وقت النهاية وقت البداية"
       },
       "enableBeforeActivateTitle": "الخدمة غير مفعلة",
       "enableBeforeActivateMessage": "خدمة API غير مفعلة حاليًا، ويجب تفعيلها أولًا. هل تريد التفعيل والتبديل الآن؟",
@@ -2178,7 +2221,12 @@
     },
     "list": {
       "showCodeReviewQuota": "إظهار حصة Code Review",
-      "showAdditionalQuota": "حصص خاصة بالنماذج"
+      "showAdditionalQuota": "حصص خاصة بالنماذج",
+      "planBadgeStyle": "نمط شارة الخطة",
+      "planBadgeStyleDefault": "افتراضي",
+      "planBadgeStyleOutline": "إطار",
+      "planBadgeStyleSoft": "ناعم",
+      "planBadgeStyleMono": "أحادي"
     },
     "time": {
       "today": "اليوم {{time}}",
@@ -2438,7 +2486,8 @@
         "selectAllSessions": "تحديد كل الجلسات",
         "clearSelectedSessions": "إلغاء تحديد الكل",
         "copyToInstance": "نسخ إلى المثيل",
-        "trash": "المهملات"
+        "trash": "المهملات",
+        "openRollout": "فتح ملف الجلسة"
       },
       "confirm": {
         "title": "نقل إلى المهملات",
@@ -2640,7 +2689,15 @@
         "removeItem": "إزالة",
         "emptyFilteredTitle": "لا توجد جلسات مطابقة",
         "emptyFilteredDesc": "عدّل البحث أو المصدر أو حالة التحديد ثم حاول مرة أخرى."
-      }
+      },
+      "kindFilter": "نوع الجلسة",
+      "kind": {
+        "conversation": "محادثات",
+        "external": "خارجي",
+        "subagent": "وكيل فرعي",
+        "all": "كل الأنواع"
+      },
+      "pickInstancePrompt": "الجلسة موجودة في عدة مثيلات. أدخل معرّف المثيل:"
     },
     "api": {
       "baseUrl": "عنوان URL الأساسي",
@@ -2654,6 +2711,20 @@
       "showApiKey": "إظهار API Key",
       "hideApiKey": "إخفاء API Key",
       "apiKeyHiddenHint": "تم إخفاء API Key. انقر للإظهار.",
+      "modelCatalog": {
+        "label": "قائمة النماذج",
+        "fetch": "جلب من المزوّد",
+        "fetching": "جارٍ الجلب...",
+        "count": "{{count}} نموذجًا",
+        "placeholder": "أدخل معرّف نموذج واحدًا في كل سطر، أو افصل المعرّفات بفواصل.",
+        "editHint": "تُضاف النماذج المجلوبة إلى هذه المسودة فقط. راجعها وعدّلها قبل الحفظ.",
+        "syncToggle": "مزامنة نماذج المزوّد مع Codex",
+        "syncDescription": "بعد الحفظ، تُستخدم هذه القائمة لإنشاء دليل نماذج Codex المُدار بواسطة Cockpit. لن تُستبدل الأدلة المخصصة.",
+        "fetchCredentialsRequired": "أدخل API Key وBase URL أولًا.",
+        "fetchEmpty": "لم يُرجع المزوّد أي نماذج. تم الاحتفاظ بالقائمة الحالية.",
+        "fetchFailed": "تعذر جلب نماذج المزوّد: {{error}}",
+        "syncRequiresModels": "اجلب نموذجًا واحدًا على الأقل أو أدخله قبل المزامنة مع Codex."
+      },
       "actions": {
         "addAndSwitch": "إضافة وتبديل"
       },
@@ -3030,7 +3101,10 @@
         "help": "فعّل هذا الخيار فقط عندما يدعم المزوّد Responses عبر WebSocket صراحةً؛ ويمكن تأكيد طريقة الاتصال من سجلات Codex أو خدمة الوكيل.",
         "enabled": "مفعّل",
         "disabled": "معطّل"
-      }
+      },
+      "renameApiKeyPrompt": "إعادة تسمية مفتاح API",
+      "renameApiKeySuccess": "تمت إعادة تسمية مفتاح API",
+      "renameApiKeyFailed": "فشل إعادة تسمية مفتاح API: {{error}}"
     },
     "quickSwitch": {
       "action": "تبديل المزوّد سريعًا",
@@ -3267,6 +3341,7 @@
         "maxRetryInterval": "انتظار retry",
         "disableCooling": "تعطيل cooldown",
         "saveOptions": "حفظ الخيارات",
+        "immediateSseResponse": "SSE فوري 200",
         "optionsSaved": "تم حفظ خيارات التوجيه"
       },
       "validation": {
@@ -3373,8 +3448,20 @@
       "previewSubtitle": "اختر الحسابات للحفظ",
       "scanSubtitle": "جارٍ تحليل الحسابات وفحصها واحدًا تلو الآخر",
       "parseSubtitle": "جارٍ تحليل ملفات الحسابات",
+      "importSubtitle": "جارٍ حفظ الحسابات المحددة",
+      "finalizing": "جارٍ إكمال الاستيراد",
+      "finalizingSubtitle": "جارٍ تحديث قائمة الحسابات والإعدادات المرتبطة",
+      "cancelImport": "إلغاء الاستيراد",
+      "importCancelledSummary": "تم إلغاء الاستيراد بعد معالجة {{processed}}/{{total}} حسابًا.",
+      "importChecked": "استيراد الحسابات المفحوصة",
+      "directImport": "استيراد مباشر دون فحص",
+      "importCheckedAndAddToApiService": "استيراد الحسابات المفحوصة وإضافتها إلى خدمة API",
+      "directImportAndAddToApiService": "استيراد مباشر وإضافة إلى خدمة API",
+      "viewAllTasks": "عرض كل المهام وعددها {{count}}",
+      "collapseTasks": "طي المهام",
       "cancelling": "جار الإلغاء...",
       "scanDone": "اكتمل الفحص",
+      "scanCompleteReview": "اكتمل الفحص، يُرجى مراجعة النتائج",
       "parseDone": "اكتمل التحليل",
       "scanning": "جار الفحص",
       "parsing": "جارٍ التحليل",
@@ -3383,7 +3470,7 @@
       "failed": "فشل",
       "quotaOk": "الحساب سليم",
       "quotaFailed": "خلل",
-      "checkQuotaToggle": "فحص الحسابات",
+      "checkQuotaToggle": "فحص الحسابات قبل الاستيراد",
       "preparing": "جار تحضير الاستيراد...",
       "importSelected": "استيراد الحسابات المحددة",
       "noSelection": "اختر الحسابات أولاً",
@@ -3406,7 +3493,17 @@
       "taskRunning": "جارٍ معالجة {{current}} / {{total}}",
       "taskPreview": "{{total}} عنصر معاينة جاهز",
       "reopen": "عرض المهمة",
-      "dismissTask": "تجاهل"
+      "dismissTask": "تجاهل",
+      "queueCount": "{{count}} مهام في الطابور",
+      "queued": "في قائمة الانتظار",
+      "batchLabel": "دفعة {{index}}",
+      "runInBackground": "خلفية",
+      "cancelQueued": "إلغاء قائمة الانتظار",
+      "importing": "استيراد",
+      "checkAccounts": "التحقق من الحسابات",
+      "importAndAddToApiService": "استيراد + API",
+      "importAndAddToApiServiceSuccess": "تم استيرادها وإضافتها إلى خدمة API",
+      "addToApiServiceFailed": "تم الاستيراد، ولكن فشلت الإضافة إلى خدمة API: {{error}}"
     },
     "autoRepairMode": {
       "label": "منطق الإصلاح التلقائي",
@@ -3453,6 +3550,71 @@
       "chipSearch": "بحث",
       "chipPlan": "خطة",
       "chipFolder": "مجلد"
+    },
+    "accessTokenImport": {
+      "nameRequired": "أدخل اسم الحساب",
+      "tokenRequired": "أدخل رمز وصول Codex",
+      "desc": "يحفظ حساب access token. بدون refresh/id يُكتب personal_access_token.",
+      "nameLabel": "اسم الحساب",
+      "namePlaceholder": "الاسم في القائمة",
+      "tokenLabel": "رمز وصول Codex",
+      "hideToken": "إخفاء",
+      "showToken": "إظهار",
+      "submit": "استيراد الرمز",
+      "success": "تم استيراد حساب access token: {{name}}"
+    },
+    "ssh": {
+      "tab": "مزامنة SSH",
+      "title": "مزامنة SSH لـ Codex",
+      "desc": "احفظ المضيفين، اختبر الاتصال، وأرسل auth.json. مزامنة تلقائية بعد التبديل عند اختيار مضيف.",
+      "new": "جديد",
+      "empty": "لا مضيفي SSH",
+      "test": "اختبار",
+      "sync": "مزامنة",
+      "saved": "تم حفظ خادم SSH",
+      "deleted": "تم الحذف",
+      "name": "الاسم",
+      "host": "المضيف",
+      "user": "المستخدم",
+      "port": "المنفذ",
+      "remoteDir": "دليل Codex البعيد",
+      "syncSwitch": "SSH على التبديل",
+      "syncSwitchDesc": "قم بالتشغيل لتكوين مضيف SSH؛ تقوم مفاتيح Codex بمزامنة الحساب الحالي عن بعد.",
+      "configure": "يثبت",
+      "modalTitle": "إعداد مزامنة SSH",
+      "modalHint": "قم بإضافة وتحديد مضيف SSH مع تمكين المزامنة التلقائية حتى تقوم مفاتيح حساب Codex بتحديث المصادقة عن بعد.",
+      "subtitle": "يتلقى المضيف المحدد حزمة مصادقة Codex الحالية بعد تبديل الحساب.",
+      "addServer": "أضف الخادم",
+      "editServer": "تحرير الخادم",
+      "username": "اسم المستخدم",
+      "codexHome": "دير الدستور الغذائي عن بعد",
+      "authMethod": "طريقة المصادقة",
+      "agentAuth": "وكيل SSH",
+      "privateKeyAuth": "مفتاح خاص",
+      "privateKeyPath": "المسار الرئيسي",
+      "syncOnSwitch": "المزامنة بعد التبديل",
+      "emptyTitle": "لا توجد خوادم SSH",
+      "emptyBody": "املأ مضيفًا على اليسار واحفظه كهدف مزامنة التبديل.",
+      "selected": "مختارة",
+      "select": "يختار",
+      "testConnection": "امتحان",
+      "syncNow": "مزامنة الآن",
+      "connectionOk": "متصل",
+      "syncVerified": "تم التحقق من مزامنة SSH",
+      "syncFailed": "فشلت مزامنة SSH",
+      "syncedAs": "تمت المزامنة {{email}} · {{time}}",
+      "neverSynced": "لم تتم المزامنة بعد",
+      "latestVerified": "تم التحقق من آخر مزامنة SSH",
+      "syncSwitchActive": "تشغيل · {{name}} ({{user}}@{{host}})",
+      "footerHint": "يتم تشغيل المفتاح بعد الحفظ؛ قم بإيقاف تشغيله في أي وقت لإيقاف المزامنة التلقائية.",
+      "formLead": "تفاصيل المضيف البعيد",
+      "namePlaceholder": "على سبيل المثال الصفحة الرئيسية ناس",
+      "syncOnSwitchHint": "بعد الحفظ والتحديد، تقوم مفاتيح Codex بدفع المصادقة إلى هذا المضيف",
+      "addAndSave": "إضافة وحفظ",
+      "serverList": "الخوادم",
+      "serverListLead": "اختر هدف المزامنة",
+      "serverCount": "{{count}} خادم",
+      "autoSyncBadge": "آلي"
     }
   },
   "githubCopilot": {
@@ -3669,8 +3831,8 @@
     "inputPercent": "أدخل النسبة المئوية",
     "inputCredits": "أدخل الرصيد",
     "windsurf": {
-      "title": "إعدادات Windsurf",
-      "appPath": "مسار Windsurf"
+      "title": "إعدادات Devin",
+      "appPath": "مسار Devin"
     },
     "windsurfRefreshInterval": "تحديث الحصة تلقائياً",
     "kiro": {
@@ -3688,7 +3850,9 @@
       "appPath": "مسار Grok CLI",
       "cliPath": "مسار CLI",
       "cliDetected": "تم الاكتشاف: {{version}} · {{path}}",
-      "cliMissing": "لم يتم العثور على Grok CLI. أدخل مسارًا مخصصًا."
+      "cliMissing": "لم يتم العثور على Grok CLI. أدخل مسارًا مخصصًا.",
+      "syncOfficialAuthOnSwitch": "مزامنة تسجيل الدخول الرسمي",
+      "syncOfficialAuthOnSwitchDesc": "عند التفعيل، يؤدي تبديل حساب OAuth للمثيل الافتراضي إلى الكتابة في الملف الرسمي ~/.grok/auth.json. عند التعطيل، يُستخدم GROK_HOME مستقل. لا تستبدل مفاتيح API والمثيلات الإضافية تسجيل الدخول الرسمي."
     },
     "grokRefreshInterval": "تحديث الحصة تلقائيًا",
     "codebuddy": {
@@ -3772,21 +3936,21 @@
     }
   },
   "windsurf": {
-    "title": "إدارة حسابات Windsurf",
+    "title": "إدارة حسابات Devin",
     "instances": {
       "unsupported": {
-        "desc": "ميزة المثيلات المتعددة لـ Windsurf متاحة على macOS فقط."
+        "desc": "ميزة المثيلات المتعددة لـ Devin متاحة على macOS فقط."
       }
     },
     "empty": {
-      "description": "انقر على \"إضافة حساب\" لبدء إدارة حسابات Windsurf"
+      "description": "انقر على \"إضافة حساب\" لبدء إدارة حسابات Devin"
     },
     "addModal": {
-      "title": "إضافة حساب Windsurf",
+      "title": "إضافة حساب Devin",
       "password": "تسجيل البريد الإلكتروني"
     },
     "password": {
-      "desc": "سجّل الدخول ببريد حساب Windsurf الإلكتروني وكلمة المرور لجلب مفتاح API وبيانات الحساب تلقائيًا.",
+      "desc": "سجّل الدخول ببريد حساب Devin الإلكتروني وكلمة المرور لجلب مفتاح API وبيانات الحساب تلقائيًا.",
       "emailPlaceholder": "عنوان البريد الإلكتروني",
       "passwordPlaceholder": "كلمة المرور",
       "empty": "أدخل البريد الإلكتروني وكلمة المرور",
@@ -3833,14 +3997,14 @@
       "batchFailureMore": "فشل {{count}} أخرى"
     },
     "oauth": {
-      "desc": "انقر الزر أدناه وأكمل تفويض Windsurf في المتصفح."
+      "desc": "انقر الزر أدناه وأكمل تفويض Devin في المتصفح."
     },
     "token": {
-      "desc": "الصق رمز وصول Windsurf أو بيانات JSON المصدّرة."
+      "desc": "الصق رمز وصول Devin أو بيانات JSON المصدّرة."
     },
     "import": {
-      "localDesc": "استيراد بيانات حسابات Windsurf من ملف JSON.",
-      "localClient": "استيراد من Windsurf المحلي"
+      "localDesc": "استيراد بيانات حسابات Devin من ملف JSON.",
+      "localClient": "استيراد من Devin المحلي"
     },
     "credits": {
       "title": "الباقة",
@@ -3864,15 +4028,15 @@
       "autoRecharge": "إعادة الشحن التلقائي",
       "remaining": "متبقٍ {{value}}"
     },
-    "injectToVSCode": "التبديل إلى Windsurf",
-    "injectSuccess": "اكتمل التبديل. جارٍ تشغيل Windsurf.",
-    "injectRequireClose": "يرجى إغلاق Windsurf قبل التبديل.",
+    "injectToVSCode": "التبديل إلى Devin",
+    "injectSuccess": "اكتمل التبديل. جارٍ تشغيل Devin.",
+    "injectRequireClose": "يرجى إغلاق Devin قبل التبديل.",
     "flowNotice": {
-      "title": "دليل حسابات Windsurf (انقر للتوسيع/الطي)",
-      "desc": "يتطلب تبديل الحساب قراءة مخزن المصادقة المحلي في Windsurf واستخدام خدمة بيانات الاعتماد في النظام لفك التشفير وإعادة الكتابة؛ وتتم معالجة البيانات محليًا فقط.",
-      "inject": "تبديل بنقرة واحدة: تقرأ هذه الأداة مواد التشفير المحلية في Windsurf (DPAPI/Keychain/Secret Service)، وتفك تشفير جلسة المصادقة في state.vscdb، وتستبدل رمز Windsurf ثم تعيد التشفير — وكل ذلك محليًا على جهازك.",
-      "reason": "نطاق الأذونات: قراءة قاعدة بيانات مصادقة Windsurf ‏(state.vscdb) واستدعاء قدرات التشفير في النظام (Windows DPAPI / macOS Keychain / Linux Secret Service) لفك التشفير وإعادة الكتابة.",
-      "storage": "نطاق القراءة: تتم معالجة بيانات جلسات تسجيل الدخول المرتبطة بـ Windsurf فقط، وجميع العمليات تُنفّذ محليًا."
+      "title": "دليل حسابات Devin (انقر للتوسيع/الطي)",
+      "desc": "يتطلب تبديل الحساب قراءة مخزن المصادقة المحلي في Devin واستخدام خدمة بيانات الاعتماد في النظام لفك التشفير وإعادة الكتابة؛ وتتم معالجة البيانات محليًا فقط.",
+      "inject": "تبديل بنقرة واحدة: تقرأ هذه الأداة مواد التشفير المحلية في Devin (DPAPI/Keychain/Secret Service)، وتفك تشفير جلسة المصادقة في state.vscdb، وتستبدل رمز Devin ثم تعيد التشفير — وكل ذلك محليًا على جهازك.",
+      "reason": "نطاق الأذونات: قراءة قاعدة بيانات مصادقة Devin ‏(state.vscdb) واستدعاء قدرات التشفير في النظام (Windows DPAPI / macOS Keychain / Linux Secret Service) لفك التشفير وإعادة الكتابة.",
+      "storage": "نطاق القراءة: تتم معالجة بيانات جلسات تسجيل الدخول المرتبطة بـ Devin فقط، وجميع العمليات تُنفّذ محليًا."
     }
   },
   "kiro": {
@@ -4050,7 +4214,7 @@
       "goSettings": "اذهب إلى الإعدادات",
       "goVerification": "اذهب إلى تحقق الإيقاظ",
       "goWakeup": "اذهب إلى مهام الإيقاظ",
-      "goWindsurf": "اذهب إلى Windsurf",
+      "goWindsurf": "اذهب إلى Devin",
       "openLayout": "فتح تخطيط المنصات"
     },
     "antigravity": {
@@ -4167,11 +4331,11 @@
     "navTitle": "دليل الاستخدام",
     "providers": {
       "cautions": {
-        "0": "انسخ البيانات احتياطيًا قبل الإجراءات الخطرة أو المجمعة في Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "تحقق من المرشحات والهدف قبل التنفيذ في Codex / GitHub Copilot / Windsurf / Kiro."
+        "0": "انسخ البيانات احتياطيًا قبل الإجراءات الخطرة أو المجمعة في Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "تحقق من المرشحات والهدف قبل التنفيذ في Codex / GitHub Copilot / Devin / Kiro."
       },
       "keywords": {
-        "0": "منصات Codex / GitHub Copilot / Windsurf / Kiro",
+        "0": "منصات Codex / GitHub Copilot / Devin / Kiro",
         "1": "دليل",
         "2": "سير عمل",
         "3": "حساب",
@@ -4179,17 +4343,17 @@
         "5": "استكشاف أخطاء"
       },
       "outcomes": {
-        "0": "افهم ما الذي يمكن أن يقدمه Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "استخدم التدفق المقترح في Codex / GitHub Copilot / Windsurf / Kiro لتقليل الأخطاء.",
-        "2": "تحقق من نجاح تشغيل واحد في Codex / GitHub Copilot / Windsurf / Kiro قبل التوسع."
+        "0": "افهم ما الذي يمكن أن يقدمه Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "استخدم التدفق المقترح في Codex / GitHub Copilot / Devin / Kiro لتقليل الأخطاء.",
+        "2": "تحقق من نجاح تشغيل واحد في Codex / GitHub Copilot / Devin / Kiro قبل التوسع."
       },
       "steps": {
-        "0": "افتح صفحة Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "أكمل الإعداد الأساسي والربط المطلوب في Codex / GitHub Copilot / Windsurf / Kiro.",
-        "2": "نفّذ عملية يدوية واحدة في Codex / GitHub Copilot / Windsurf / Kiro للتحقق من النتيجة."
+        "0": "افتح صفحة Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "أكمل الإعداد الأساسي والربط المطلوب في Codex / GitHub Copilot / Devin / Kiro.",
+        "2": "نفّذ عملية يدوية واحدة في Codex / GitHub Copilot / Devin / Kiro للتحقق من النتيجة."
       },
-      "summary": "يوضح هذا القسم كيفية استخدام Codex / GitHub Copilot / Windsurf / Kiro ضمن سير العمل اليومي.",
-      "title": "منصات Codex / GitHub Copilot / Windsurf / Kiro"
+      "summary": "يوضح هذا القسم كيفية استخدام Codex / GitHub Copilot / Devin / Kiro ضمن سير العمل اليومي.",
+      "title": "منصات Codex / GitHub Copilot / Devin / Kiro"
     },
     "quickStart": {
       "cautions": {
@@ -4370,6 +4534,12 @@
     },
     "quota": {
       "usedOfTotal": "{{used}} / {{total}}​"
+    },
+    "sessions": {
+      "title": "ملفات الجلسة المحلية",
+      "desc": "ملفات الجلسة المحلية — مسح محلي وفتح الموقع.",
+      "empty": "لا ملفات جلسة",
+      "open": "فتح الموقع"
     }
   },
   "qoder": {
@@ -5000,8 +5170,8 @@
     "search": "البحث في حسابات Grok CLI...",
     "flowNotice": {
       "title": "إدارة حسابات Grok CLI",
-      "desc": "يدير Cockpit الحسابات بتنسيق بيانات الاعتماد الرسمي لـ Grok CLI لتبديل الحساب الافتراضي فعليًا وربط النسخ المعزولة.",
-      "permission": "النطاق المحلي: قراءة ملف ~/.grok/auth.json الافتراضي وإدارة أدلة منفصلة لحسابات Grok وGROK_HOME ضمن بيانات Cockpit المحلية.",
+      "desc": "تُستخدم أدلة GROK_HOME مستقلة افتراضيًا. عند تفعيل المزامنة، يكتب تبديل OAuth للمثيل الافتراضي في ~/.grok/auth.json، بينما تبقى المثيلات الإضافية معزولة.",
+      "permission": "النطاق المحلي: يمكن قراءة ~/.grok/auth.json للاستيراد، ولا يُكتب إلا عند تفعيل المزامنة أثناء تبديل OAuth للمثيل الافتراضي. لا تستبدل مفاتيح API تسجيل الدخول الرسمي.",
       "network": "نطاق الشبكة: تفويض OAuth وتجديد بيانات الاعتماد والاستعلام عن استخدام الحساب. لا تُرفع بيانات الاعتماد إلى خدمات Cockpit."
     },
     "empty": "لا توجد حسابات Grok CLI بعد",
@@ -5042,7 +5212,8 @@
       "installHint": "شغّل الأمر الرسمي التالي في الطرفية، ثم انقر على التحديث بعد اكتمال التثبيت.",
       "selectWorkingDir": "اختر مجلد عمل Grok CLI",
       "workingDirAccountHint": "يرتبط مجلد العمل بهذا الحساب ويُستعاد عند التشغيل التالي.",
-      "launchCommandPlaceholder": "اختر مجلدًا أو أكّده لإنشاء أمر التشغيل"
+      "launchCommandPlaceholder": "اختر مجلدًا أو أكّده لإنشاء أمر التشغيل",
+      "reauthLaunchHint": "انتهت صلاحية مصادقة الحساب. إعادة التفويض؛ لا يزال أمر التشغيل أدناه متاحًا."
     },
     "switch": {
       "success": "تم تبديل الحساب"
@@ -5325,5 +5496,23 @@
       "supports1mLabel": "إعلان دعم 1M",
       "supports1mShort": "سياق 1M"
     }
+  },
+  "openrouter": {
+    "title": "OpenRouter",
+    "desc": "إدارة مفاتيح OpenRouter والاستخدام والنماذج.",
+    "tabKeys": "المفاتيح والاستخدام",
+    "tabModels": "النماذج",
+    "modelsLoaded": "تم تحميل {{count}} نموذجًا",
+    "noUsageYet": "لم يُحدَّث الاستخدام بعد",
+    "loadModels": "تحميل النماذج",
+    "searchModels": "بحث النماذج",
+    "freeOnly": "مجاني فقط",
+    "noModels": "لا نماذج — أضف مفتاحًا ثم حمّل.",
+    "free": "مجاني",
+    "noCtx": "بلا طول سياق"
+  },
+  "opencode": {
+    "title": "OpenCode",
+    "desc": "إدارة مفاتيح OpenCode Go/Zen والتصفية حسب المستوى."
   }
 }

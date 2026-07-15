@@ -33,6 +33,9 @@ pub struct ServerStatus {
     pub pid: u32,
     /// 启动时间戳
     pub started_at: i64,
+    /// 当前进程 WebSocket 会话鉴权 token（高危操作必填，#1104）
+    #[serde(default)]
+    pub auth_token: String,
 }
 
 /// 用户配置（持久化存储）
@@ -77,6 +80,15 @@ pub struct UserConfig {
     /// 应用主题
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// 主题色套件：default / nord / tokyo-night / catppuccin / gruvbox / everforest
+    #[serde(default = "default_theme_color")]
+    pub theme_color: String,
+    /// 是否允许受控外连：当前闸 WebDAV 同步与 OpenRouter 用量刷新（非全局网络 kill switch）
+    #[serde(default = "default_external_network_enabled")]
+    pub external_network_enabled: bool,
+    /// WebDAV 允许域名（逗号分隔，空=不限制）；非空时同步 URL 主机必须匹配
+    #[serde(default = "default_webdav_allowed_domains")]
+    pub webdav_allowed_domains: String,
     /// 是否减少界面动画
     #[serde(default = "default_reduced_motion_enabled")]
     pub reduced_motion_enabled: bool,
@@ -113,6 +125,9 @@ pub struct UserConfig {
     /// Grok CLI 自动刷新间隔（分钟），-1 表示禁用
     #[serde(default = "default_grok_auto_refresh")]
     pub grok_auto_refresh_minutes: i32,
+    /// 默认实例切号时是否同步写入官方 ~/.grok/auth.json
+    #[serde(default)]
+    pub grok_sync_official_auth_on_switch: bool,
     /// Claude 自动刷新间隔（分钟），-1 表示禁用
     #[serde(default = "default_claude_auto_refresh")]
     pub claude_auto_refresh_minutes: i32,
@@ -158,6 +173,9 @@ pub struct UserConfig {
     /// 是否在启动后自动最小化主窗口
     #[serde(default = "default_startup_minimized")]
     pub startup_minimized: bool,
+    /// 启动默认页面：`last` 表示恢复上次页面，其它为页面 id（如 dashboard、codex）
+    #[serde(default = "default_startup_page")]
+    pub startup_page: String,
     /// 悬浮卡片是否默认置顶
     #[serde(default = "default_floating_card_always_on_top")]
     pub floating_card_always_on_top: bool,
@@ -325,6 +343,9 @@ pub struct UserConfig {
     /// 切换 Codex 时是否覆盖 OpenClaw 登录信息
     #[serde(default = "default_openclaw_auth_overwrite_on_switch")]
     pub openclaw_auth_overwrite_on_switch: bool,
+    /// 切换 Codex 时是否同步 Hermes auth.json（默认关）
+    #[serde(default = "default_hermes_auth_overwrite_on_switch")]
+    pub hermes_auth_overwrite_on_switch: bool,
     /// 切换 Codex 时是否自动启动/重启 Codex App
     #[serde(default = "default_codex_launch_on_switch")]
     pub codex_launch_on_switch: bool,
@@ -591,6 +612,38 @@ fn default_default_terminal() -> String {
 fn default_theme() -> String {
     "system".to_string()
 }
+fn default_theme_color() -> String {
+    "default".to_string()
+}
+fn default_external_network_enabled() -> bool {
+    true
+}
+fn default_webdav_allowed_domains() -> String {
+    String::new()
+}
+
+/// Normalize theme color pack id.
+pub fn normalize_theme_color(raw: &str) -> String {
+    let v = raw.trim().to_ascii_lowercase().replace('_', "-");
+    match v.as_str() {
+        "nord" | "tokyo-night" | "tokyonight" => {
+            if v == "tokyonight" {
+                "tokyo-night".to_string()
+            } else {
+                v
+            }
+        }
+        "catppuccin" | "gruvbox" | "everforest" | "ayu" | "one-dark" | "onedark" => {
+            if v == "onedark" {
+                "one-dark".to_string()
+            } else {
+                v
+            }
+        }
+        "default" | "" => "default".to_string(),
+        _ => "default".to_string(),
+    }
+}
 fn default_reduced_motion_enabled() -> bool {
     false
 }
@@ -665,6 +718,52 @@ fn default_floating_card_show_on_startup() -> bool {
 }
 fn default_startup_minimized() -> bool {
     false
+}
+fn default_startup_page() -> String {
+    "last".to_string()
+}
+
+/// 规范化启动页配置；非法值回退为 `last`。
+pub fn normalize_startup_page(value: &str) -> String {
+    let normalized = value.trim().to_ascii_lowercase();
+    if normalized.is_empty() || normalized == "last" {
+        return "last".to_string();
+    }
+    const ALLOWED: &[&str] = &[
+        "dashboard",
+        "api-relay",
+        "overview",
+        "codex",
+        "claude",
+        "claude-cli",
+        "codex-api-service",
+        "github-copilot",
+        "windsurf",
+        "kiro",
+        "cursor",
+        "grok",
+        "codebuddy",
+        "codebuddy-cn",
+        "qoder",
+        "zcode",
+        "trae",
+        "trae-solo",
+        "trae-cn",
+        "trae-solo-cn",
+        "workbuddy",
+        "zed",
+        "instances",
+        "wakeup",
+        "verification",
+        "2fa",
+        "manual",
+        "settings",
+    ];
+    if ALLOWED.contains(&normalized.as_str()) {
+        normalized
+    } else {
+        "last".to_string()
+    }
 }
 fn default_floating_card_always_on_top() -> bool {
     false
@@ -815,6 +914,9 @@ fn default_ghcp_launch_on_switch() -> bool {
     true
 }
 fn default_openclaw_auth_overwrite_on_switch() -> bool {
+    false
+}
+fn default_hermes_auth_overwrite_on_switch() -> bool {
     false
 }
 fn default_codex_launch_on_switch() -> bool {
@@ -981,6 +1083,9 @@ impl Default for UserConfig {
             language: default_language(),
             default_terminal: default_default_terminal(),
             theme: default_theme(),
+            theme_color: default_theme_color(),
+            external_network_enabled: default_external_network_enabled(),
+            webdav_allowed_domains: default_webdav_allowed_domains(),
             reduced_motion_enabled: default_reduced_motion_enabled(),
             ui_scale: default_ui_scale(),
             auto_refresh_minutes: default_auto_refresh(),
@@ -993,6 +1098,7 @@ impl Default for UserConfig {
             kiro_auto_refresh_minutes: default_kiro_auto_refresh(),
             cursor_auto_refresh_minutes: default_cursor_auto_refresh(),
             grok_auto_refresh_minutes: default_grok_auto_refresh(),
+            grok_sync_official_auth_on_switch: false,
             claude_auto_refresh_minutes: default_claude_auto_refresh(),
             codebuddy_auto_refresh_minutes: default_codebuddy_auto_refresh(),
             codebuddy_cn_auto_refresh_minutes: default_codebuddy_cn_auto_refresh(),
@@ -1009,6 +1115,7 @@ impl Default for UserConfig {
             tray_icon_style: default_tray_icon_style(),
             floating_card_show_on_startup: default_floating_card_show_on_startup(),
             startup_minimized: default_startup_minimized(),
+            startup_page: default_startup_page(),
             floating_card_always_on_top: default_floating_card_always_on_top(),
             app_auto_launch_enabled: default_app_auto_launch_enabled(),
             token_keeper_enabled: default_token_keeper_enabled(),
@@ -1069,6 +1176,7 @@ impl Default for UserConfig {
             ),
             ghcp_launch_on_switch: default_ghcp_launch_on_switch(),
             openclaw_auth_overwrite_on_switch: default_openclaw_auth_overwrite_on_switch(),
+            hermes_auth_overwrite_on_switch: default_hermes_auth_overwrite_on_switch(),
             codex_launch_on_switch: default_codex_launch_on_switch(),
             antigravity_launch_on_switch: default_antigravity_launch_on_switch(),
             codex_restart_specified_app_on_switch: default_codex_restart_specified_app_on_switch(),
@@ -1476,6 +1584,16 @@ pub fn load_user_config() -> Result<UserConfig, String> {
                 "startup_minimized".to_string(),
                 json!(default_startup_minimized()),
             );
+        }
+
+        if !obj.contains_key("startup_page") {
+            obj.insert(
+                "startup_page".to_string(),
+                json!(default_startup_page()),
+            );
+        } else if let Some(value) = obj.get("startup_page").and_then(|v| v.as_str()) {
+            let normalized = normalize_startup_page(value);
+            obj.insert("startup_page".to_string(), json!(normalized));
         }
 
         if !obj.contains_key("floating_card_always_on_top") {
@@ -2209,7 +2327,7 @@ pub fn save_server_status(status: &ServerStatus) -> Result<(), String> {
 }
 
 /// 初始化服务状态（WebSocket 启动后调用）
-pub fn init_server_status(actual_port: u16) -> Result<(), String> {
+pub fn init_server_status(actual_port: u16, auth_token: String) -> Result<(), String> {
     // 更新运行时状态
     if let Ok(mut state) = get_runtime_state().write() {
         state.actual_port = Some(actual_port);
@@ -2220,6 +2338,7 @@ pub fn init_server_status(actual_port: u16) -> Result<(), String> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         pid: std::process::id(),
         started_at: chrono::Utc::now().timestamp(),
+        auth_token,
     };
 
     save_server_status(&status)?;
@@ -2229,6 +2348,13 @@ pub fn init_server_status(actual_port: u16) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn normalize_theme_color_maps_aliases() {
+        assert_eq!(super::normalize_theme_color("TokyoNight"), "tokyo-night");
+        assert_eq!(super::normalize_theme_color("onedark"), "one-dark");
+        assert_eq!(super::normalize_theme_color("nope"), "default");
+    }
     use super::{acquire_config_file_lock, patch_runtime_state, RuntimeState, UserConfig};
     use std::fs;
     use std::path::Path;
@@ -2289,6 +2415,16 @@ mod tests {
         let cfg: UserConfig =
             serde_json::from_value(serde_json::json!({})).expect("反序列化默认配置应成功");
         assert!(!cfg.openclaw_auth_overwrite_on_switch);
+    }
+
+    #[test]
+    fn grok_official_auth_sync_defaults_to_disabled() {
+        let default_cfg = UserConfig::default();
+        assert!(!default_cfg.grok_sync_official_auth_on_switch);
+
+        let migrated_cfg: UserConfig =
+            serde_json::from_value(serde_json::json!({})).expect("旧配置反序列化应成功");
+        assert!(!migrated_cfg.grok_sync_official_auth_on_switch);
     }
 
     #[test]

@@ -59,7 +59,6 @@ import type {
   CodexLocalAccessClientBaseUrlHost,
   CodexLocalAccessCustomRoutingRule,
   CodexLocalAccessGatewayMode,
-  CodexLocalAccessImageGenerationMode,
   CodexLocalAccessModelAlias,
   CodexLocalAccessModelPricing,
   CodexLocalAccessRoutingStrategy,
@@ -80,14 +79,19 @@ import { filterCodexLocalAccessAccountIds } from "../utils/codexLocalAccessAccou
 import { scrollElementTo } from "../utils/reducedMotion";
 import { SingleSelectDropdown } from "../components/SingleSelectDropdown";
 import { CodexLocalAccessModal } from "../components/CodexLocalAccessModal";
+import { CodexStatsRangePicker } from "../components/CodexStatsRangePicker";
 import { PaginationControls } from "../components/PaginationControls";
 import { useCodexAccountOverviewMemberView } from "../hooks/useCodexAccountOverviewMemberView";
 import { useAutoDismissText } from "../hooks/useAutoDismissMessage";
+import {
+  buildCodexStatsTimeRange,
+  type CodexStatsRangeKey,
+  type CodexStatsTimeRange,
+} from "../utils/codexStatsRange";
 import "./CodexApiServicePage.css";
 
 type ServiceTab = "overview" | "keys" | "accounts" | "models" | "logs";
 type StatsLogTab = "accounts" | "logs" | "models" | "keys";
-type StatsRangeKey = "daily" | "weekly" | "monthly";
 type CopyField =
   | "baseUrl"
   | "lanBaseUrl"
@@ -186,12 +190,12 @@ function persistAddressKind(value: CodexLocalAccessAddressKind): void {
   }
 }
 
-function normalizeStatsRange(value: string | null | undefined): StatsRangeKey {
+function normalizeStatsRange(value: string | null | undefined): CodexStatsRangeKey {
   if (value === "weekly" || value === "monthly") return value;
   return "daily";
 }
 
-function readStoredStatsRange(): StatsRangeKey {
+function readStoredStatsRange(): CodexStatsRangeKey {
   try {
     return normalizeStatsRange(localStorage.getItem(STATS_RANGE_STORAGE_KEY));
   } catch {
@@ -199,7 +203,7 @@ function readStoredStatsRange(): StatsRangeKey {
   }
 }
 
-function persistStatsRange(value: StatsRangeKey): void {
+function persistStatsRange(value: CodexStatsRangeKey): void {
   try {
     localStorage.setItem(STATS_RANGE_STORAGE_KEY, value);
   } catch {
@@ -589,15 +593,26 @@ function gatewayModeLabel(
 export function CodexApiServicePage() {
   const { t } = useTranslation();
   const { platformGroups } = usePlatformLayoutStore();
-  const { accounts, currentAccount, fetchAccounts, fetchCurrentAccount } =
-    useCodexAccountStore();
+  const {
+    accounts,
+    accountsLoaded,
+    currentAccount,
+    fetchAccounts,
+    fetchCurrentAccount,
+  } = useCodexAccountStore();
   const [state, setState] = useState<CodexLocalAccessState | null>(null);
   const [groups, setGroups] = useState<CodexAccountGroup[]>([]);
   const [activeTab, setActiveTab] = useState<ServiceTab>("overview");
   const [statsLogTab, setStatsLogTab] = useState<StatsLogTab>("logs");
-  const [statsRange, setStatsRange] = useState<StatsRangeKey>(() =>
+  const [statsRange, setStatsRange] = useState<CodexStatsRangeKey>(() =>
     readStoredStatsRange(),
   );
+  const [statsTimeRange, setStatsTimeRange] = useState<CodexStatsTimeRange>(() =>
+    buildCodexStatsTimeRange(readStoredStatsRange()),
+  );
+  const [filteredStatsWindow, setFilteredStatsWindow] =
+    useState<CodexLocalAccessStatsWindow | null>(null);
+  const [statsRangeError, setStatsRangeError] = useState("");
   const [addressKind, setAddressKind] = useState<CodexLocalAccessAddressKind>(
     () => readStoredAddressKind(),
   );
@@ -655,6 +670,7 @@ export function CodexApiServicePage() {
   const [maxRetryCredentialsDraft, setMaxRetryCredentialsDraft] = useState("0");
   const [maxRetryIntervalDraft, setMaxRetryIntervalDraft] = useState("3");
   const [disableCoolingDraft, setDisableCoolingDraft] = useState(false);
+  const [immediateSseResponseDraft, setImmediateSseResponseDraft] = useState(false);
   const [requestLogPage, setRequestLogPage] = useState(1);
   const [requestLogPageSize, setRequestLogPageSize] = useState(() =>
     readStoredRequestLogPageSize(),
@@ -664,6 +680,8 @@ export function CodexApiServicePage() {
   const [requestLogLoading, setRequestLogLoading] = useState(false);
   const [requestLogError, setRequestLogError] = useState("");
   const mountedRef = useRef(true);
+  const stateRequestSeqRef = useRef(0);
+  const statsRequestSeqRef = useRef(0);
   const testChatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const collection = state?.collection ?? null;
@@ -708,9 +726,10 @@ export function CodexApiServicePage() {
   );
   const selectedStatsWindow =
     useMemo<CodexLocalAccessStatsWindow | null>(() => {
-      if (!stats) return null;
+      if (filteredStatsWindow) return filteredStatsWindow;
+      if (!stats || statsRange === "custom") return null;
       return stats[statsRange];
-    }, [stats, statsRange]);
+    }, [filteredStatsWindow, stats, statsRange]);
   const totals = selectedStatsWindow?.totals;
   const memberIds = collection?.accountIds ?? [];
   const localAccessAccounts = useMemo(() => accounts, [accounts]);
@@ -755,7 +774,6 @@ export function CodexApiServicePage() {
     addressKind === "lan" && state?.lanBaseUrl ? state.lanBaseUrl : baseUrl;
   const accessScope = collection?.accessScope ?? "localhost";
   const clientBaseUrlHost = collection?.clientBaseUrlHost ?? "localhost";
-  const imageGenerationMode = collection?.imageGenerationMode ?? "enabled";
   const routingStrategy = collection?.routingStrategy ?? "auto";
   const gatewayMode = collection?.gatewayMode ?? "sidecar";
   const modelIds = state?.modelIds ?? [];
@@ -1029,16 +1047,26 @@ export function CodexApiServicePage() {
   );
 
   const reloadState = useCallback(async (options?: { preserveDrafts?: boolean }) => {
-    const nextState = await codexLocalAccessService.getCodexLocalAccessState();
-    if (!mountedRef.current) return nextState;
-    setState(nextState);
-    if (!options?.preserveDrafts) {
-      setPortInput(
-        nextState.collection?.port ? String(nextState.collection.port) : "",
-      );
-      setProxyInput(nextState.collection?.upstreamProxyUrl ?? "");
+    const requestSeq = ++stateRequestSeqRef.current;
+    try {
+      const nextState = await codexLocalAccessService.getCodexLocalAccessState();
+      if (!mountedRef.current || requestSeq !== stateRequestSeqRef.current) {
+        return null;
+      }
+      setState(nextState);
+      if (!options?.preserveDrafts) {
+        setPortInput(
+          nextState.collection?.port ? String(nextState.collection.port) : "",
+        );
+        setProxyInput(nextState.collection?.upstreamProxyUrl ?? "");
+      }
+      return nextState;
+    } catch (error) {
+      if (!mountedRef.current || requestSeq !== stateRequestSeqRef.current) {
+        return null;
+      }
+      throw error;
     }
-    return nextState;
   }, []);
 
   useEffect(() => {
@@ -1150,6 +1178,34 @@ export function CodexApiServicePage() {
   }, [statsRange]);
 
   useEffect(() => {
+    const requestSeq = ++statsRequestSeqRef.current;
+    setStatsRangeError("");
+    void codexLocalAccessService
+      .queryCodexLocalAccessStats(statsTimeRange.startAt, statsTimeRange.endAt)
+      .then((window) => {
+        if (!mountedRef.current || requestSeq !== statsRequestSeqRef.current) return;
+        setFilteredStatsWindow(window);
+      })
+      .catch((err) => {
+        if (!mountedRef.current || requestSeq !== statsRequestSeqRef.current) return;
+        setStatsRangeError(String(err).replace(/^Error:\s*/, ""));
+      });
+  }, [statsTimeRange.endAt, statsTimeRange.startAt, stats?.updatedAt]);
+
+  const handleStatsPresetChange = (
+    key: Exclude<CodexStatsRangeKey, "custom">,
+    range: CodexStatsTimeRange,
+  ) => {
+    setStatsRange(key);
+    setStatsTimeRange(range);
+  };
+
+  const handleCustomStatsRangeApply = (range: CodexStatsTimeRange) => {
+    setStatsRange("custom");
+    setStatsTimeRange(range);
+  };
+
+  useEffect(() => {
     persistAddressKind(addressKind);
   }, [addressKind]);
 
@@ -1159,7 +1215,12 @@ export function CodexApiServicePage() {
 
   useEffect(() => {
     setRequestLogPage(1);
-  }, [statsRange, requestLogPageSize]);
+  }, [
+    statsRange,
+    statsTimeRange.startAt,
+    statsTimeRange.endAt,
+    requestLogPageSize,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "logs" || statsLogTab !== "logs") return;
@@ -1170,7 +1231,9 @@ export function CodexApiServicePage() {
       .queryCodexLocalAccessRequestLogs({
         page: requestLogPage,
         pageSize: requestLogPageSize,
-        statsRange,
+        statsRange: statsRange === "custom" ? null : statsRange,
+        startAt: statsTimeRange.startAt,
+        endAt: statsTimeRange.endAt,
         modelQuery: "",
         accountQuery: "",
         apiKeyQuery: "",
@@ -1203,6 +1266,8 @@ export function CodexApiServicePage() {
     activeTab,
     statsLogTab,
     statsRange,
+    statsTimeRange.startAt,
+    statsTimeRange.endAt,
     requestLogPage,
     requestLogPageSize,
     stats?.updatedAt,
@@ -1250,6 +1315,7 @@ export function CodexApiServicePage() {
       formatSeconds(collection?.maxRetryIntervalMs ?? 3000),
     );
     setDisableCoolingDraft(collection?.disableCooling ?? false);
+    setImmediateSseResponseDraft(collection?.immediateSseResponse ?? false);
     setTimeoutDrafts(timeoutDraftsFromValue(collection?.timeouts));
     setSelectedTimeoutPresetId(
       collection?.activeTimeoutPresetId || "long_wait",
@@ -1263,6 +1329,7 @@ export function CodexApiServicePage() {
     collection?.maxRetryCredentials,
     collection?.maxRetryIntervalMs,
     collection?.disableCooling,
+    collection?.immediateSseResponse,
     collection?.timeouts,
     collection?.activeTimeoutPresetId,
   ]);
@@ -1555,25 +1622,6 @@ export function CodexApiServicePage() {
         setState(next);
       },
       t("codex.localAccess.clientBaseUrlHostSaveSuccess", "客户端地址已更新"),
-    );
-  };
-
-  const handleUpdateImageMode = async (value: string) => {
-    const mode = (
-      value === "images_only" || value === "disabled" ? value : "enabled"
-    ) as CodexLocalAccessImageGenerationMode;
-    await runAction(
-      async () => {
-        const next =
-          await codexLocalAccessService.updateCodexLocalAccessImageGenerationMode(
-            mode,
-          );
-        setState(next);
-      },
-      t(
-        "codex.localAccess.imageGenerationSaveSuccess",
-        "image_generation 设置已更新",
-      ),
     );
   };
 
@@ -2209,6 +2257,7 @@ export function CodexApiServicePage() {
             maxRetryCredentials,
             maxRetryIntervalMs: maxRetryIntervalSeconds * 1000,
             disableCooling: disableCoolingDraft,
+            immediateSseResponse: immediateSseResponseDraft,
           });
         setState(next);
       },
@@ -2587,24 +2636,14 @@ export function CodexApiServicePage() {
     { value: "localhost", label: "localhost" },
     { value: "127.0.0.1", label: "127.0.0.1" },
   ];
-  const imageModeOptions = [
-    {
-      value: "enabled",
-      label: t("codex.localAccess.imageGenerationMode.enabled", "启用"),
-    },
-    {
-      value: "images_only",
-      label: t("codex.localAccess.imageGenerationMode.imagesOnly", "仅图片"),
-    },
-    {
-      value: "disabled",
-      label: t("codex.localAccess.imageGenerationMode.disabled", "禁用"),
-    },
-  ];
   const routingOptions = [
     {
       value: "auto",
       label: t("codex.localAccess.routingStrategy.auto", "自动（推荐）"),
+    },
+    {
+      value: "random",
+      label: t("codex.localAccess.routingStrategy.random", "随机分散"),
     },
     {
       value: "single_account",
@@ -2639,20 +2678,6 @@ export function CodexApiServicePage() {
     {
       value: "custom",
       label: t("codex.localAccess.routingStrategy.custom", "自定义"),
-    },
-  ];
-  const statsRangeOptions = [
-    {
-      key: "daily" as const,
-      label: t("codex.localAccess.statsRange.daily", "日"),
-    },
-    {
-      key: "weekly" as const,
-      label: t("codex.localAccess.statsRange.weekly", "周"),
-    },
-    {
-      key: "monthly" as const,
-      label: t("codex.localAccess.statsRange.monthly", "月"),
     },
   ];
   const serviceTabs: Array<{
@@ -3710,6 +3735,22 @@ export function CodexApiServicePage() {
                     disabled={busy || !collection}
                   />
                 </label>
+                <label>
+                  <span>
+                    {t(
+                      "codex.apiService.routing.immediateSseResponse",
+                      "SSE 立即返回 200",
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={immediateSseResponseDraft}
+                    onChange={(event) =>
+                      setImmediateSseResponseDraft(event.target.checked)
+                    }
+                    disabled={busy || !collection || gatewayMode !== "sidecar"}
+                  />
+                </label>
               </div>
             </section>
           </div>
@@ -3768,24 +3809,6 @@ export function CodexApiServicePage() {
                   </h2>
                 </div>
                 <div className="codex-api-service-config-list">
-                  <label>
-                    <span>
-                      {t(
-                        "codex.localAccess.imageGenerationLabel",
-                        "image_generation",
-                      )}
-                    </span>
-                    <SingleSelectDropdown
-                      value={imageGenerationMode}
-                      options={imageModeOptions}
-                      onChange={(value) => void handleUpdateImageMode(value)}
-                      disabled={busy || !collection}
-                      ariaLabel={t(
-                        "codex.localAccess.imageGenerationLabel",
-                        "image_generation",
-                      )}
-                    />
-                  </label>
                   <label>
                     <span>
                       {t("codex.localAccess.accessScopeLabel", "访问范围")}
@@ -3883,18 +3906,14 @@ export function CodexApiServicePage() {
                 ))}
               </div>
               <div className="codex-api-service-head-actions">
-                <div className="codex-api-service-range-tabs">
-                  {statsRangeOptions.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={statsRange === option.key ? "active" : ""}
-                      onClick={() => setStatsRange(option.key)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <CodexStatsRangePicker
+                  value={statsRange}
+                  range={statsTimeRange}
+                  onPresetChange={handleStatsPresetChange}
+                  onCustomApply={handleCustomStatsRangeApply}
+                  disabled={busy}
+                  error={statsRangeError}
+                />
                 <button
                   type="button"
                   className="btn btn-danger btn-sm"
@@ -5518,6 +5537,7 @@ export function CodexApiServicePage() {
           setAddressKind(normalizeAddressKind(value))
         }
         accounts={accounts}
+        accountsLoaded={accountsLoaded}
         accountGroups={groups}
         memberView={memberView}
         initialSelectedIds={memberIds}

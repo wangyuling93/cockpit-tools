@@ -2640,3 +2640,27 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	return string(data)
 }
+
+
+func TestRelayAcceptsResponsesPathAppendedToChatCompletionsBase(t *testing.T) {
+	t.Parallel()
+	// Route registration only: ensure compatibility paths are not NoRoute 404.
+	m := &manifest{}
+	policy := &requestPolicy{manifest: m}
+	router := (&relayServer{
+		manifest: m,
+		policy:   policy,
+	}).router()
+	for _, path := range []string{
+		"/v1/chat/completions/v1/responses",
+		"/v1/chat/completions/v1/responses/compact",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("Authorization", "Bearer unused")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusNotFound {
+			t.Fatalf("path %s should not be NoRoute 404 (got %d body=%s)", path, w.Code, w.Body.String())
+		}
+	}
+}

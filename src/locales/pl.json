@@ -2,6 +2,8 @@
   "common": {
     "confirm": "Potwierdź",
     "cancel": "Anuluj",
+    "cancelling": "Anulowanie...",
+    "cancelled": "Anulowano",
     "save": "Zapisz",
     "saving": "Zapisywanie...",
     "delete": "Usuń",
@@ -240,7 +242,7 @@
     "settings": "Ustawienia",
     "codex": "Codex​",
     "githubCopilot": "GitHub Copilot​",
-    "windsurf": "Windsurf​",
+    "windsurf": "Devin​",
     "dashboard": "Panel",
     "morePlatforms": "Więcej platform",
     "instances": "Multi-Instancja",
@@ -270,7 +272,9 @@
     "switchClassicLayoutConfirm": "Przełącz teraz",
     "2faManager": "Menedżer 2FA",
     "apiRelay": "Relay API",
-    "claude": "Claude"
+    "claude": "Claude",
+    "openrouter": "OpenRouter",
+    "opencode": "OpenCode"
   },
   "sponsors": {
     "pageTitle": "Sponsorzy",
@@ -663,10 +667,10 @@
       "githubCopilotSettingsTitle": "Ustawienia GitHub Copilot",
       "ghcpAutoRefresh": "Automatyczne odświeżanie limitu GitHub Copilot",
       "ghcpAutoRefreshDesc": "Częstotliwość aktualizacji w tle",
-      "windsurfSettingsTitle": "Ustawienia Windsurf",
-      "windsurfAutoRefresh": "Automatyczne odświeżanie limitu Windsurf",
+      "windsurfSettingsTitle": "Ustawienia Devin",
+      "windsurfAutoRefresh": "Automatyczne odświeżanie limitu Devin",
       "windsurfAutoRefreshDesc": "Częstotliwość aktualizacji w tle",
-      "windsurfAppPath": "Ścieżka aplikacji Windsurf",
+      "windsurfAppPath": "Ścieżka aplikacji Devin",
       "windsurfAppPathDesc": "Pozostaw puste, aby użyć domyślnej ścieżki",
       "windsurfAppPathPlaceholder": "Domyślna ścieżka",
       "windsurfPathSelect": "Wybierz",
@@ -816,7 +820,25 @@
       "autoImportFromLocalScanEmpty": "Gotowe: brak lokalnych logowań",
       "autoImportFromLocalScanPartial": "Gotowe: częściowe błędy",
       "autoImportFromLocalScanFailed": "Skanowanie nieudane: {{error}}",
-      "autoImportFromLocalScanCancelled": "Wyłączono; trwający skan zostanie zignorowany"
+      "autoImportFromLocalScanCancelled": "Wyłączono; trwający skan zostanie zignorowany",
+      "startupPage": "Strona startowa",
+      "startupPageDesc": "Strona przy zimnym starcie. „Zapamiętaj ostatnią” przywraca poprzednią stronę.",
+      "startupPageLast": "Zapamiętaj ostatnią",
+      "startupPageCodexApi": "Usługa API Codex",
+      "hermesAuthOverwrite": "Sync Hermes przy zmianie Codex",
+      "hermesAuthOverwriteDesc": "Tylko OAuth: zapisuje openai-codex do ~/.hermes/auth.json (domyślnie wył.)",
+      "themeColor": "Pakiet kolorów",
+      "themeColorDesc": "Nałóż pakiet na jasny/ciemny motyw",
+      "themeColorDefault": "Domyślny",
+      "themeColorNord": "Nord",
+      "themeColorTokyoNight": "Tokyo Night",
+      "themeColorCatppuccin": "Catppuccin",
+      "themeColorGruvbox": "Gruvbox",
+      "themeColorEverforest": "Everforest",
+      "externalNetwork": "Zezwól na sieć zewnętrzną",
+      "externalNetworkDesc": "Wył.: blokuje WebDAV, usage OpenRouter, ogłoszenia i auto-sprawdzanie aktualizacji (lokalne działa).",
+      "webdavAllowedDomains": "Biała lista WebDAV",
+      "webdavAllowedDomainsDesc": "Po przecinku; puste = bez limitu"
     },
     "network": {
       "apiTitle": "API kokpitu antygrawitacyjnego",
@@ -881,6 +903,7 @@
       "releaseHistoryLoading": "Ładowanie informacji o wersji...",
       "releaseHistoryEmpty": "Nie ma jeszcze żadnych informacji o wersji",
       "releaseHistoryLoadFailed": "Nie udało się załadować: {{error}}",
+      "releaseHistorySectionHighlights": "Najważniejsze zmiany",
       "releaseHistorySectionAdded": "W dodatku",
       "releaseHistorySectionChanged": "Zmieniono",
       "releaseHistorySectionFixed": "Naprawił",
@@ -1045,6 +1068,19 @@
       "retentionUnit": "days",
       "collapseAll": "Collapse remote backups",
       "expandAll": "Expand all remote backups ({{count}} more)"
+    },
+    "keysVault": {
+      "title": "OpenRouter / OpenCode Key",
+      "desc": "Przechowuje klucze API lokalnie. Odświeża usage OpenRouter przy sieci zewnętrznej. To nie pełna platforma.",
+      "openRouter": "OpenRouter",
+      "openCode": "OpenCode Go / Zen",
+      "label": "Etykieta",
+      "empty": "Brak kluczy",
+      "added": "Dodano",
+      "deleted": "Usunięto",
+      "refreshed": "Odświeżono użycie",
+      "usage": "Użycie",
+      "tierOther": "Inne"
     }
   },
   "appPath": {
@@ -1741,7 +1777,8 @@
       "title": "Dodaj konto Codex",
       "oauth": "Autoryzacja OAuth",
       "token": "Import JSON",
-      "local": "Import lokalny"
+      "local": "Import lokalny",
+      "accessToken": "Token dostępu"
     },
     "oauth": {
       "desc": "Kliknij poniżej i zakończ autoryzację OpenAI w przeglądarce",
@@ -1917,6 +1954,7 @@
         "planHighFirst": "Najpierw wyższy plan",
         "planLowFirst": "Najpierw niższy plan",
         "expirySoonFirst": "Najbliższe wygaśnięcie",
+        "random": "Losowo",
         "custom": "Niestandardowe"
       },
       "statusUnconfigured": "Nieskonfigurowane",
@@ -1939,7 +1977,12 @@
         "label": "Zakres statystyk",
         "daily": "Dzień",
         "weekly": "Tydzień",
-        "monthly": "Miesiąc"
+        "monthly": "Miesiąc",
+        "custom": "Własny",
+        "start": "Początek",
+        "end": "Koniec",
+        "apply": "Zastosuj",
+        "invalid": "Czas zakończenia nie może być wcześniejszy niż rozpoczęcia"
       },
       "enableBeforeActivateTitle": "Usługa nie jest włączona",
       "enableBeforeActivateMessage": "Usługa API jest obecnie wyłączona i trzeba ją najpierw włączyć. Włączyć i przełączyć teraz?",
@@ -2131,7 +2174,12 @@
     },
     "list": {
       "showCodeReviewQuota": "Pokaż limit Code Review",
-      "showAdditionalQuota": "Limity modeli"
+      "showAdditionalQuota": "Limity modeli",
+      "planBadgeStyle": "Styl odznaki planu",
+      "planBadgeStyleDefault": "Domyślny",
+      "planBadgeStyleOutline": "Kontur",
+      "planBadgeStyleSoft": "Miękki",
+      "planBadgeStyleMono": "Monochromatyczny"
     },
     "time": {
       "today": "Dzisiaj {{time}}",
@@ -2391,7 +2439,8 @@
         "selectAllSessions": "Zaznacz sesje",
         "clearSelectedSessions": "Odznacz wszystko",
         "copyToInstance": "Kopiuj do instancji",
-        "trash": "Kosz"
+        "trash": "Kosz",
+        "openRollout": "Otwórz plik sesji"
       },
       "confirm": {
         "title": "Przenieś do kosza",
@@ -2593,7 +2642,15 @@
         "removeItem": "Usuń",
         "emptyFilteredTitle": "Brak pasujących sesji",
         "emptyFilteredDesc": "Zmień wyszukiwanie, źródło lub stan wyboru i spróbuj ponownie."
-      }
+      },
+      "kindFilter": "Typ sesji",
+      "kind": {
+        "conversation": "Czaty",
+        "external": "Zewnętrzne",
+        "subagent": "Podagent",
+        "all": "Wszystkie"
+      },
+      "pickInstancePrompt": "Sesja jest na wielu instancjach. Podaj ID instancji:"
     },
     "api": {
       "baseUrl": "Bazowy URL",
@@ -2607,6 +2664,20 @@
       "showApiKey": "Pokaż API Key",
       "hideApiKey": "Ukryj API Key",
       "apiKeyHiddenHint": "API Key jest ukryty. Kliknij, aby pokazać.",
+      "modelCatalog": {
+        "label": "Lista modeli",
+        "fetch": "Pobierz od dostawcy",
+        "fetching": "Pobieranie...",
+        "count": "Liczba modeli: {{count}}",
+        "placeholder": "Wpisz jeden identyfikator modelu w każdym wierszu lub rozdziel identyfikatory przecinkami.",
+        "editHint": "Pobrane modele trafią tylko do tej wersji roboczej. Sprawdź i edytuj je przed zapisaniem.",
+        "syncToggle": "Synchronizuj modele dostawcy z Codex",
+        "syncDescription": "Po zapisaniu ta lista posłuży do utworzenia katalogu modeli Codex zarządzanego przez Cockpit. Własne katalogi nie zostaną nadpisane.",
+        "fetchCredentialsRequired": "Najpierw wpisz API Key i Base URL.",
+        "fetchEmpty": "Dostawca nie zwrócił żadnych modeli. Zachowano bieżącą listę.",
+        "fetchFailed": "Nie udało się pobrać modeli dostawcy: {{error}}",
+        "syncRequiresModels": "Przed synchronizacją z Codex pobierz lub wpisz co najmniej jeden model."
+      },
       "actions": {
         "addAndSwitch": "Dodaj i przełącz"
       },
@@ -2983,7 +3054,10 @@
         "help": "Włącz tylko wtedy, gdy dostawca jawnie obsługuje Responses przez WebSocket; sprawdź sposób połączenia w dziennikach Codex lub usługi proxy.",
         "enabled": "Włączono",
         "disabled": "Wyłączono"
-      }
+      },
+      "renameApiKeyPrompt": "Zmień nazwę API key",
+      "renameApiKeySuccess": "Zmieniono nazwę API key",
+      "renameApiKeyFailed": "Nie udało się zmienić nazwy API key: {{error}}"
     },
     "quickSwitch": {
       "action": "Szybka zmiana dostawcy",
@@ -3220,6 +3294,7 @@
         "maxRetryInterval": "Czas retry",
         "disableCooling": "Wyłącz cooldown",
         "saveOptions": "Zapisz opcje",
+        "immediateSseResponse": "Natychmiastowe SSE 200",
         "optionsSaved": "Opcje routingu zapisane"
       },
       "validation": {
@@ -3326,8 +3401,20 @@
       "previewSubtitle": "Wybierz konta do zapisu",
       "scanSubtitle": "Konta są analizowane i sprawdzane pojedynczo",
       "parseSubtitle": "Analizowanie plików kont",
+      "importSubtitle": "Zapisywanie wybranych kont",
+      "finalizing": "Kończenie importu",
+      "finalizingSubtitle": "Aktualizowanie listy kont i powiązanych ustawień",
+      "cancelImport": "Anuluj import",
+      "importCancelledSummary": "Import anulowano po przetworzeniu {{processed}}/{{total}} kont.",
+      "importChecked": "Importuj sprawdzone konta",
+      "directImport": "Importuj bezpośrednio bez sprawdzania",
+      "importCheckedAndAddToApiService": "Importuj sprawdzone konta i dodaj je do usługi API",
+      "directImportAndAddToApiService": "Importuj bezpośrednio i dodaj do usługi API",
+      "viewAllTasks": "Pokaż wszystkie zadania ({{count}})",
+      "collapseTasks": "Zwiń zadania",
       "cancelling": "Anulowanie...",
       "scanDone": "Skan zakończony",
+      "scanCompleteReview": "Sprawdzanie zakończone — zobacz wyniki",
       "parseDone": "Analiza zakończona",
       "scanning": "Skanowanie",
       "parsing": "Analizowanie",
@@ -3336,7 +3423,7 @@
       "failed": "Błędy",
       "quotaOk": "Konto OK",
       "quotaFailed": "Błąd",
-      "checkQuotaToggle": "Sprawdzaj konta",
+      "checkQuotaToggle": "Sprawdź przed importem",
       "preparing": "Przygotowanie importu...",
       "importSelected": "Importuj wybrane konta",
       "noSelection": "Najpierw wybierz konta",
@@ -3359,7 +3446,17 @@
       "taskRunning": "Przetwarzanie {{current}} / {{total}}",
       "taskPreview": "Gotowe podglądy: {{total}}",
       "reopen": "Pokaż zadanie",
-      "dismissTask": "Odrzuć"
+      "dismissTask": "Odrzuć",
+      "queueCount": "{{count}} zadań w kolejce",
+      "queued": "W kolejce",
+      "batchLabel": "Partia {{index}}",
+      "runInBackground": "Tło",
+      "cancelQueued": "Anuluj kolejkę",
+      "importing": "Importowanie",
+      "checkAccounts": "Sprawdź konta",
+      "importAndAddToApiService": "Importuj + API",
+      "importAndAddToApiServiceSuccess": "Zaimportowano i dodano do usługi API",
+      "addToApiServiceFailed": "Zaimportowano, ale dodanie do usługi API nie powiodło się: {{error}}"
     },
     "autoRepairMode": {
       "label": "Logika autonaprawy",
@@ -3406,6 +3503,71 @@
       "chipSearch": "Szukaj",
       "chipPlan": "Taryfa",
       "chipFolder": "Katalog"
+    },
+    "accessTokenImport": {
+      "nameRequired": "Podaj nazwę konta",
+      "tokenRequired": "Podaj access token Codex",
+      "desc": "Zapisz konto access token. Bez refresh/id używa personal_access_token.",
+      "nameLabel": "Nazwa konta",
+      "namePlaceholder": "Nazwa na liście",
+      "tokenLabel": "Access token Codex",
+      "hideToken": "Ukryj",
+      "showToken": "Pokaż",
+      "submit": "Importuj token",
+      "success": "Zaimportowano konto access token: {{name}}"
+    },
+    "ssh": {
+      "tab": "Sync SSH",
+      "title": "Sync SSH Codex",
+      "desc": "Zapisz hosty, przetestuj połączenie i wyślij auth.json. Po zmianie konta auto-sync wybranego hosta.",
+      "new": "Nowy",
+      "empty": "Brak hostów SSH",
+      "test": "Testuj",
+      "sync": "Sync",
+      "saved": "Zapisano serwer SSH",
+      "deleted": "Usunięto",
+      "name": "Nazwa",
+      "host": "Host",
+      "user": "Użytkownik",
+      "port": "Port",
+      "remoteDir": "Zdalny katalog Codex",
+      "syncSwitch": "SSH na przełączniku",
+      "syncSwitchDesc": "Włącz, aby skonfigurować hosta SSH; Przełączniki Codex zdalnie synchronizują bieżące konto.",
+      "configure": "Organizować coś",
+      "modalTitle": "Konfiguracja synchronizacji SSH",
+      "modalHint": "Dodaj i wybierz hosta SSH z włączoną funkcją automatycznej synchronizacji, aby przełączniki kont Codex aktualizowały zdalne uwierzytelnianie.",
+      "subtitle": "Wybrany host otrzymuje aktualny pakiet autoryzacji Codexu po zmianie konta.",
+      "addServer": "Dodaj serwer",
+      "editServer": "Edytuj serwer",
+      "username": "Nazwa użytkownika",
+      "codexHome": "Zdalny Kodeks, reż",
+      "authMethod": "Metoda autoryzacji",
+      "agentAuth": "Agent SSH",
+      "privateKeyAuth": "Klucz prywatny",
+      "privateKeyPath": "Kluczowa ścieżka",
+      "syncOnSwitch": "Synchronizacja po przełączeniu",
+      "emptyTitle": "Brak serwerów SSH",
+      "emptyBody": "Wpisz host po lewej stronie i zapisz go jako cel synchronizacji przełącznika.",
+      "selected": "Wybrany",
+      "select": "Wybierać",
+      "testConnection": "Testuj",
+      "syncNow": "Zsynchronizuj teraz",
+      "connectionOk": "Połączony",
+      "syncVerified": "Synchronizacja SSH zweryfikowana",
+      "syncFailed": "Synchronizacja SSH nie powiodła się",
+      "syncedAs": "Zsynchronizowane {{email}} · {{time}}",
+      "neverSynced": "Jeszcze nie zsynchronizowane",
+      "latestVerified": "Ostatnia synchronizacja SSH zweryfikowana",
+      "syncSwitchActive": "Włącz · {{name}} ({{user}}@{{host}})",
+      "footerHint": "Przełącznik włącza się po zapisaniu; wyłącz go w dowolnym momencie, aby zatrzymać automatyczną synchronizację.",
+      "formLead": "Szczegóły zdalnego hosta",
+      "namePlaceholder": "np. Domowy NAS",
+      "syncOnSwitchHint": "Po zapisaniu i wybraniu Codex przełącza autoryzację push na ten host",
+      "addAndSave": "Dodaj i zapisz",
+      "serverList": "Serwery",
+      "serverListLead": "Wybierz cel synchronizacji",
+      "serverCount": "{{count}} serwerów",
+      "autoSyncBadge": "Automatyczny"
     }
   },
   "githubCopilot": {
@@ -3622,8 +3784,8 @@
     "inputPercent": "Wpisz procent",
     "inputCredits": "Wpisz kredyty",
     "windsurf": {
-      "title": "Ustawienia Windsurf",
-      "appPath": "Ścieżka Windsurf"
+      "title": "Ustawienia Devin",
+      "appPath": "Ścieżka Devin"
     },
     "windsurfRefreshInterval": "Automatyczne odświeżanie limitu",
     "kiro": {
@@ -3641,7 +3803,9 @@
       "appPath": "Ścieżka Grok CLI",
       "cliPath": "Ścieżka CLI",
       "cliDetected": "Wykryto: {{version}} · {{path}}",
-      "cliMissing": "Nie wykryto Grok CLI. Podaj własną ścieżkę."
+      "cliMissing": "Nie wykryto Grok CLI. Podaj własną ścieżkę.",
+      "syncOfficialAuthOnSwitch": "Synchronizuj oficjalne logowanie",
+      "syncOfficialAuthOnSwitchDesc": "Po włączeniu zmiana konta OAuth w instancji domyślnej zapisuje oficjalny plik ~/.grok/auth.json. Po wyłączeniu używany jest osobny GROK_HOME. Klucze API i dodatkowe instancje nie nadpisują oficjalnego logowania."
     },
     "grokRefreshInterval": "Automatyczne odświeżanie limitu",
     "codebuddy": {
@@ -3725,21 +3889,21 @@
     }
   },
   "windsurf": {
-    "title": "Zarządzanie kontami Windsurf",
+    "title": "Zarządzanie kontami Devin",
     "instances": {
       "unsupported": {
-        "desc": "Multi-instancja Windsurf jest obecnie dostępna tylko na macOS."
+        "desc": "Multi-instancja Devin jest obecnie dostępna tylko na macOS."
       }
     },
     "empty": {
       "description": "Kliknij „Dodaj konto”, aby rozpocząć"
     },
     "addModal": {
-      "title": "Dodaj konto Windsurf",
+      "title": "Dodaj konto Devin",
       "password": "Logowanie e-mailem"
     },
     "password": {
-      "desc": "Zaloguj się adresem e-mail i hasłem konta Windsurf, aby automatycznie pobrać klucz API i dane konta.",
+      "desc": "Zaloguj się adresem e-mail i hasłem konta Devin, aby automatycznie pobrać klucz API i dane konta.",
       "emailPlaceholder": "Adres e-mail",
       "passwordPlaceholder": "Hasło",
       "empty": "Wpisz e-mail i hasło",
@@ -3786,14 +3950,14 @@
       "batchFailureMore": "{{count}} kolejnych nie powiodło się"
     },
     "oauth": {
-      "desc": "Kliknij poniżej i dokończ autoryzację Windsurf w przeglądarce."
+      "desc": "Kliknij poniżej i dokończ autoryzację Devin w przeglądarce."
     },
     "token": {
-      "desc": "Wklej token dostępu Windsurf lub wyeksportowane dane JSON."
+      "desc": "Wklej token dostępu Devin lub wyeksportowane dane JSON."
     },
     "import": {
-      "localDesc": "Importuj konta Windsurf z lokalnie zalogowanych sesji.",
-      "localClient": "Importuj z lokalnego Windsurf"
+      "localDesc": "Importuj konta Devin z lokalnie zalogowanych sesji.",
+      "localClient": "Importuj z lokalnego Devin"
     },
     "credits": {
       "title": "Plan​",
@@ -3817,15 +3981,15 @@
       "autoRecharge": "Automatyczne doładowanie",
       "remaining": "Pozostało {{value}}"
     },
-    "injectToVSCode": "Przełącz do Windsurf",
-    "injectSuccess": "Przełączenie zakończone. Windsurf uruchamia się.",
-    "injectRequireClose": "Zamknij Windsurf przed przełączeniem.",
+    "injectToVSCode": "Przełącz do Devin",
+    "injectSuccess": "Przełączenie zakończone. Devin uruchamia się.",
+    "injectRequireClose": "Zamknij Devin przed przełączeniem.",
     "flowNotice": {
-      "title": "Przewodnik po kontach Windsurf (kliknij, aby rozwinąć/zwinąć)",
-      "desc": "Przełączanie konta wymaga odczytu lokalnego magazynu uwierzytelniania Windsurf oraz użycia systemowej usługi poświadczeń do odszyfrowania i ponownego zapisu; dane są przetwarzane wyłącznie lokalnie.",
-      "inject": "Przełączanie jednym kliknięciem: to narzędzie odczytuje lokalny materiał szyfrujący Windsurf (DPAPI/Keychain/Secret Service), odszyfrowuje sesję uwierzytelniania w state.vscdb, podmienia token Windsurf i ponownie szyfruje dane — wszystko lokalnie na Twoim urządzeniu.",
-      "reason": "Zakres uprawnień: odczyt bazy uwierzytelniania Windsurf (state.vscdb) oraz użycie szyfrowania systemowego (Windows DPAPI / macOS Keychain / Linux Secret Service) do odszyfrowania i ponownego zapisu.",
-      "storage": "Zakres odczytu: przetwarzane są tylko dane związane z sesją logowania Windsurf; wszystkie procesy są wykonywane lokalnie."
+      "title": "Przewodnik po kontach Devin (kliknij, aby rozwinąć/zwinąć)",
+      "desc": "Przełączanie konta wymaga odczytu lokalnego magazynu uwierzytelniania Devin oraz użycia systemowej usługi poświadczeń do odszyfrowania i ponownego zapisu; dane są przetwarzane wyłącznie lokalnie.",
+      "inject": "Przełączanie jednym kliknięciem: to narzędzie odczytuje lokalny materiał szyfrujący Devin (DPAPI/Keychain/Secret Service), odszyfrowuje sesję uwierzytelniania w state.vscdb, podmienia token Devin i ponownie szyfruje dane — wszystko lokalnie na Twoim urządzeniu.",
+      "reason": "Zakres uprawnień: odczyt bazy uwierzytelniania Devin (state.vscdb) oraz użycie szyfrowania systemowego (Windows DPAPI / macOS Keychain / Linux Secret Service) do odszyfrowania i ponownego zapisu.",
+      "storage": "Zakres odczytu: przetwarzane są tylko dane związane z sesją logowania Devin; wszystkie procesy są wykonywane lokalnie."
     }
   },
   "kiro": {
@@ -4003,7 +4167,7 @@
       "goSettings": "Przejdź do ustawień",
       "goVerification": "Przejdź do weryfikacji wakeup",
       "goWakeup": "Przejdź do zadań wakeup",
-      "goWindsurf": "Przejdź do Windsurf",
+      "goWindsurf": "Przejdź do Devin",
       "openLayout": "Otwórz układ platform"
     },
     "antigravity": {
@@ -4120,11 +4284,11 @@
     "navTitle": "Podręcznik użytkownika",
     "providers": {
       "cautions": {
-        "0": "Przed ryzykownymi lub masowymi akcjami w Codex / GitHub Copilot / Windsurf / Kiro wykonaj kopię zapasową.",
-        "1": "Przed uruchomieniem w Codex / GitHub Copilot / Windsurf / Kiro sprawdź filtry i zakres celu."
+        "0": "Przed ryzykownymi lub masowymi akcjami w Codex / GitHub Copilot / Devin / Kiro wykonaj kopię zapasową.",
+        "1": "Przed uruchomieniem w Codex / GitHub Copilot / Devin / Kiro sprawdź filtry i zakres celu."
       },
       "keywords": {
-        "0": "Platformy Codex / GitHub Copilot / Windsurf / Kiro",
+        "0": "Platformy Codex / GitHub Copilot / Devin / Kiro",
         "1": "przewodnik",
         "2": "przepływ",
         "3": "konto",
@@ -4132,17 +4296,17 @@
         "5": "diagnoza"
       },
       "outcomes": {
-        "0": "Zrozum, co daje Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "Stosuj zalecany przepływ w Codex / GitHub Copilot / Windsurf / Kiro, aby ograniczyć błędy.",
-        "2": "Przed skalowaniem potwierdź jedno udane wykonanie w Codex / GitHub Copilot / Windsurf / Kiro."
+        "0": "Zrozum, co daje Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "Stosuj zalecany przepływ w Codex / GitHub Copilot / Devin / Kiro, aby ograniczyć błędy.",
+        "2": "Przed skalowaniem potwierdź jedno udane wykonanie w Codex / GitHub Copilot / Devin / Kiro."
       },
       "steps": {
-        "0": "Otwórz stronę Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "Ukończ podstawową konfigurację i wymagane powiązania w Codex / GitHub Copilot / Windsurf / Kiro.",
-        "2": "Wykonaj jedną ręczną operację w Codex / GitHub Copilot / Windsurf / Kiro, aby zweryfikować wynik."
+        "0": "Otwórz stronę Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "Ukończ podstawową konfigurację i wymagane powiązania w Codex / GitHub Copilot / Devin / Kiro.",
+        "2": "Wykonaj jedną ręczną operację w Codex / GitHub Copilot / Devin / Kiro, aby zweryfikować wynik."
       },
-      "summary": "Ta sekcja wyjaśnia użycie Codex / GitHub Copilot / Windsurf / Kiro w codziennym workflow.",
-      "title": "Platformy Codex / GitHub Copilot / Windsurf / Kiro"
+      "summary": "Ta sekcja wyjaśnia użycie Codex / GitHub Copilot / Devin / Kiro w codziennym workflow.",
+      "title": "Platformy Codex / GitHub Copilot / Devin / Kiro"
     },
     "quickStart": {
       "cautions": {
@@ -4323,6 +4487,12 @@
     },
     "quota": {
       "usedOfTotal": "{{used}} / {{total}}​"
+    },
+    "sessions": {
+      "title": "Lokalne pliki sesji",
+      "desc": "Lokalne pliki sesji — Skan lokalny i otwarcie lokalizacji.",
+      "empty": "Brak plików sesji",
+      "open": "Otwórz lokalizację"
     }
   },
   "qoder": {
@@ -5000,8 +5170,8 @@
     "search": "Szukaj kont Grok CLI...",
     "flowNotice": {
       "title": "Zarządzanie kontami Grok CLI",
-      "desc": "Cockpit zarządza kontami w oficjalnym formacie poświadczeń Grok CLI, aby rzeczywiście przełączać konto domyślne i wiązać odizolowane instancje.",
-      "permission": "Zakres lokalny: odczytuje domyślny plik ~/.grok/auth.json i zarządza oddzielnymi katalogami kont Grok oraz GROK_HOME w lokalnych danych Cockpit.",
+      "desc": "Domyślnie używane są oddzielne katalogi GROK_HOME. Przy włączonej synchronizacji zmiana konta OAuth w instancji domyślnej zapisuje ~/.grok/auth.json; dodatkowe instancje pozostają odizolowane.",
+      "permission": "Zakres lokalny: ~/.grok/auth.json może być odczytany podczas importu i jest zapisywany tylko przy włączonej synchronizacji podczas zmiany OAuth instancji domyślnej. Klucze API nie nadpisują oficjalnego logowania.",
       "network": "Zakres sieciowy: autoryzacja OAuth, odnawianie poświadczeń i sprawdzanie użycia konta. Poświadczenia nie są wysyłane do usług Cockpit."
     },
     "empty": "Brak kont Grok CLI",
@@ -5042,7 +5212,8 @@
       "installHint": "Uruchom poniższe oficjalne polecenie w terminalu, a po instalacji kliknij Odśwież.",
       "selectWorkingDir": "Wybierz katalog roboczy Grok CLI",
       "workingDirAccountHint": "Katalog roboczy jest powiązany z tym kontem i zostanie przywrócony przy następnym uruchomieniu.",
-      "launchCommandPlaceholder": "Wybierz lub potwierdź katalog, aby wygenerować polecenie uruchomienia"
+      "launchCommandPlaceholder": "Wybierz lub potwierdź katalog, aby wygenerować polecenie uruchomienia",
+      "reauthLaunchHint": "Autoryzacja konta wygasła. Autoryzuj ponownie; poniższe polecenie uruchomienia jest nadal dostępne."
     },
     "switch": {
       "success": "Konto przełączone"
@@ -5325,5 +5496,23 @@
       "supports1mLabel": "Deklaruj 1M",
       "supports1mShort": "1M kontekst"
     }
+  },
+  "openrouter": {
+    "title": "OpenRouter",
+    "desc": "Zarządzaj kluczami OpenRouter, usage i modelami.",
+    "tabKeys": "Klucze i użycie",
+    "tabModels": "Modele",
+    "modelsLoaded": "Wczytano {{count}} modeli",
+    "noUsageYet": "Usage jeszcze nie odświeżony",
+    "loadModels": "Wczytaj modele",
+    "searchModels": "Szukaj modeli",
+    "freeOnly": "Tylko darmowe",
+    "noModels": "Brak modeli — dodaj key i wczytaj.",
+    "free": "Darmowy",
+    "noCtx": "Brak długości kontekstu"
+  },
+  "opencode": {
+    "title": "OpenCode",
+    "desc": "Zarządzaj kluczami OpenCode Go/Zen i filtruj po tier."
   }
 }

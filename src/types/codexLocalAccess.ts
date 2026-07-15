@@ -11,6 +11,7 @@ export type CodexLocalAccessImageGenerationStatus =
 
 export type CodexLocalAccessRoutingStrategy =
   | "auto"
+  | "random"
   | "single_account"
   | "quota_high_first"
   | "quota_low_first"
@@ -122,6 +123,7 @@ export interface CodexLocalAccessCollection {
   modelPricingVersion: number;
   modelPricings: CodexLocalAccessModelPricing[];
   debugLogs: boolean;
+  immediateSseResponse: boolean;
   excludedModels: string[];
   sessionAffinity: boolean;
   sessionAffinityTtlMs: number;
@@ -243,6 +245,8 @@ export interface CodexLocalAccessRequestLogQuery {
   page: number;
   pageSize: number;
   statsRange?: "daily" | "weekly" | "monthly" | null;
+  startAt?: number | null;
+  endAt?: number | null;
   modelQuery?: string | null;
   accountQuery?: string | null;
   apiKeyQuery?: string | null;

@@ -24,7 +24,12 @@ import { getPlatformLabel } from '../../utils/platformMeta';
 import { PlatformGroupSwitcher } from './PlatformGroupSwitcher';
 import { useRemoteConfigStore } from '../../stores/useRemoteConfigStore';
 
-export type PlatformOverviewTab = 'overview' | 'wakeup' | 'instances' | 'sessions' | 'providers';
+export type PlatformOverviewTab =
+  | 'overview'
+  | 'wakeup'
+  | 'instances'
+  | 'sessions'
+  | 'providers';
 export type PlatformOverviewHeaderId =
   | 'codex'
   | 'claude'
@@ -80,7 +85,7 @@ const CONFIGS: Record<PlatformOverviewHeaderId, PlatformOverviewConfig> = {
     overviewIcon: <Github className="tab-icon" />,
   },
   windsurf: {
-    platformLabel: 'Windsurf',
+    platformLabel: 'Devin',
     overviewIcon: <WindsurfIcon className="tab-icon" />,
   },
   kiro: {

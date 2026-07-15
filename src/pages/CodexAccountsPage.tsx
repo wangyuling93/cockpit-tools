@@ -8,6 +8,7 @@ import {
   type ReactElement,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus,
   RefreshCw,
@@ -52,6 +53,7 @@ import {
   Link2,
   ChevronDown,
   ShieldCheck,
+  Minimize2,
 } from "lucide-react";
 import { useCodexAccountStore } from "../stores/useCodexAccountStore";
 import { useCodexInstanceStore } from "../stores/useCodexInstanceStore";
@@ -110,6 +112,11 @@ import {
   readCodexImportSyncApiService,
   writeCodexImportSyncApiService,
 } from "../utils/codexImportPreferences";
+import {
+  CODEX_PLAN_BADGE_STYLE_CHANGED_EVENT,
+  getCodexPlanBadgeStyle,
+  type CodexPlanBadgeStyle,
+} from "../utils/codexPreferences";
 
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -124,6 +131,16 @@ import {
 } from "../components/CodexOverviewTabsHeader";
 import { CodexInstancesContent } from "./CodexInstancesPage";
 import { CodexSessionManager } from "../components/codex/CodexSessionManager";
+import { useCodexBatchImportTaskStore } from "../stores/useCodexBatchImportTaskStore";
+import {
+  buildCodexBatchImportApiServiceAccountIds,
+  findNextCodexBatchImportTaskId,
+  getCodexBatchImportProgressPercent,
+  getCodexBatchImportProgressTone,
+  mergeCodexBatchImportDefaultSelection,
+  recoverCodexBatchImportStartedTaskFromPreview,
+  type CodexBatchImportQueueTaskStatus,
+} from "../utils/codexBatchImportQueue";
 import {
   buildCodexSessionVisibilityInitialProgress,
   CodexSessionVisibilityRepairProgressView,
@@ -232,7 +249,10 @@ import {
   writeCodexApiKeyUsageCache,
   type CodexApiKeyUsageState,
 } from "../services/codexApiKeyUsageRefreshService";
-import { isModelProviderUsageUnavailableError } from "../services/modelProviderUsageService";
+import {
+  isModelProviderUsageUnavailableError,
+  listModelProviderModels,
+} from "../services/modelProviderUsageService";
 import { useSponsorStore } from "../stores/useSponsorStore";
 import type { Sponsor } from "../types/sponsor";
 import { buildValidAccountsFilterOption } from "../utils/accountValidityFilter";
@@ -296,6 +316,12 @@ const CODEX_TOKEN_SESSION_EXAMPLE = `{
 
 {
   "refresh_token": "rt_..."
+}
+
+at-your-personal-access-token
+
+{
+  "personal_access_token": "at-..."
 }`;
 const CODEX_TOKEN_BATCH_EXAMPLE = `[
   {
@@ -556,6 +582,22 @@ const CODEX_SESSION_VISIBILITY_REPAIR_PROGRESS_EVENT =
 const CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY =
   "cockpit.codex.batchImport.sessionId";
 
+type CodexBatchImportFilter = "all" | "ready";
+
+type CodexBatchImportTask = {
+  id: string;
+  filePaths: string[];
+  sessionId: string | null;
+  status: CodexBatchImportQueueTaskStatus;
+  checkQuota: boolean;
+  progress: codexService.CodexBatchImportProgress | null;
+  preview: codexService.CodexBatchImportPreview | null;
+  selectedIds: string[];
+  filter: CodexBatchImportFilter;
+  error: string | null;
+  result: codexService.CodexBatchImportConfirmResult | null;
+};
+
 function shouldAutoHideBatchDeleteJob(
   job: CodexBatchDeleteJobStatus | null,
 ): job is CodexBatchDeleteJobStatus {
@@ -765,6 +807,22 @@ function maskCodexApiKey(value: string): string {
   return "••••••••••••••••";
 }
 
+function parseApiModelCatalogText(value: string): string[] {
+  const seen = new Set<string>();
+  const models: string[] = [];
+  value
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((model) => {
+      const key = model.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      models.push(model);
+    });
+  return models;
+}
+
 interface SponsorApiProviderTemplate {
   id: string;
   sponsor: Sponsor;
@@ -968,6 +1026,7 @@ export function CodexAccountsPage() {
   >(new Set());
   const [localAccessState, setLocalAccessState] =
     useState<CodexLocalAccessState | null>(null);
+  const localAccessStateRequestSeqRef = useRef(0);
   const [showLocalAccessModal, setShowLocalAccessModal] = useState(false);
   const [localAccessModalMode, setLocalAccessModalMode] = useState<
     "panel" | "members"
@@ -1393,35 +1452,20 @@ export function CodexAccountsPage() {
   const pendingOAuthHasNoteDetails =
     hasCodexAccountNoteFormDetails(pendingOAuthNoteForm);
   const [batchImportOpen, setBatchImportOpen] = useState(false);
-  const [batchImportSessionId, setBatchImportSessionId] = useState<
+  const [activeBatchImportTaskId, setActiveBatchImportTaskId] = useState<
     string | null
   >(null);
-  const [batchImportProgress, setBatchImportProgress] =
-    useState<codexService.CodexBatchImportProgress | null>(null);
-  const [batchImportPreview, setBatchImportPreview] =
-    useState<codexService.CodexBatchImportPreview | null>(null);
-  const [batchImportSelectedIds, setBatchImportSelectedIds] = useState<
-    string[]
+  const [batchImportTasks, setBatchImportTasks] = useState<
+    CodexBatchImportTask[]
   >([]);
-  const [batchImportFilter, setBatchImportFilter] = useState<"all" | "ready">(
-    "all",
-  );
-  const [batchImportBusy, setBatchImportBusy] = useState(false);
-  const [batchImportError, setBatchImportError] = useState<string | null>(null);
-  const [batchImportResult, setBatchImportResult] =
-    useState<codexService.CodexBatchImportConfirmResult | null>(null);
-  const [batchImportFilePaths, setBatchImportFilePaths] = useState<string[]>(
-    [],
-  );
-  const [batchImportCheckQuota, setBatchImportCheckQuota] = useState(false);
+  const batchImportTaskCounterRef = useRef(0);
+  const batchImportStartingTaskIdRef = useRef<string | null>(null);
   const [batchDeleteJob, setBatchDeleteJob] =
     useState<CodexBatchDeleteJobStatus | null>(null);
   const [batchDeleteBusy, setBatchDeleteBusy] = useState(false);
   const [batchDeleteModalError, setBatchDeleteModalError] = useState<
     string | null
   >(null);
-  const batchImportUnlistenersRef = useRef<UnlistenFn[]>([]);
-  const batchImportSessionIdRef = useRef<string | null>(null);
   const batchDeleteRemoveIdsRef = useRef<Set<string>>(new Set());
   const codexAccountsRef = useRef<CodexAccount[]>(store.accounts);
   const codexCurrentAccountRef = useRef<CodexAccount | null>(
@@ -1551,40 +1595,318 @@ export function CodexAccountsPage() {
     };
   }, [batchDeleteJob, refreshAccountsAfterBatchDelete]);
 
-  const cleanupBatchImportListeners = useCallback(() => {
-    for (const unlisten of batchImportUnlistenersRef.current) {
-      try {
-        unlisten();
-      } catch {
-        // ignore listener cleanup failures
+  const activeBatchImportTask = useMemo(
+    () =>
+      batchImportTasks.find((task) => task.id === activeBatchImportTaskId) ??
+      null,
+    [activeBatchImportTaskId, batchImportTasks],
+  );
+  const batchImportSessionId = activeBatchImportTask?.sessionId ?? null;
+  const batchImportProgress = activeBatchImportTask?.progress ?? null;
+  const batchImportPreview = activeBatchImportTask?.preview ?? null;
+  const batchImportSelectedIds = activeBatchImportTask?.selectedIds ?? [];
+  const batchImportFilter = activeBatchImportTask?.filter ?? "all";
+  const batchImportError = activeBatchImportTask?.error ?? null;
+  const batchImportResult = activeBatchImportTask?.result ?? null;
+  const batchImportCheckQuota = activeBatchImportTask?.checkQuota ?? false;
+  const batchImportBusy =
+    activeBatchImportTask?.status === "queued" ||
+    activeBatchImportTask?.status === "running" ||
+    activeBatchImportTask?.status === "importing";
+  const activeBatchImportProgressPercent = activeBatchImportTask
+    ? getCodexBatchImportProgressPercent(activeBatchImportTask)
+    : 0;
+
+  const enqueueBatchImportTask = useCallback(
+    (paths: string[], checkQuota: boolean, openModal: boolean) => {
+      const id = `codex-batch-import-${Date.now()}-${++batchImportTaskCounterRef.current}`;
+      const task: CodexBatchImportTask = {
+        id,
+        filePaths: [...paths],
+        sessionId: null,
+        status: "queued",
+        checkQuota,
+        progress: null,
+        preview: null,
+        selectedIds: [],
+        filter: "all",
+        error: null,
+        result: null,
+      };
+      setBatchImportTasks((current) => [...current, task]);
+      setActiveBatchImportTaskId((current) => current ?? id);
+      if (openModal) {
+        setActiveBatchImportTaskId(id);
+        setBatchImportOpen(true);
       }
+      return id;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (
+      activeBatchImportTaskId &&
+      batchImportTasks.some((task) => task.id === activeBatchImportTaskId)
+    ) {
+      return;
     }
-    batchImportUnlistenersRef.current = [];
+    setActiveBatchImportTaskId(batchImportTasks[0]?.id ?? null);
+    if (batchImportTasks.length === 0) {
+      setBatchImportOpen(false);
+    }
+  }, [activeBatchImportTaskId, batchImportTasks]);
+
+  // Multi-session event listeners update tasks by sessionId (#1286).
+  useEffect(() => {
+    let mounted = true;
+    let unlisteners: UnlistenFn[] = [];
+
+    const register = async () => {
+      const progressUnlisten =
+        await listen<codexService.CodexBatchImportProgress>(
+          "codex:batch-import-progress",
+          (event) => {
+            setBatchImportTasks((current) =>
+              current.map((task) =>
+                task.sessionId === event.payload.sessionId
+                  ? {
+                      ...task,
+                      status:
+                        event.payload.phase === "importing"
+                          ? "importing"
+                          : "running",
+                      checkQuota: event.payload.checkQuota,
+                      progress: event.payload,
+                      error: null,
+                    }
+                  : task,
+              ),
+            );
+          },
+        );
+      const previewUnlisten =
+        await listen<codexService.CodexBatchImportPreview>(
+          "codex:batch-import-preview",
+          (event) => {
+            setBatchImportTasks((current) =>
+              current.map((task) =>
+                task.sessionId === event.payload.sessionId
+                  ? {
+                      ...task,
+                      checkQuota: event.payload.checkQuota,
+                      preview: event.payload,
+                      selectedIds: mergeCodexBatchImportDefaultSelection(
+                        task.selectedIds,
+                        event.payload.items,
+                      ),
+                    }
+                  : task,
+              ),
+            );
+          },
+        );
+      const completedUnlisten =
+        await listen<codexService.CodexBatchImportPreview>(
+          "codex:batch-import-completed",
+          (event) => {
+            setBatchImportTasks((current) =>
+              current.map((task) =>
+                task.sessionId === event.payload.sessionId
+                  ? {
+                      ...task,
+                      status:
+                        event.payload.status === "cancelled"
+                          ? "cancelled"
+                          : "ready",
+                      checkQuota: event.payload.checkQuota,
+                      preview: event.payload,
+                      progress: task.progress
+                        ? {
+                            ...task.progress,
+                            phase: event.payload.status,
+                            checkQuota: event.payload.checkQuota,
+                            current: event.payload.items.length,
+                            total: event.payload.total,
+                          }
+                        : task.progress,
+                      selectedIds: mergeCodexBatchImportDefaultSelection(
+                        task.selectedIds,
+                        event.payload.items,
+                      ),
+                    }
+                  : task,
+              ),
+            );
+          },
+        );
+
+      const nextUnlisteners = [
+        progressUnlisten,
+        previewUnlisten,
+        completedUnlisten,
+      ];
+      if (!mounted) {
+        nextUnlisteners.forEach((unlisten) => unlisten());
+        return;
+      }
+      unlisteners = nextUnlisteners;
+    };
+
+    void register();
+
+    return () => {
+      mounted = false;
+      unlisteners.forEach((unlisten) => unlisten());
+    };
   }, []);
 
-  useEffect(() => cleanupBatchImportListeners, [cleanupBatchImportListeners]);
-
-  const resetBatchImportState = useCallback(() => {
-    cleanupBatchImportListeners();
-    batchImportSessionIdRef.current = null;
-    setBatchImportOpen(false);
-    setBatchImportSessionId(null);
-    setBatchImportProgress(null);
-    setBatchImportPreview(null);
-    setBatchImportSelectedIds([]);
-    setBatchImportFilter("all");
-    setBatchImportBusy(false);
-    setBatchImportError(null);
-    setBatchImportResult(null);
-    setBatchImportFilePaths([]);
-    setBatchImportCheckQuota(false);
-    setBatchImportTargetGroupId(null);
-    try {
-      localStorage.removeItem(CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY);
-    } catch {
-      // ignore storage failures
+  // Auto-start next queued task when no scan/import is busy (#1286).
+  useEffect(() => {
+    const nextTaskId = findNextCodexBatchImportTaskId(batchImportTasks);
+    if (!nextTaskId || batchImportStartingTaskIdRef.current) {
+      return;
     }
-  }, [cleanupBatchImportListeners]);
+    const task = batchImportTasks.find((item) => item.id === nextTaskId);
+    if (!task) return;
+
+    batchImportStartingTaskIdRef.current = nextTaskId;
+    setBatchImportTasks((current) =>
+      current.map((item) =>
+        item.id === nextTaskId
+          ? {
+              ...item,
+              status: "running",
+              sessionId: null,
+              progress: null,
+              preview: null,
+              selectedIds: [],
+              filter: "all",
+              error: null,
+              result: null,
+            }
+          : item,
+      ),
+    );
+
+    void codexService
+      .startCodexBatchImportFromFiles(task.filePaths, task.checkQuota)
+      .then(async (started) => {
+        setBatchImportTasks((current) =>
+          current.map((item) =>
+            item.id === nextTaskId
+              ? { ...item, sessionId: started.sessionId }
+              : item,
+          ),
+        );
+        try {
+          localStorage.setItem(
+            CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY,
+            started.sessionId,
+          );
+        } catch {
+          // ignore storage failures
+        }
+        const preview = await codexService.getCodexBatchImportPreview(
+          started.sessionId,
+        );
+        setBatchImportTasks((current) =>
+          current.map((item) =>
+            item.id === nextTaskId
+              ? recoverCodexBatchImportStartedTaskFromPreview(
+                  item,
+                  started.sessionId,
+                  preview,
+                )
+              : item,
+          ),
+        );
+      })
+      .catch((error) => {
+        setBatchImportTasks((current) =>
+          current.map((item) =>
+            item.id === nextTaskId
+              ? {
+                  ...item,
+                  status: "error",
+                  error: String(error).replace(/^Error:\s*/, ""),
+                }
+              : item,
+          ),
+        );
+      })
+      .finally(() => {
+        if (batchImportStartingTaskIdRef.current === nextTaskId) {
+          batchImportStartingTaskIdRef.current = null;
+        }
+      });
+  }, [batchImportTasks]);
+
+  // Mirror all multi-session jobs to the global strip store (#1286).
+  useEffect(() => {
+    const store = useCodexBatchImportTaskStore.getState();
+    if (batchImportTasks.length === 0) {
+      store.clearAll();
+      return;
+    }
+    const knownTaskIds = new Set(batchImportTasks.map((task) => task.id));
+    for (const existing of Object.keys(store.jobs)) {
+      if (!knownTaskIds.has(existing)) {
+        store.clear(existing);
+      }
+    }
+    for (const task of batchImportTasks) {
+      const sessionId = task.sessionId?.trim() || null;
+      store.publish({
+        taskId: task.id,
+        sessionId,
+        busy:
+          task.status === "queued" ||
+          task.status === "running" ||
+          task.status === "importing",
+        current: task.progress?.current ?? task.preview?.items.length ?? 0,
+        total: task.progress?.total ?? task.preview?.total ?? 0,
+        phase: task.progress?.phase ?? task.status,
+        checkQuota: task.checkQuota,
+        hasPreview: Boolean(task.preview),
+        hasResult: Boolean(task.result) || task.status === "imported",
+        open: batchImportOpen && task.id === activeBatchImportTaskId,
+      });
+    }
+  }, [activeBatchImportTaskId, batchImportOpen, batchImportTasks]);
+
+  const batchImportReopenNonce = useCodexBatchImportTaskStore(
+    (s) => s.reopenNonce,
+  );
+  const batchImportReopenTaskId = useCodexBatchImportTaskStore(
+    (s) => s.reopenTaskId,
+  );
+  const consumeBatchImportReopen = useCodexBatchImportTaskStore(
+    (s) => s.consumeReopen,
+  );
+  const handledBatchImportReopenNonceRef = useRef(0);
+  useEffect(() => {
+    if (
+      batchImportReopenNonce <= 0 ||
+      batchImportReopenNonce === handledBatchImportReopenNonceRef.current
+    ) {
+      return;
+    }
+    handledBatchImportReopenNonceRef.current = batchImportReopenNonce;
+    if (!batchImportReopenTaskId) return;
+    consumeBatchImportReopen();
+    const matched = batchImportTasks.find(
+      (task) => task.id === batchImportReopenTaskId,
+    );
+    if (!matched) return;
+    setActiveBatchImportTaskId(matched.id);
+    setBatchImportOpen(true);
+  }, [
+    batchImportReopenNonce,
+    batchImportReopenTaskId,
+    batchImportTasks,
+    consumeBatchImportReopen,
+  ]);
 
   useEffect(() => {
     let disposed = false;
@@ -1597,28 +1919,39 @@ export function CodexAccountsPage() {
       } catch {
         savedSessionId = null;
       }
-      if (!savedSessionId || batchImportSessionIdRef.current) {
+      if (!savedSessionId) {
         return;
       }
       try {
         const preview =
           await codexService.getCodexBatchImportPreview(savedSessionId);
         if (disposed) return;
-        batchImportSessionIdRef.current = savedSessionId;
-        setBatchImportSessionId(savedSessionId);
-        setBatchImportPreview(preview);
-        setBatchImportCheckQuota(preview.checkQuota);
-        setBatchImportBusy(false);
-        setBatchImportSelectedIds(
-          preview.items
-            .filter(
-              (item) =>
-                item.defaultSelected &&
-                item.selectable &&
-                (item.status === "ready" || item.status === "existing"),
-            )
-            .map((item) => item.itemId),
+        const id = `codex-batch-import-restored-${Date.now()}`;
+        const status: CodexBatchImportQueueTaskStatus =
+          preview.status === "cancelled"
+            ? "cancelled"
+            : preview.status === "ready"
+              ? "ready"
+              : "running";
+        const task: CodexBatchImportTask = {
+          id,
+          filePaths: [],
+          sessionId: savedSessionId,
+          status,
+          checkQuota: preview.checkQuota,
+          progress: null,
+          preview,
+          selectedIds: mergeCodexBatchImportDefaultSelection([], preview.items),
+          filter: "all",
+          error: null,
+          result: null,
+        };
+        setBatchImportTasks((current) =>
+          current.some((item) => item.sessionId === savedSessionId)
+            ? current
+            : [...current, task],
         );
+        setActiveBatchImportTaskId((current) => current ?? id);
       } catch {
         try {
           localStorage.removeItem(CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY);
@@ -1676,6 +2009,19 @@ export function CodexAccountsPage() {
     batchImportProgress?.checkQuota ??
     batchImportPreview?.checkQuota ??
     batchImportCheckQuota;
+  const batchImportProgressCurrent =
+    batchImportProgress?.current ?? batchImportPreview?.items.length ?? 0;
+  const batchImportProgressTotal =
+    batchImportProgress?.total ?? batchImportPreview?.total ?? 0;
+  const batchImportCanCancel =
+    activeBatchImportTask?.status === "queued" ||
+    activeBatchImportTask?.status === "running" ||
+    (activeBatchImportTask?.status === "importing" &&
+      batchImportProgress?.phase !== "finalizing");
+  const batchImportCancelling =
+    (activeBatchImportTask?.status === "running" ||
+      activeBatchImportTask?.status === "importing") &&
+    batchImportProgress?.phase === "cancelling";
 
   const openCodexAddModal = useCallback(
     (tab: string, targetAccount?: CodexAccount | null) => {
@@ -1794,11 +2140,14 @@ export function CodexAccountsPage() {
   }, [activeGroupId, filterPersistenceEnabled, filterPersistenceScope]);
 
   const reloadLocalAccessState = useCallback(async () => {
+    const requestSeq = ++localAccessStateRequestSeqRef.current;
     try {
       const nextState =
         await codexLocalAccessService.getCodexLocalAccessState();
+      if (requestSeq !== localAccessStateRequestSeqRef.current) return;
       setLocalAccessState(nextState);
     } catch (error) {
+      if (requestSeq !== localAccessStateRequestSeqRef.current) return;
       console.error("Failed to load codex local access state:", error);
       setMessage({
         text: t("messages.actionFailed", {
@@ -3377,6 +3726,13 @@ export function CodexAccountsPage() {
   const [apiBaseUrlInput, setApiBaseUrlInput] = useState(
     DEFAULT_CODEX_API_BASE_URL,
   );
+  const [apiModelCatalogInput, setApiModelCatalogInput] = useState("");
+  const [apiSyncModelCatalogToCodex, setApiSyncModelCatalogToCodex] =
+    useState(false);
+  const [apiModelCatalogFetching, setApiModelCatalogFetching] = useState(false);
+  const [apiModelCatalogError, setApiModelCatalogError] = useState<
+    string | null
+  >(null);
   const [apiProviderPresetId, setApiProviderPresetId] = useState(
     DEFAULT_CODEX_API_PROVIDER_ID,
   );
@@ -3414,6 +3770,16 @@ export function CodexAccountsPage() {
   const [editingApiProviderPresetId, setEditingApiProviderPresetId] = useState(
     DEFAULT_CODEX_API_PROVIDER_ID,
   );
+  const [editingApiModelCatalogInput, setEditingApiModelCatalogInput] =
+    useState("");
+  const [
+    editingApiSyncModelCatalogToCodex,
+    setEditingApiSyncModelCatalogToCodex,
+  ] = useState(false);
+  const [editingApiModelCatalogFetching, setEditingApiModelCatalogFetching] =
+    useState(false);
+  const [editingApiModelCatalogError, setEditingApiModelCatalogError] =
+    useState<string | null>(null);
   const [editingManagedProviderId, setEditingManagedProviderId] =
     useState<string>("");
   const [editingManagedProviderApiKeyId, setEditingManagedProviderApiKeyId] =
@@ -3440,10 +3806,6 @@ export function CodexAccountsPage() {
     useState("");
   const [oauthBindingSaving, setOauthBindingSaving] = useState(false);
   const [oauthBindingAutoSwitch, setOauthBindingAutoSwitch] = useState(false);
-  const [
-    oauthBindingUseLocalGateway,
-    setOauthBindingUseLocalGateway,
-  ] = useState(false);
   const [oauthBindingQuotaReserve, setOauthBindingQuotaReserve] =
     useState<CodexLocalAccessOAuthQuotaReserve | null>(null);
   const [oauthBindingQuotaReserveEditorOpen, setOauthBindingQuotaReserveEditorOpen] =
@@ -3589,6 +3951,56 @@ export function CodexAccountsPage() {
       ) ?? null,
     [editingManagedProviderApiKeyId, selectedEditingManagedProvider],
   );
+  const apiModelCatalogDraft = useMemo(
+    () => parseApiModelCatalogText(apiModelCatalogInput),
+    [apiModelCatalogInput],
+  );
+  const editingApiModelCatalogDraft = useMemo(
+    () => parseApiModelCatalogText(editingApiModelCatalogInput),
+    [editingApiModelCatalogInput],
+  );
+  const apiModelCatalogSyncAvailable = useMemo(
+    () =>
+      apiProviderPresetId !== OPENAI_OFFICIAL_PRESET_ID &&
+      resolveCodexProviderCapabilityProfile({
+        presetId: apiProviderPresetId,
+        baseUrl: apiBaseUrlInput,
+        wireApi:
+          selectedManagedProvider?.wireApi ??
+          selectedSponsorApiProviderTemplate?.wireApi ??
+          null,
+      }).wireApi === "responses",
+    [
+      apiBaseUrlInput,
+      apiProviderPresetId,
+      selectedManagedProvider?.wireApi,
+      selectedSponsorApiProviderTemplate?.wireApi,
+    ],
+  );
+  const editingApiModelCatalogSyncAvailable = useMemo(
+    () =>
+      editingApiProviderPresetId !== OPENAI_OFFICIAL_PRESET_ID &&
+      resolveCodexProviderCapabilityProfile({
+        presetId: editingApiProviderPresetId,
+        baseUrl: editingApiBaseUrlCredentialsValue,
+        wireApi: selectedEditingManagedProvider?.wireApi ?? null,
+      }).wireApi === "responses",
+    [
+      editingApiBaseUrlCredentialsValue,
+      editingApiProviderPresetId,
+      selectedEditingManagedProvider?.wireApi,
+    ],
+  );
+  useEffect(() => {
+    if (!apiModelCatalogSyncAvailable) {
+      setApiSyncModelCatalogToCodex(false);
+    }
+  }, [apiModelCatalogSyncAvailable]);
+  useEffect(() => {
+    if (!editingApiModelCatalogSyncAvailable) {
+      setEditingApiSyncModelCatalogToCodex(false);
+    }
+  }, [editingApiModelCatalogSyncAvailable]);
   const quickSwitchAccount = useMemo(
     () =>
       quickSwitchAccountId
@@ -3701,7 +4113,6 @@ export function CodexAccountsPage() {
       setOauthBindingAccountId(null);
       setOauthBindingSelectedAccountId("");
       setOauthBindingAutoSwitch(false);
-      setOauthBindingUseLocalGateway(false);
       setOauthBindingError(null);
     }
     if (oauthBindingTargetKind === "local_access" && !localAccessCollection) {
@@ -3709,7 +4120,6 @@ export function CodexAccountsPage() {
       setOauthBindingAccountId(null);
       setOauthBindingSelectedAccountId("");
       setOauthBindingAutoSwitch(false);
-      setOauthBindingUseLocalGateway(false);
       setOauthBindingError(null);
     }
   }, [
@@ -3962,6 +4372,17 @@ export function CodexAccountsPage() {
       setManagedProviderId("");
       setManagedProviderApiKeyId("");
       setNewManagedProviderNameInput(defaultProvider.providerName);
+      const defaultModels =
+        sponsorApiProviderTemplates.find(
+          (template) => template.id === defaultApiProviderPresetId,
+        )?.modelCatalog ??
+        findCodexApiProviderPresetById(defaultApiProviderPresetId)
+          ?.modelCatalog ??
+        [];
+      setApiModelCatalogInput(defaultModels.join("\n"));
+      setApiSyncModelCatalogToCodex(false);
+      setApiModelCatalogFetching(false);
+      setApiModelCatalogError(null);
     }
   }, [defaultApiProviderPresetId, showAddModal, sponsorApiProviderTemplates]);
 
@@ -4004,6 +4425,13 @@ export function CodexAccountsPage() {
       );
       setApiBaseUrlInput(defaultProvider.baseUrl);
       setNewManagedProviderNameInput(defaultProvider.providerName);
+      const defaultModels =
+        sponsorApiProviderTemplates.find(
+          (template) => template.id === nextProviderPresetId,
+        )?.modelCatalog ??
+        findCodexApiProviderPresetById(nextProviderPresetId)?.modelCatalog ??
+        [];
+      setApiModelCatalogInput(defaultModels.join("\n"));
     }
   }, [
     addTab,
@@ -4701,7 +5129,6 @@ export function CodexAccountsPage() {
     setOauthBindingAccountId(null);
     setOauthBindingSelectedAccountId("");
     setOauthBindingAutoSwitch(false);
-    setOauthBindingUseLocalGateway(false);
     setOauthBindingQuotaReserve(null);
     setOauthBindingQuotaReserveEditorOpen(false);
     setOauthBindingHourlyReserveDraft("");
@@ -4715,44 +5142,6 @@ export function CodexAccountsPage() {
     resetOAuthBindingModal();
   }, [oauthBindingSaving, resetOAuthBindingModal]);
 
-  const handleOAuthBindingLocalGatewayToggle = useCallback(
-    async (checked: boolean) => {
-      if (!checked) {
-        setOauthBindingUseLocalGateway(false);
-        return;
-      }
-      const isLocalAccessBinding = oauthBindingTargetKind === "local_access";
-      const confirmed = await confirmDialog(
-        isLocalAccessBinding
-          ? t(
-              "codex.localAccess.oauthBinding.imageGenerationConfirm.message",
-              "开启后，API 服务会在本地网关转发普通文本对话前移除 image_generation 工具声明，避免部分供应商报 “Image generation is not enabled”；不会删除 gpt-image 等生图模型。是否继续？",
-            )
-          : t(
-              "codex.api.oauthBinding.localGatewayConfirm.message",
-              "开启后，该 API Key 账号绑定 OAuth 后的普通文本对话会走本地网关，并在转发前移除 image_generation 工具声明，避免部分供应商报 “Image generation is not enabled”；不会删除 gpt-image 等生图模型。是否继续？",
-            ),
-        {
-          title: isLocalAccessBinding
-            ? t(
-                "codex.localAccess.oauthBinding.imageGenerationConfirm.title",
-                "禁用 image_generation 能力",
-              )
-            : t(
-                "codex.api.oauthBinding.localGatewayConfirm.title",
-                "禁用 image_generation 能力",
-              ),
-          okLabel: t("common.confirm", "确认"),
-          cancelLabel: t("common.cancel", "取消"),
-        },
-      );
-      if (confirmed) {
-        setOauthBindingUseLocalGateway(true);
-      }
-    },
-    [oauthBindingTargetKind, t],
-  );
-
   const openOAuthBindingModal = useCallback(
     (account: CodexAccount, options?: { autoSwitch?: boolean }) => {
       if (!isCodexApiKeyAccount(account)) return;
@@ -4765,9 +5154,6 @@ export function CodexAccountsPage() {
           : "",
       );
       setOauthBindingAutoSwitch(options?.autoSwitch ?? false);
-      setOauthBindingUseLocalGateway(
-        Boolean(account.bound_oauth_use_local_gateway),
-      );
       setOauthBindingQuotaReserve(null);
       setOauthBindingQuotaReserveEditorOpen(false);
       setOauthBindingHourlyReserveDraft("");
@@ -4809,9 +5195,6 @@ export function CodexAccountsPage() {
           : "",
       );
       setOauthBindingAutoSwitch(options?.autoSwitch ?? false);
-      setOauthBindingUseLocalGateway(
-        localAccessCollection?.imageGenerationMode === "images_only",
-      );
       setOauthBindingQuotaReserve(quotaReserve);
       setOauthBindingQuotaReserveEditorOpen(false);
       setOauthBindingHourlyReserveDraft("");
@@ -4822,7 +5205,6 @@ export function CodexAccountsPage() {
     [
       boundLocalAccessOAuthAccount,
       isOAuthBindingEligibleAccount,
-      localAccessCollection?.imageGenerationMode,
       localAccessCollection?.boundOauthQuotaReserve,
       setOauthBindingError,
     ],
@@ -5085,7 +5467,6 @@ export function CodexAccountsPage() {
         const nextState =
           await codexLocalAccessService.updateCodexLocalAccessBoundOAuthAccount(
             selectedOAuthBindingAccount.id,
-            oauthBindingUseLocalGateway,
             quotaReserve,
           );
         setLocalAccessState(nextState);
@@ -5093,7 +5474,6 @@ export function CodexAccountsPage() {
         await updateApiKeyBoundOAuthAccount(
           oauthBindingAccount.id,
           selectedOAuthBindingAccount.id,
-          oauthBindingUseLocalGateway,
         );
       }
       setMessage({
@@ -5122,7 +5502,6 @@ export function CodexAccountsPage() {
     oauthBindingAutoSwitch,
     oauthBindingQuotaReserve,
     oauthBindingTargetKind,
-    oauthBindingUseLocalGateway,
     isOAuthBindingEligibleAccount,
     selectedOAuthBindingAccount,
     setMessage,
@@ -5148,7 +5527,7 @@ export function CodexAccountsPage() {
           );
         setLocalAccessState(nextState);
       } else if (oauthBindingAccount) {
-        await updateApiKeyBoundOAuthAccount(oauthBindingAccount.id, null, false);
+        await updateApiKeyBoundOAuthAccount(oauthBindingAccount.id, null);
       }
       setMessage({
         text: t("codex.api.oauthBinding.clearSuccess", "OAuth 绑定已解除"),
@@ -5306,122 +5685,41 @@ export function CodexAccountsPage() {
     }
   };
 
-  const startBatchImportFromPaths = async (
-    paths: string[],
-    checkQuota: boolean,
+  const updateActiveBatchImportTask = (
+    updater: (task: CodexBatchImportTask) => CodexBatchImportTask,
   ) => {
-    cleanupBatchImportListeners();
-    setBatchImportOpen(true);
-    setBatchImportSessionId(null);
-    setBatchImportProgress(null);
-    setBatchImportPreview(null);
-    setBatchImportSelectedIds([]);
-    setBatchImportFilter("all");
-    setBatchImportResult(null);
-    setBatchImportError(null);
-    setBatchImportFilePaths(paths);
-    setBatchImportCheckQuota(checkQuota);
-    setBatchImportBusy(true);
-    batchImportSessionIdRef.current = "__pending__";
+    if (!activeBatchImportTaskId) return;
+    setBatchImportTasks((current) =>
+      current.map((task) =>
+        task.id === activeBatchImportTaskId ? updater(task) : task,
+      ),
+    );
+  };
 
-    try {
-      const progressUnlisten =
-        await listen<codexService.CodexBatchImportProgress>(
-          "codex:batch-import-progress",
-          (event) => {
-            if (event.payload.sessionId !== batchImportSessionIdRef.current) {
-              return;
-            }
-            setBatchImportProgress(event.payload);
-            setBatchImportCheckQuota(event.payload.checkQuota);
-          },
-        );
-      const completedUnlisten =
-        await listen<codexService.CodexBatchImportPreview>(
-          "codex:batch-import-completed",
-          (event) => {
-            if (event.payload.sessionId !== batchImportSessionIdRef.current) {
-              return;
-            }
-            setBatchImportPreview(event.payload);
-            setBatchImportCheckQuota(event.payload.checkQuota);
-            setBatchImportProgress((current) =>
-              current
-                ? {
-                    ...current,
-                    phase: event.payload.status,
-                    checkQuota: event.payload.checkQuota,
-                    current: event.payload.items.length,
-                    total: event.payload.total,
-                  }
-                : current,
-            );
-            setBatchImportSelectedIds((prev) => {
-              const next = new Set(prev);
-              for (const item of event.payload.items) {
-                if (
-                  item.defaultSelected &&
-                  item.selectable &&
-                  (item.status === "ready" || item.status === "existing")
-                ) {
-                  next.add(item.itemId);
-                }
-              }
-              return Array.from(next);
-            });
-            setBatchImportBusy(false);
-          },
-        );
-      const previewUnlisten =
-        await listen<codexService.CodexBatchImportPreview>(
-          "codex:batch-import-preview",
-          (event) => {
-            if (event.payload.sessionId !== batchImportSessionIdRef.current) {
-              return;
-            }
-            setBatchImportPreview(event.payload);
-            setBatchImportCheckQuota(event.payload.checkQuota);
-            setBatchImportSelectedIds((prev) => {
-              const next = new Set(prev);
-              for (const item of event.payload.items) {
-                if (
-                  item.defaultSelected &&
-                  item.selectable &&
-                  (item.status === "ready" || item.status === "existing")
-                ) {
-                  next.add(item.itemId);
-                }
-              }
-              return Array.from(next);
-            });
-          },
-        );
-      batchImportUnlistenersRef.current = [
-        progressUnlisten,
-        previewUnlisten,
-        completedUnlisten,
-      ];
-
-      const started = await codexService.startCodexBatchImportFromFiles(
-        paths,
-        checkQuota,
-      );
-      batchImportSessionIdRef.current = started.sessionId;
-      setBatchImportSessionId(started.sessionId);
-      try {
-        localStorage.setItem(
-          CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY,
-          started.sessionId,
-        );
-      } catch {
-        // ignore storage failures
+  const removeBatchImportTask = (taskId: string) => {
+    setBatchImportTasks((current) => {
+      const removed = current.find((task) => task.id === taskId);
+      const next = current.filter((task) => task.id !== taskId);
+      if (removed) {
+        useCodexBatchImportTaskStore.getState().clear(removed.id);
       }
-    } catch (e) {
-      cleanupBatchImportListeners();
-      batchImportSessionIdRef.current = null;
-      setBatchImportBusy(false);
-      setBatchImportError(String(e).replace(/^Error:\s*/, ""));
-    }
+      if (removed?.sessionId) {
+        try {
+          const saved = localStorage.getItem(
+            CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY,
+          );
+          if (saved && saved === removed.sessionId) {
+            localStorage.removeItem(CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY);
+          }
+        } catch {
+          // ignore storage failures
+        }
+      }
+      if (next.length === 0) {
+        setBatchImportTargetGroupId(null);
+      }
+      return next;
+    });
   };
 
   const handleImportFromFiles = async () => {
@@ -5437,79 +5735,115 @@ export function CodexAccountsPage() {
         resolveValidCodexGroupId(codexAddTargetGroupId),
       );
       closeAddModal();
-      await startBatchImportFromPaths(paths, false);
+      // Every file selection opens one unified batch-import dialog. The queue only
+      // schedules work and never decides whether this task should check quota.
+      enqueueBatchImportTask(paths, false, true);
     } catch (e) {
-      setBatchImportBusy(false);
-      setBatchImportError(String(e).replace(/^Error:\s*/, ""));
+      setMessage({
+        text: String(e).replace(/^Error:\s*/, ""),
+        tone: "error",
+      });
     }
   };
 
   const handleBatchImportCheckQuotaChange = async (checkQuota: boolean) => {
     if (
+      !activeBatchImportTask ||
       batchImportBusy ||
       batchImportResult ||
       checkQuota === batchImportCheckQuota
     ) {
       return;
     }
-    setBatchImportCheckQuota(checkQuota);
-    if (batchImportFilePaths.length === 0) {
+    // Restored sessions may lack original file paths; only re-queue when we can restart.
+    if (activeBatchImportTask.filePaths.length === 0) {
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        checkQuota,
+      }));
       return;
     }
-    await startBatchImportFromPaths(batchImportFilePaths, checkQuota);
+    // Re-parse in the selected mode so turning detection off cannot retain stale
+    // quota results from a previous checked preview.
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      sessionId: null,
+      status: "queued",
+      checkQuota,
+      progress: null,
+      preview: null,
+      selectedIds: [],
+      filter: "all",
+      error: null,
+      result: null,
+    }));
   };
 
   const handleCancelBatchImport = async () => {
-    if (!batchImportSessionId) {
+    if (!activeBatchImportTask) {
       return;
     }
-    if (batchImportBusy) {
+    if (activeBatchImportTask.status === "queued") {
+      removeBatchImportTask(activeBatchImportTask.id);
+      return;
+    }
+    if (
+      (activeBatchImportTask.status === "running" ||
+        activeBatchImportTask.status === "importing") &&
+      batchImportSessionId
+    ) {
       try {
         await codexService.cancelCodexBatchImport(batchImportSessionId);
-        setBatchImportProgress((current) =>
-          current ? { ...current, phase: "cancelling" } : current,
-        );
+        updateActiveBatchImportTask((task) => ({
+          ...task,
+          progress: task.progress
+            ? { ...task.progress, phase: "cancelling" }
+            : task.progress,
+        }));
       } catch (e) {
-        setBatchImportError(String(e).replace(/^Error:\s*/, ""));
+        updateActiveBatchImportTask((task) => ({
+          ...task,
+          error: String(e).replace(/^Error:\s*/, ""),
+        }));
       }
-      return;
     }
   };
 
   const handleCloseBatchImport = async () => {
-    if (batchImportResult) {
-      resetBatchImportState();
-      return;
-    }
-    // Busy scan/parse: minimize to sticky task bar so progress can be reopened.
-    if (batchImportBusy) {
+    if (!activeBatchImportTask) {
       setBatchImportOpen(false);
       return;
     }
-    // Idle preview/error with nothing selectable: discard so the sticky bar
-    // does not stay forever after a failed all-invalid import.
-    const selectableCount = (batchImportPreview?.items ?? []).filter(
-      (item) => item.selectable && item.status !== "invalid",
-    ).length;
-    if (!batchImportPreview || selectableCount === 0) {
-      resetBatchImportState();
+    if (activeBatchImportTask.status === "queued") {
+      removeBatchImportTask(activeBatchImportTask.id);
       return;
     }
+    if (
+      activeBatchImportTask.status === "imported" ||
+      activeBatchImportTask.status === "cancelled" ||
+      activeBatchImportTask.status === "error"
+    ) {
+      removeBatchImportTask(activeBatchImportTask.id);
+      return;
+    }
+    // A ready preview is idle: closing discards it. Background mode is reserved
+    // for queued, scanning, parsing, and importing work that can take time.
+    if (activeBatchImportTask.status === "ready") {
+      removeBatchImportTask(activeBatchImportTask.id);
+      return;
+    }
+    // Busy scan/import or ready-with-selection: minimize so progress continues.
     setBatchImportOpen(false);
-  };
-
-  const handleDismissBatchImportTask = () => {
-    if (batchImportBusy) return;
-    resetBatchImportState();
   };
 
   const toggleBatchImportItem = (itemId: string) => {
     if (!batchImportSelectableIdSet.has(itemId)) return;
-    setBatchImportSelectedIds((prev) =>
-      prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId],
-    );
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      selectedIds: task.selectedIds.includes(itemId)
+        ? task.selectedIds.filter((id) => id !== itemId)
+        : [...task.selectedIds, itemId],
+    }));
   };
 
   const selectAllBatchImportAccounts = () => {
@@ -5517,8 +5851,11 @@ export function CodexAccountsPage() {
     const ids = items
       .filter((item) => item.selectable && item.status !== "invalid")
       .map((item) => item.itemId);
-    setBatchImportFilter("all");
-    setBatchImportSelectedIds(ids);
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      filter: "all",
+      selectedIds: ids,
+    }));
   };
 
   const selectReadyBatchImportAccounts = () => {
@@ -5530,33 +5867,68 @@ export function CodexAccountsPage() {
           (item.status === "ready" || item.status === "existing"),
       )
       .map((item) => item.itemId);
-    setBatchImportFilter("ready");
-    setBatchImportSelectedIds(ids);
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      filter: "ready",
+      selectedIds: ids,
+    }));
   };
 
   const clearBatchImportSelection = () => {
-    setBatchImportFilter("all");
-    setBatchImportSelectedIds([]);
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      filter: "all",
+      selectedIds: [],
+    }));
   };
 
-  const handleConfirmBatchImport = async () => {
+  const handleConfirmBatchImport = async (
+    options: { addToApiService?: boolean } = {},
+  ) => {
     const selectedSelectableIds = batchImportSelectedIds.filter((id) =>
       batchImportSelectableIdSet.has(id),
     );
     if (!batchImportSessionId || selectedSelectableIds.length === 0) {
-      setBatchImportError(
-        t("codex.batchImport.noSelection", "请先选择要导入的账号"),
-      );
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        error: t("codex.batchImport.noSelection", "请先选择要导入的账号"),
+      }));
       return;
     }
-    setBatchImportBusy(true);
-    setBatchImportError(null);
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      status: "importing",
+      progress: {
+        sessionId: batchImportSessionId,
+        phase: "importing",
+        checkQuota: task.checkQuota,
+        current: 0,
+        total: selectedSelectableIds.length,
+        success: 0,
+        failed: 0,
+        quotaFailed: 0,
+        existing: 0,
+        currentLabel: null,
+      },
+      error: null,
+    }));
     try {
       const result = await codexService.confirmCodexBatchImport(
         batchImportSessionId,
         selectedSelectableIds,
       );
-      setBatchImportResult(result);
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        progress: task.progress
+          ? {
+              ...task.progress,
+              phase: "finalizing",
+              current: result.processed,
+              total: result.total,
+            }
+          : task.progress,
+      }));
+      let apiServiceError: string | null = null;
       await fetchAccounts();
       await assignCodexAccountsToTargetGroup(
         result.imported,
@@ -5567,50 +5939,146 @@ export function CodexAccountsPage() {
           platformId: "codex",
           reason: "import",
         });
+      }
+
+      if (options.addToApiService) {
+        const nextLocalAccessAccountIds =
+          buildCodexBatchImportApiServiceAccountIds(
+            localAccessCollection?.accountIds ?? [],
+            selectedSelectableIds,
+            batchImportPreview?.items ?? [],
+            result.imported,
+          );
+        setLocalAccessSaving(true);
+        try {
+          const nextState =
+            await codexLocalAccessService.saveCodexLocalAccessAccounts(
+              nextLocalAccessAccountIds,
+              localAccessCollection?.restrictFreeAccounts ?? true,
+            );
+          setLocalAccessState(nextState);
+          if (nextLocalAccessAccountIds.length > 0) {
+            await ensureLocalAccessEntryVisible();
+            setImportApiServiceGuideCount(
+              result.imported.map((account) => account.id).filter(Boolean)
+                .length,
+            );
+          }
+          window.dispatchEvent(new Event("codex-local-access-state-updated"));
+        } catch (apiError) {
+          apiServiceError = t(
+            "codex.batchImport.addToApiServiceFailed",
+            "账号已导入，但添加到 API 服务失败: {{error}}",
+          ).replace(
+            "{{error}}",
+            String(apiError).replace(/^Error:\s*/, ""),
+          );
+        } finally {
+          setLocalAccessSaving(false);
+        }
+      } else if (result.imported.length > 0) {
         try {
           await syncImportedAccountsToApiService(
             result.imported.map((account) => account.id),
           );
         } catch (error) {
-          setBatchImportError(
-            t(
-              "codex.importApiService.syncFailed",
-              "账号已导入，但加入 API 服务失败：{{error}}",
-            ).replace("{{error}}", String(error).replace(/^Error:\s*/, "")),
-          );
+          apiServiceError = t(
+            "codex.importApiService.syncFailed",
+            "账号已导入，但加入 API 服务失败：{{error}}",
+          ).replace("{{error}}", String(error).replace(/^Error:\s*/, ""));
         }
       }
-      cleanupBatchImportListeners();
+
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        status: result.cancelled ? "cancelled" : "imported",
+        progress: task.progress
+          ? {
+              ...task.progress,
+              phase: result.cancelled ? "cancelled" : "imported",
+              current: result.processed,
+              total: result.total,
+            }
+          : task.progress,
+        result,
+        error: apiServiceError,
+      }));
       try {
         localStorage.removeItem(CODEX_BATCH_IMPORT_SESSION_STORAGE_KEY);
       } catch {
         // ignore storage failures
       }
     } catch (e) {
-      setBatchImportError(String(e).replace(/^Error:\s*/, ""));
-    } finally {
-      setBatchImportBusy(false);
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        status: "ready",
+        error: String(e).replace(/^Error:\s*/, ""),
+      }));
     }
   };
 
   const handleResumeBatchImport = async () => {
-    if (!batchImportSessionId || batchImportBusy) return;
-    setBatchImportBusy(true);
-    setBatchImportError(null);
-    setBatchImportResult(null);
+    if (!activeBatchImportTask || !batchImportSessionId || batchImportBusy)
+      return;
+    updateActiveBatchImportTask((task) => ({
+      ...task,
+      status: "running",
+      error: null,
+      result: null,
+    }));
     try {
       await codexService.resumeCodexBatchImport(batchImportSessionId);
-      setBatchImportProgress((current) =>
-        current ? { ...current, phase: "scanning" } : current,
-      );
-      setBatchImportPreview((current) =>
-        current ? { ...current, status: "scanning" } : current,
-      );
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        progress: task.progress
+          ? { ...task.progress, phase: "scanning" }
+          : task.progress,
+        preview: task.preview
+          ? { ...task.preview, status: "scanning" }
+          : task.preview,
+      }));
     } catch (e) {
-      setBatchImportBusy(false);
-      setBatchImportError(String(e).replace(/^Error:\s*/, ""));
+      updateActiveBatchImportTask((task) => ({
+        ...task,
+        status: "cancelled",
+        error: String(e).replace(/^Error:\s*/, ""),
+      }));
     }
   };
+
+  const getBatchImportTaskStatusLabel = (task: CodexBatchImportTask) => {
+    if (task.status === "queued") {
+      return t("codex.batchImport.queued", "排队中");
+    }
+    if (task.status === "running") {
+      return task.checkQuota
+        ? t("codex.batchImport.scanning", "扫描中")
+        : t("codex.batchImport.parsing", "解析中");
+    }
+    if (task.status === "cancelled") {
+      return t("codex.batchImport.cancelled", "已取消");
+    }
+    if (task.status === "error") {
+      return t("codex.batchImport.failed", "失败");
+    }
+    if (task.status === "importing") {
+      return task.progress?.phase === "finalizing"
+        ? t("codex.batchImport.finalizing", "正在完成导入")
+        : t("codex.batchImport.importing", "导入中");
+    }
+    if (task.status === "imported") {
+      return t("codex.batchImport.imported", "已导入");
+    }
+    return task.checkQuota
+      ? t("codex.batchImport.scanDone", "扫描完成")
+      : t("codex.batchImport.parseDone", "解析完成");
+  };
+
+  const batchImportStatusLabel = activeBatchImportTask
+    ? getBatchImportTaskStatusLabel(activeBatchImportTask)
+    : activeBatchImportCheckQuota
+      ? t("codex.batchImport.scanning", "扫描中")
+      : t("codex.batchImport.parsing", "解析中");
 
   const handleSelectApiProviderPreset = useCallback(
     (providerId: string) => {
@@ -5618,12 +6086,14 @@ export function CodexAccountsPage() {
       setApiProviderPresetId(providerId);
       setManagedProviderId("");
       setManagedProviderApiKeyId("");
+      setApiModelCatalogError(null);
       if (selectedManagedProviderApiKey) {
         setApiKeyInput("");
       }
       if (providerId === CODEX_API_PROVIDER_CUSTOM_ID) {
         setApiBaseUrlInput("");
         setNewManagedProviderNameInput("");
+        setApiModelCatalogInput("");
         return;
       }
       const sponsorTemplate = sponsorApiProviderTemplates.find(
@@ -5632,12 +6102,17 @@ export function CodexAccountsPage() {
       if (sponsorTemplate) {
         setApiBaseUrlInput(sponsorTemplate.baseUrl);
         setNewManagedProviderNameInput(sponsorTemplate.name);
+        setApiModelCatalogInput(sponsorTemplate.modelCatalog.join("\n"));
         return;
       }
       const preset = findCodexApiProviderPresetById(providerId);
       if (!preset || preset.baseUrls.length === 0) return;
       setApiBaseUrlInput(preset.baseUrls[0]);
       setNewManagedProviderNameInput("");
+      setApiModelCatalogInput((preset.modelCatalog ?? []).join("\n"));
+      if (providerId === OPENAI_OFFICIAL_PRESET_ID) {
+        setApiSyncModelCatalogToCodex(false);
+      }
     },
     [selectedManagedProviderApiKey, sponsorApiProviderTemplates],
   );
@@ -5650,6 +6125,8 @@ export function CodexAccountsPage() {
       const provider = managedProviders.find((item) => item.id === providerId);
       if (!provider) return;
       setApiBaseUrlInput(provider.baseUrl);
+      setApiModelCatalogInput((provider.modelCatalog ?? []).join("\n"));
+      setApiModelCatalogError(null);
       const firstKey = provider.apiKeys[0];
       if (firstKey) {
         setManagedProviderApiKeyId(firstKey.id);
@@ -5680,6 +6157,7 @@ export function CodexAccountsPage() {
   const handleApiKeyInputChange = useCallback(
     (value: string) => {
       setApiKeyInput(value);
+      setApiModelCatalogError(null);
       if (
         selectedManagedProviderApiKey &&
         value.trim() !== selectedManagedProviderApiKey.apiKey.trim()
@@ -5693,6 +6171,7 @@ export function CodexAccountsPage() {
   const handleApiBaseUrlInputChange = useCallback(
     (value: string) => {
       setApiBaseUrlInput(value);
+      setApiModelCatalogError(null);
       if (
         selectedManagedProvider &&
         !isSameHttpBaseUrl(selectedManagedProvider.baseUrl, value)
@@ -5703,6 +6182,47 @@ export function CodexAccountsPage() {
     },
     [selectedManagedProvider],
   );
+
+  const handleFetchApiModelCatalog = useCallback(async () => {
+    const apiKey = apiKeyInput.trim();
+    const baseUrl = apiBaseUrlInput.trim() || DEFAULT_CODEX_API_BASE_URL;
+    if (!apiKey || !baseUrl) {
+      setApiModelCatalogError(
+        t(
+          "codex.api.modelCatalog.fetchCredentialsRequired",
+          "请先填写 API Key 和 Base URL。",
+        ),
+      );
+      return;
+    }
+    setApiModelCatalogFetching(true);
+    setApiModelCatalogError(null);
+    try {
+      const result = await listModelProviderModels({ baseUrl, apiKey });
+      const models = parseApiModelCatalogText(
+        result.models.map((model) => model.id).join("\n"),
+      );
+      if (models.length === 0) {
+        setApiModelCatalogError(
+          t(
+            "codex.api.modelCatalog.fetchEmpty",
+            "上游未返回可用模型，已保留当前列表。",
+          ),
+        );
+        return;
+      }
+      setApiModelCatalogInput(models.join("\n"));
+    } catch (error) {
+      setApiModelCatalogError(
+        t("codex.api.modelCatalog.fetchFailed", {
+          defaultValue: "获取上游模型失败：{{error}}",
+          error: String(error).replace(/^Error:\s*/, ""),
+        }),
+      );
+    } finally {
+      setApiModelCatalogFetching(false);
+    }
+  }, [apiBaseUrlInput, apiKeyInput, t]);
 
   const applyApiKeyFunPrefill = useCallback(
     (request: ApiKeyFunPrefillPayload) => {
@@ -5760,6 +6280,8 @@ export function CodexAccountsPage() {
     setNewManagedProviderNameInput(
       sponsorTemplate?.name ?? request.providerName?.trim() ?? "APIKEY.FUN",
     );
+    setApiModelCatalogInput((request.modelCatalog ?? []).join("\n"));
+    setApiModelCatalogError(null);
     setAddStatus("idle");
     setAddMessage(
       t(
@@ -5796,9 +6318,17 @@ export function CodexAccountsPage() {
       setEditingManagedProviderId("");
       setEditingManagedProviderApiKeyId("");
       setEditingNewManagedProviderNameInput("");
+      setEditingApiModelCatalogError(null);
+      if (providerId === CODEX_API_PROVIDER_CUSTOM_ID) {
+        setEditingApiModelCatalogInput("");
+      }
       const preset = findCodexApiProviderPresetById(providerId);
       if (!preset || preset.baseUrls.length === 0) return;
       setEditingApiBaseUrlCredentialsValue(preset.baseUrls[0]);
+      setEditingApiModelCatalogInput((preset.modelCatalog ?? []).join("\n"));
+      if (providerId === OPENAI_OFFICIAL_PRESET_ID) {
+        setEditingApiSyncModelCatalogToCodex(false);
+      }
     },
     [],
   );
@@ -5810,6 +6340,8 @@ export function CodexAccountsPage() {
       const provider = managedProviders.find((item) => item.id === providerId);
       if (!provider) return;
       setEditingApiBaseUrlCredentialsValue(provider.baseUrl);
+      setEditingApiModelCatalogInput((provider.modelCatalog ?? []).join("\n"));
+      setEditingApiModelCatalogError(null);
       const firstKey = provider.apiKeys[0];
       if (firstKey) {
         setEditingManagedProviderApiKeyId(firstKey.id);
@@ -5840,6 +6372,7 @@ export function CodexAccountsPage() {
   const handleEditingApiKeyCredentialsChange = useCallback(
     (value: string) => {
       setEditingApiKeyCredentialsValue(value);
+      setEditingApiModelCatalogError(null);
       if (
         selectedEditingManagedProviderApiKey &&
         value.trim() !== selectedEditingManagedProviderApiKey.apiKey.trim()
@@ -5853,6 +6386,7 @@ export function CodexAccountsPage() {
   const handleEditingApiBaseUrlCredentialsChange = useCallback(
     (value: string) => {
       setEditingApiBaseUrlCredentialsValue(value);
+      setEditingApiModelCatalogError(null);
       if (
         selectedEditingManagedProvider &&
         !isSameHttpBaseUrl(selectedEditingManagedProvider.baseUrl, value)
@@ -5863,6 +6397,48 @@ export function CodexAccountsPage() {
     },
     [selectedEditingManagedProvider],
   );
+
+  const handleFetchEditingApiModelCatalog = useCallback(async () => {
+    const apiKey = editingApiKeyCredentialsValue.trim();
+    const baseUrl =
+      editingApiBaseUrlCredentialsValue.trim() || DEFAULT_CODEX_API_BASE_URL;
+    if (!apiKey || !baseUrl) {
+      setEditingApiModelCatalogError(
+        t(
+          "codex.api.modelCatalog.fetchCredentialsRequired",
+          "请先填写 API Key 和 Base URL。",
+        ),
+      );
+      return;
+    }
+    setEditingApiModelCatalogFetching(true);
+    setEditingApiModelCatalogError(null);
+    try {
+      const result = await listModelProviderModels({ baseUrl, apiKey });
+      const models = parseApiModelCatalogText(
+        result.models.map((model) => model.id).join("\n"),
+      );
+      if (models.length === 0) {
+        setEditingApiModelCatalogError(
+          t(
+            "codex.api.modelCatalog.fetchEmpty",
+            "上游未返回可用模型，已保留当前列表。",
+          ),
+        );
+        return;
+      }
+      setEditingApiModelCatalogInput(models.join("\n"));
+    } catch (error) {
+      setEditingApiModelCatalogError(
+        t("codex.api.modelCatalog.fetchFailed", {
+          defaultValue: "获取上游模型失败：{{error}}",
+          error: String(error).replace(/^Error:\s*/, ""),
+        }),
+      );
+    } finally {
+      setEditingApiModelCatalogFetching(false);
+    }
+  }, [editingApiBaseUrlCredentialsValue, editingApiKeyCredentialsValue, t]);
 
   const closeQuickSwitchModal = useCallback(() => {
     if (quickSwitchSubmitting) return;
@@ -5948,6 +6524,7 @@ export function CodexAccountsPage() {
         selectedQuickSwitchProvider.visionRoutingModel,
         selectedQuickSwitchProvider.wireApi ?? undefined,
         selectedQuickSwitchProvider.supportsWebsockets,
+        quickSwitchAccount.api_sync_model_catalog_to_codex === true,
       );
       setMessage({
         text: t("codex.quickSwitch.success", {
@@ -6001,12 +6578,25 @@ export function CodexAccountsPage() {
       page.setAddMessage(validation.message);
       return;
     }
-    const providerPayload = buildApiProviderPayload(
-      apiBaseUrlInput,
-      apiProviderPresetId,
-      managedProviderId,
-      newManagedProviderNameInput,
-    );
+    if (apiSyncModelCatalogToCodex && apiModelCatalogDraft.length === 0) {
+      setApiModelCatalogError(
+        t(
+          "codex.api.modelCatalog.syncRequiresModels",
+          "同步到 Codex 前请先获取或填写模型列表。",
+        ),
+      );
+      return;
+    }
+    setApiModelCatalogError(null);
+    const providerPayload = {
+      ...buildApiProviderPayload(
+        apiBaseUrlInput,
+        apiProviderPresetId,
+        managedProviderId,
+        newManagedProviderNameInput,
+      ),
+      apiModelCatalog: apiModelCatalogDraft,
+    };
 
     page.setAddStatus("loading");
     page.setAddMessage(t("common.shared.token.importing", "正在导入..."));
@@ -6040,7 +6630,8 @@ export function CodexAccountsPage() {
             ...providerPayload,
             apiProviderId: savedProvider.id,
             apiProviderName: savedProvider.name,
-            apiModelCatalog: savedProvider.modelCatalog,
+            apiModelCatalog:
+              savedProvider.modelCatalog ?? providerPayload.apiModelCatalog,
             apiSupportsVision: savedProvider.supportsVision,
             apiWireApi: savedProvider.wireApi ?? undefined,
             apiSupportsWebsockets: savedProvider.supportsWebsockets,
@@ -6087,6 +6678,7 @@ export function CodexAccountsPage() {
         finalProviderPayload.accountName,
         finalProviderPayload.apiWireApi,
         finalProviderPayload.apiSupportsWebsockets,
+        apiSyncModelCatalogToCodex,
       );
       await fetchAccounts();
       await fetchCurrentAccount();
@@ -7108,6 +7700,10 @@ export function CodexAccountsPage() {
     setEditingManagedProviderId("");
     setEditingManagedProviderApiKeyId("");
     setEditingNewManagedProviderNameInput("");
+    setEditingApiModelCatalogInput("");
+    setEditingApiSyncModelCatalogToCodex(false);
+    setEditingApiModelCatalogFetching(false);
+    setEditingApiModelCatalogError(null);
   }, [savingApiKeyCredentials]);
 
   const openApiKeyCredentialsModal = useCallback(
@@ -7137,6 +7733,16 @@ export function CodexAccountsPage() {
       setEditingNewManagedProviderNameInput(
         matchedProvider?.name ?? account.api_provider_name ?? "",
       );
+      setEditingApiModelCatalogInput(
+        (account.api_model_catalog ?? matchedProvider?.modelCatalog ?? []).join(
+          "\n",
+        ),
+      );
+      setEditingApiSyncModelCatalogToCodex(
+        account.api_sync_model_catalog_to_codex === true,
+      );
+      setEditingApiModelCatalogFetching(false);
+      setEditingApiModelCatalogError(null);
     },
     [managedProviders],
   );
@@ -7156,12 +7762,28 @@ export function CodexAccountsPage() {
       });
       return;
     }
-    const providerPayload = buildApiProviderPayload(
-      editingApiBaseUrlCredentialsValue,
-      editingApiProviderPresetId,
-      editingManagedProviderId,
-      editingNewManagedProviderNameInput,
-    );
+    if (
+      editingApiSyncModelCatalogToCodex &&
+      editingApiModelCatalogDraft.length === 0
+    ) {
+      setEditingApiModelCatalogError(
+        t(
+          "codex.api.modelCatalog.syncRequiresModels",
+          "同步到 Codex 前请先获取或填写模型列表。",
+        ),
+      );
+      return;
+    }
+    setEditingApiModelCatalogError(null);
+    const providerPayload = {
+      ...buildApiProviderPayload(
+        editingApiBaseUrlCredentialsValue,
+        editingApiProviderPresetId,
+        editingManagedProviderId,
+        editingNewManagedProviderNameInput,
+      ),
+      apiModelCatalog: editingApiModelCatalogDraft,
+    };
 
     setSavingApiKeyCredentials(true);
     try {
@@ -7178,6 +7800,7 @@ export function CodexAccountsPage() {
         providerPayload.apiVisionRoutingModel,
         providerPayload.apiWireApi,
         providerPayload.apiSupportsWebsockets,
+        editingApiSyncModelCatalogToCodex,
       );
       if (
         validation.apiBaseUrl &&
@@ -7196,7 +7819,7 @@ export function CodexAccountsPage() {
             apiKey: validation.apiKey,
             apiKeyName: providerPayload.accountName,
             sourceTag: providerPayload.sponsorTemplate?.id ?? null,
-            modelCatalog: providerPayload.sponsorTemplate?.modelCatalog,
+            modelCatalog: providerPayload.apiModelCatalog,
             supportsVision: providerPayload.sponsorTemplate?.supportsVision,
             website: providerPayload.sponsorTemplate?.website,
             apiKeyUrl: providerPayload.sponsorTemplate?.apiKeyUrl,
@@ -7245,6 +7868,9 @@ export function CodexAccountsPage() {
       setEditingManagedProviderId("");
       setEditingManagedProviderApiKeyId("");
       setEditingNewManagedProviderNameInput("");
+      setEditingApiModelCatalogInput("");
+      setEditingApiSyncModelCatalogToCodex(false);
+      setEditingApiModelCatalogError(null);
     } catch (e) {
       setMessage({
         text: `${t("common.failed", "失败")}: ${String(e)}`,
@@ -7258,7 +7884,9 @@ export function CodexAccountsPage() {
     editingApiBaseUrlCredentialsValue,
     editingApiKeyCredentialsId,
     editingApiKeyCredentialsValue,
+    editingApiModelCatalogDraft,
     editingApiProviderPresetId,
+    editingApiSyncModelCatalogToCodex,
     editingManagedProviderId,
     editingNewManagedProviderNameInput,
     reloadManagedProviders,
@@ -7366,14 +7994,36 @@ export function CodexAccountsPage() {
     [],
   );
 
+  const [planBadgeStyle, setPlanBadgeStyle] = useState<CodexPlanBadgeStyle>(
+    getCodexPlanBadgeStyle,
+  );
+
+  useEffect(() => {
+    const syncPlanBadgeStyle = () => {
+      setPlanBadgeStyle(getCodexPlanBadgeStyle());
+    };
+    window.addEventListener(
+      CODEX_PLAN_BADGE_STYLE_CHANGED_EVENT,
+      syncPlanBadgeStyle as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        CODEX_PLAN_BADGE_STYLE_CHANGED_EVENT,
+        syncPlanBadgeStyle as EventListener,
+      );
+    };
+  }, []);
+
   const accountPresentations = useMemo(() => {
     const map = new Map<
       string,
       ReturnType<typeof buildCodexAccountPresentation>
     >();
+    // planBadgeStyle forces rebuild when quick-settings style changes (event-driven).
+    void planBadgeStyle;
     accounts.forEach((a) => map.set(a.id, buildCodexAccountPresentation(a, t)));
     return map;
-  }, [accounts, t]);
+  }, [accounts, t, planBadgeStyle]);
 
   const resolvePresentation = useCallback(
     (account: CodexAccount) =>
@@ -9388,6 +10038,10 @@ export function CodexAccountsPage() {
       );
       const showApiKeyUsagePanel =
         isApiKeyAccount && !isNewApiAccount && !isChatCompletionsApiKey;
+      const isSub2ApiUsageAccount =
+        showApiKeyUsagePanel &&
+        (apiKeyUsageMode === "sub2api" ||
+          apiKeyUsageProvider?.integrationType === "sub2api");
       const isQuotaAwareApiKeyAccount =
         showApiKeyUsagePanel &&
         !isSponsorApiKeyAccount &&
@@ -9543,10 +10197,23 @@ export function CodexAccountsPage() {
                   </button>
                 )}
               </div>
-              <div className="account-sub-line">
-                <span className="codex-login-subline" title={apiBaseUrlLine}>
+              <div className="account-sub-line codex-provider-inline-line">
+                <span
+                  className="codex-login-subline codex-provider-inline-text"
+                  title={apiBaseUrlLine}
+                >
                   {apiBaseUrlLine}
                 </span>
+                {isSub2ApiUsageAccount && (
+                  <button
+                    type="button"
+                    className="codex-provider-inline-switch"
+                    onClick={() => setApiKeyUsageDetailAccountId(account.id)}
+                    title={t("codex.modelProviders.usage.detailTitle", "服务面板")}
+                  >
+                    {t("common.detail", "详情")}
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -10667,6 +11334,10 @@ export function CodexAccountsPage() {
       );
       const showApiKeyUsagePanel =
         isApiKeyAccount && !isNewApiAccount && !isChatCompletionsApiKey;
+      const isSub2ApiUsageAccount =
+        showApiKeyUsagePanel &&
+        (apiKeyUsageMode === "sub2api" ||
+          apiKeyUsageProvider?.integrationType === "sub2api");
       const isQuotaAwareApiKeyAccount =
         showApiKeyUsagePanel &&
         !isSponsorApiKeyAccount &&
@@ -10801,13 +11472,23 @@ export function CodexAccountsPage() {
                       </button>
                     )}
                   </div>
-                  <div className="account-sub-line codex-account-meta-inline">
+                  <div className="account-sub-line codex-account-meta-inline codex-provider-inline-line">
                     <span
-                      className="codex-login-subline"
+                      className="codex-login-subline codex-provider-inline-text"
                       title={apiBaseUrlLine}
                     >
                       {apiBaseUrlLine}
                     </span>
+                    {isSub2ApiUsageAccount && (
+                      <button
+                        type="button"
+                        className="codex-provider-inline-switch"
+                        onClick={() => setApiKeyUsageDetailAccountId(account.id)}
+                        title={t("codex.modelProviders.usage.detailTitle", "服务面板")}
+                      >
+                        {t("common.detail", "详情")}
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -11226,17 +11907,18 @@ export function CodexAccountsPage() {
     if (!account) return null;
     const state = apiKeyUsageMap[account.id];
     const summary = state?.summary;
-    if (!summary) return null;
-    const usageMode = resolveApiKeyUsageMode(summary);
-    if (!usageMode) return null;
     const provider = resolveUsageProviderForApiKeyAccount(account);
+    const usageMode =
+      resolveApiKeyUsageMode(summary) ??
+      (provider?.integrationType === "sub2api" ? "sub2api" : null);
+    if (!usageMode) return null;
     const coreDetailKeys =
       usageMode === "new_api"
         ? new Set(["mode", "totalGranted", "totalAvailable", "expiresAt"])
         : usageMode === "sub2api"
           ? new Set(["mode", "remaining", "todayRequests", "todayTokens"])
           : new Set<string>();
-    const details = (summary.details ?? []).filter(
+    const details = (summary?.details ?? []).filter(
       (item) => !coreDetailKeys.has(item.key),
     );
     const visible = visibleApiKeyAccountIds.has(account.id);
@@ -11258,7 +11940,7 @@ export function CodexAccountsPage() {
                   findApiKeyUsageDetail(summary, "totalGranted")?.value ?? NaN,
                 );
                 return Number.isFinite(raw)
-                  ? formatApiKeyUsageMoney(raw, summary.unit)
+                  ? formatApiKeyUsageMoney(raw, summary?.unit)
                   : formatApiKeyUsageDetailByKey(summary, "totalGranted");
               })(),
             },
@@ -11274,7 +11956,7 @@ export function CodexAccountsPage() {
                     NaN,
                 );
                 return Number.isFinite(raw)
-                  ? formatApiKeyUsageMoney(raw, summary.unit)
+                  ? formatApiKeyUsageMoney(raw, summary?.unit)
                   : formatApiKeyUsageDetailByKey(summary, "totalAvailable");
               })(),
             },
@@ -11297,9 +11979,9 @@ export function CodexAccountsPage() {
                 ),
                 value: formatApiKeyUsageQuotaValue(
                   summary,
-                  summary.remaining ??
-                    summary.balance ??
-                    summary.quotaRemaining,
+                  summary?.remaining ??
+                    summary?.balance ??
+                    summary?.quotaRemaining,
                 ),
               },
               {
@@ -11308,7 +11990,9 @@ export function CodexAccountsPage() {
                   "codex.modelProviders.usage.fields.todayRequests",
                   "今日请求",
                 ),
-                value: formatCockpitApiInteger(summary.todayRequests ?? 0),
+                value: summary
+                  ? formatCockpitApiInteger(summary.todayRequests ?? 0)
+                  : "-",
               },
               {
                 key: "todayTokens",
@@ -11316,9 +12000,9 @@ export function CodexAccountsPage() {
                   "codex.modelProviders.usage.fields.todayTokens",
                   "今日 Token",
                 ),
-                value: formatCockpitApiTokenCount(
-                  summary.todayTotalTokens ?? 0,
-                ),
+                value: summary
+                  ? formatCockpitApiTokenCount(summary.todayTotalTokens ?? 0)
+                  : "-",
               },
             ]
           : [];
@@ -11442,7 +12126,7 @@ export function CodexAccountsPage() {
                         {formatApiKeyUsageDetailLabel(item.key, item.label)}
                       </span>
                       <strong>
-                        {formatApiKeyUsageDetailValue(item, summary.unit)}
+                        {formatApiKeyUsageDetailValue(item, summary?.unit)}
                       </strong>
                       <small>{item.key}</small>
                     </div>
@@ -11808,37 +12492,41 @@ export function CodexAccountsPage() {
       <CodexOverviewTabsHeader
         active={activeTab}
         onTabChange={setActiveTab}
-        tabs={["overview", "providers", "instances", "sessions"]}
+        tabs={[
+          "overview",
+          "providers",
+          "wakeup",
+          "instances",
+          "sessions",
+        ]}
       />
 
-      {batchImportOpen && (
-        <div className="modal-overlay codex-batch-import-overlay">
-          <div
-            className="modal-content codex-batch-import-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-header">
-              <div>
-                <h2>{t("codex.batchImport.title", "Codex 批量导入")}</h2>
-                <p className="codex-batch-import-subtitle">
-                  {batchImportResult
-                    ? t("codex.batchImport.resultSubtitle", "导入结果")
-                    : batchImportBusy
-                      ? activeBatchImportCheckQuota
+      {batchImportOpen &&
+        activeBatchImportTask &&
+        createPortal(
+          <div className="modal-overlay codex-batch-import-overlay">
+            <div
+              className="modal-content codex-batch-import-modal"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-header">
+                <div>
+                  <h2>{t("codex.batchImport.title", "Codex 批量导入")}</h2>
+                  <p className="codex-batch-import-subtitle">
+                    {batchImportResult
+                      ? t("codex.batchImport.resultSubtitle", "导入结果")
+                      : batchImportProgress?.phase === "finalizing"
                         ? t(
-                            "codex.batchImport.scanSubtitle",
-                            "正在逐条解析并检查账号",
+                            "codex.batchImport.finalizingSubtitle",
+                            "正在更新账号列表和关联设置",
                           )
-                        : t(
-                            "codex.batchImport.parseSubtitle",
-                            "正在解析账号文件",
-                          )
-                      : batchImportPreview
+                      : activeBatchImportTask.status === "importing"
                         ? t(
-                            "codex.batchImport.previewSubtitle",
-                            "选择要写入的账号",
+                            "codex.batchImport.importSubtitle",
+                            "正在写入选中的账号",
                           )
-                        : activeBatchImportCheckQuota
+                      : batchImportBusy
+                        ? activeBatchImportCheckQuota
                           ? t(
                               "codex.batchImport.scanSubtitle",
                               "正在逐条解析并检查账号",
@@ -11846,364 +12534,417 @@ export function CodexAccountsPage() {
                           : t(
                               "codex.batchImport.parseSubtitle",
                               "正在解析账号文件",
-                            )}
-                </p>
-              </div>
-              <button
-                className="modal-close"
-                onClick={() => void handleCloseBatchImport()}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="codex-batch-import-body">
-              {batchImportError && (
-                <div className="codex-batch-import-error">
-                  <CircleAlert size={16} />
-                  <span>{batchImportError}</span>
-                </div>
-              )}
-
-              {!batchImportResult && (
-                <div className="codex-batch-import-progress-panel">
-                  <div className="codex-batch-import-progress-head">
-                    <span>
-                      {batchImportProgress?.phase === "cancelling"
-                        ? t("codex.batchImport.cancelling", "正在取消...")
-                        : batchImportBusy
-                          ? activeBatchImportCheckQuota
-                            ? t("codex.batchImport.scanning", "扫描中")
-                            : t("codex.batchImport.parsing", "解析中")
-                          : batchImportPreview?.status === "cancelled"
-                            ? t("codex.batchImport.cancelled", "已取消")
-                            : batchImportPreview
-                              ? activeBatchImportCheckQuota
-                                ? t("codex.batchImport.scanDone", "扫描完成")
-                                : t("codex.batchImport.parseDone", "解析完成")
-                              : activeBatchImportCheckQuota
-                                ? t("codex.batchImport.scanning", "扫描中")
-                                : t("codex.batchImport.parsing", "解析中")}
-                    </span>
-                    <strong>
-                      {batchImportProgress?.current ?? 0}/
-                      {batchImportProgress?.total ??
-                        batchImportPreview?.total ??
-                        0}
-                    </strong>
-                  </div>
-                  <div className="codex-batch-import-progress-track">
-                    <div
-                      className="codex-batch-import-progress-fill"
-                      style={{
-                        width: `${
-                          batchImportProgress?.total
-                            ? Math.min(
-                                100,
-                                Math.round(
-                                  ((batchImportProgress.current || 0) /
-                                    batchImportProgress.total) *
-                                    100,
-                                ),
+                            )
+                        : batchImportPreview
+                          ? t(
+                              "codex.batchImport.previewSubtitle",
+                              "选择要写入的账号",
+                            )
+                          : activeBatchImportCheckQuota
+                            ? t(
+                                "codex.batchImport.scanSubtitle",
+                                "正在逐条解析并检查账号",
                               )
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                  {batchImportProgress?.currentLabel && (
-                    <div className="codex-batch-import-current">
-                      {t("codex.batchImport.current", "当前")}：
-                      {maskAccountText(batchImportProgress.currentLabel)}
-                    </div>
-                  )}
+                            : t(
+                                "codex.batchImport.parseSubtitle",
+                                "正在解析账号文件",
+                              )}
+                  </p>
                 </div>
-              )}
-
-              {batchImportResult ? (
-                <div className="codex-batch-import-result">
-                  <div className="codex-batch-import-stat-grid">
-                    <div>
-                      <span>{t("codex.batchImport.imported", "已导入")}</span>
-                      <strong>{batchImportResult.imported.length}</strong>
-                    </div>
-                    <div>
-                      <span>{t("codex.batchImport.failed", "失败")}</span>
-                      <strong>{batchImportResult.failed.length}</strong>
-                    </div>
-                  </div>
-                  {batchImportResult.failed.length > 0 && (
-                    <div className="codex-batch-import-list compact">
-                      {batchImportResult.failed.map((item) => (
-                        <div
-                          className="codex-batch-import-row"
-                          key={item.email}
-                        >
-                          <div>
-                            <strong>{maskAccountText(item.email)}</strong>
-                            <small>{item.error}</small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                <div className="codex-batch-import-header-actions">
+                  {batchImportBusy && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary compact"
+                      onClick={() => setBatchImportOpen(false)}
+                    >
+                      <Minimize2 size={14} />
+                      {t("codex.batchImport.runInBackground", "后台执行")}
+                    </button>
                   )}
+                  <button
+                    className="modal-close"
+                    onClick={() => void handleCloseBatchImport()}
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
-              ) : batchImportPreview ? (
-                <>
-                  <div className="codex-batch-import-stat-grid">
-                    <div>
-                      <span>
-                        {t("codex.batchImport.groups.ready", "可导入")}
-                      </span>
-                      <strong>{batchImportCounts.ready}</strong>
-                    </div>
-                    <div>
-                      <span>
-                        {t("codex.batchImport.groups.quotaFailed", "异常")}
-                      </span>
-                      <strong>{batchImportCounts.quotaFailed}</strong>
-                    </div>
-                    <div>
-                      <span>
-                        {t("codex.batchImport.groups.existing", "已存在")}
-                      </span>
-                      <strong>{batchImportCounts.existing}</strong>
-                    </div>
-                    <div>
-                      <span>
-                        {t("codex.batchImport.groups.invalid", "无效账号")}
-                      </span>
-                      <strong>{batchImportCounts.invalid}</strong>
-                    </div>
-                  </div>
+              </div>
 
-                  <div className="codex-batch-import-toolbar">
-                    <div className="codex-batch-import-toolbar-main">
-                      <span>{batchImportSelectedCountLabel}</span>
-                      <label className="codex-batch-import-check-toggle">
-                        <input
-                          type="checkbox"
-                          checked={batchImportCheckQuota}
-                          disabled={batchImportBusy}
-                          onChange={(event) =>
-                            void handleBatchImportCheckQuotaChange(
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        <span className="codex-batch-import-check-switch" />
-                        <span>
-                          {t("codex.batchImport.checkQuotaToggle", "检测账号")}
-                        </span>
-                      </label>
-                      <label className="codex-batch-import-check-toggle">
-                        <input
-                          type="checkbox"
-                          checked={syncImportedToApiService}
-                          disabled={batchImportBusy}
-                          onChange={(event) =>
-                            handleSyncImportedToApiServiceChange(
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        <span className="codex-batch-import-check-switch" />
-                        <span>
-                          {t(
-                            "codex.importApiService.toggle",
-                            "同步加入 API 服务",
-                          )}
-                        </span>
-                      </label>
+              <div className="codex-batch-import-body">
+                {batchImportError && (
+                  <div className="codex-batch-import-error">
+                    <CircleAlert size={16} />
+                    <span>{batchImportError}</span>
+                  </div>
+                )}
+
+                {!batchImportResult && (
+                  <div className="codex-batch-import-progress-panel">
+                    <div className="codex-batch-import-progress-head">
+                      <span>
+                        {batchImportCancelling
+                          ? t("codex.batchImport.cancelling", "正在取消...")
+                          : batchImportStatusLabel}
+                      </span>
+                      <strong>
+                        {batchImportProgressCurrent}/{batchImportProgressTotal}
+                      </strong>
                     </div>
-                    <div className="codex-batch-import-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary compact"
-                        disabled={
-                          batchImportBusy ||
-                          batchImportSelectableIds.length === 0
-                        }
-                        onClick={selectAllBatchImportAccounts}
-                      >
+                    <div className="codex-batch-import-progress-track">
+                      <div
+                        className={`codex-batch-import-progress-fill tone-${getCodexBatchImportProgressTone(activeBatchImportTask)}`}
+                        style={{
+                          width: `${activeBatchImportProgressPercent}%`,
+                        }}
+                      />
+                    </div>
+                    {batchImportProgress?.currentLabel && (
+                      <div className="codex-batch-import-current">
+                        {t("codex.batchImport.current", "当前")}：
+                        {maskAccountText(batchImportProgress.currentLabel)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {batchImportResult ? (
+                    <div className="codex-batch-import-result">
+                    {batchImportResult.cancelled && (
+                      <div className="codex-batch-import-cancelled-note">
                         {t(
-                          "codex.batchImport.selectAllAccounts",
-                          "选择全部账号",
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary compact"
-                        disabled={
-                          batchImportBusy ||
-                          batchImportCounts.ready +
-                            batchImportCounts.existing ===
-                            0
-                        }
-                        onClick={selectReadyBatchImportAccounts}
-                      >
-                        {t("codex.batchImport.selectReady", "选择正常账号")}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary compact"
-                        disabled={
-                          batchImportBusy ||
-                          batchImportSelectedSelectableCount === 0
-                        }
-                        onClick={clearBatchImportSelection}
-                      >
-                        {t("codex.batchImport.clearSelection", "取消选择")}
-                      </button>
+                          "codex.batchImport.importCancelledSummary",
+                          "导入已取消，已处理 {{processed}}/{{total}} 个账号。",
+                        )
+                          .replace("{{processed}}", String(batchImportResult.processed))
+                          .replace("{{total}}", String(batchImportResult.total))}
+                      </div>
+                    )}
+                    <div className="codex-batch-import-stat-grid">
+                      <div>
+                        <span>{t("codex.batchImport.imported", "已导入")}</span>
+                        <strong>{batchImportResult.imported.length}</strong>
+                      </div>
+                      <div>
+                        <span>{t("codex.batchImport.failed", "失败")}</span>
+                        <strong>{batchImportResult.failed.length}</strong>
+                      </div>
                     </div>
+                    {batchImportResult.failed.length > 0 && (
+                      <div className="codex-batch-import-list compact">
+                        {batchImportResult.failed.map((item) => (
+                          <div
+                            className="codex-batch-import-row"
+                            key={item.email}
+                          >
+                            <div>
+                              <strong>{maskAccountText(item.email)}</strong>
+                              <small>{item.error}</small>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                ) : batchImportPreview ? (
+                  <>
+                    <div className="codex-batch-import-stat-grid">
+                      <div>
+                        <span>
+                          {t("codex.batchImport.groups.ready", "可导入")}
+                        </span>
+                        <strong>{batchImportCounts.ready}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          {t("codex.batchImport.groups.quotaFailed", "异常")}
+                        </span>
+                        <strong>{batchImportCounts.quotaFailed}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          {t("codex.batchImport.groups.existing", "已存在")}
+                        </span>
+                        <strong>{batchImportCounts.existing}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          {t("codex.batchImport.groups.invalid", "无效账号")}
+                        </span>
+                        <strong>{batchImportCounts.invalid}</strong>
+                      </div>
+                    </div>
 
-                  <div className="codex-batch-import-list">
-                    {[...batchImportVisibleItems].reverse().map((item) => {
-                      const selectable = batchImportSelectableIdSet.has(
-                        item.itemId,
-                      );
-                      const checked =
-                        selectable &&
-                        batchImportSelectedIds.includes(item.itemId);
-                      return (
-                        <label
-                          className={`codex-batch-import-row status-${item.status}`}
-                          key={item.itemId}
-                        >
+                    <div className="codex-batch-import-toolbar">
+                      <div className="codex-batch-import-toolbar-main">
+                        <span>{batchImportSelectedCountLabel}</span>
+                        <label className="codex-batch-import-check-toggle">
                           <input
                             type="checkbox"
-                            checked={checked}
-                            disabled={!selectable || batchImportBusy}
-                            onChange={() => toggleBatchImportItem(item.itemId)}
+                            checked={batchImportCheckQuota}
+                            disabled={batchImportBusy}
+                            onChange={(event) =>
+                              void handleBatchImportCheckQuotaChange(
+                                event.target.checked,
+                              )
+                            }
                           />
-                          <div className="codex-batch-import-row-main">
-                            <div className="codex-batch-import-row-title">
-                              <strong>{maskAccountText(item.label)}</strong>
-                              <span>{item.accountType}</span>
-                            </div>
-                            <div className="codex-batch-import-row-meta">
-                              <span>{item.source}</span>
-                              {item.provider && <span>{item.provider}</span>}
-                              {item.status === "ready" && (
-                                <span>
-                                  {activeBatchImportCheckQuota
-                                    ? t(
-                                        "codex.batchImport.quotaOk",
-                                        "账号正常",
-                                      )
-                                    : t(
-                                        "codex.batchImport.groups.ready",
-                                        "可导入",
-                                      )}
-                                </span>
-                              )}
-                              {item.status === "quota_failed" && (
-                                <span>
-                                  {t("codex.batchImport.quotaFailed", "异常")}
-                                </span>
-                              )}
-                              {item.status === "existing" && (
-                                <span>
-                                  {t(
-                                    "codex.batchImport.groups.existing",
-                                    "已存在",
-                                  )}
-                                </span>
-                              )}
-                              {item.status === "invalid" && (
-                                <span>
-                                  {t(
-                                    "codex.batchImport.groups.invalid",
-                                    "无效账号",
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                            {(item.quotaError || item.error) && (
-                              <small className="codex-batch-import-row-error">
-                                {item.quotaError || item.error}
-                              </small>
+                          <span className="codex-batch-import-check-switch" />
+                          <span>
+                            {t(
+                              "codex.batchImport.checkQuotaToggle",
+                              "导入前检测账号",
                             )}
-                          </div>
+                          </span>
                         </label>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="codex-batch-import-empty">
-                  <RefreshCw size={18} className="loading-spinner" />
-                  {t("codex.batchImport.preparing", "正在准备导入任务...")}
-                </div>
-              )}
-            </div>
+                        <label className="codex-batch-import-check-toggle">
+                          <input
+                            type="checkbox"
+                            checked={syncImportedToApiService}
+                            disabled={batchImportBusy}
+                            onChange={(event) =>
+                              handleSyncImportedToApiServiceChange(
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <span className="codex-batch-import-check-switch" />
+                          <span>
+                            {t(
+                              "codex.importApiService.toggle",
+                              "同步加入 API 服务",
+                            )}
+                          </span>
+                        </label>
+                      </div>
+                      <div className="codex-batch-import-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary compact"
+                          disabled={
+                            batchImportBusy ||
+                            batchImportSelectableIds.length === 0
+                          }
+                          onClick={selectAllBatchImportAccounts}
+                        >
+                          {t(
+                            "codex.batchImport.selectAllAccounts",
+                            "选择全部账号",
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary compact"
+                          disabled={
+                            batchImportBusy ||
+                            batchImportCounts.ready +
+                              batchImportCounts.existing ===
+                              0
+                          }
+                          onClick={selectReadyBatchImportAccounts}
+                        >
+                          {t("codex.batchImport.selectReady", "选择正常账号")}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary compact"
+                          disabled={
+                            batchImportBusy ||
+                            batchImportSelectedSelectableCount === 0
+                          }
+                          onClick={clearBatchImportSelection}
+                        >
+                          {t("codex.batchImport.clearSelection", "取消选择")}
+                        </button>
+                      </div>
+                    </div>
 
-            <div className="modal-footer codex-batch-import-footer">
-              {batchImportResult ? (
-                <button
-                  className="btn btn-primary"
-                  onClick={() => void handleCloseBatchImport()}
-                >
-                  {t("common.shared.close", "关闭")}
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() =>
-                      batchImportBusy
-                        ? void handleCancelBatchImport()
-                        : void handleCloseBatchImport()
-                    }
-                    disabled={
-                      batchImportBusy &&
-                      batchImportProgress?.phase === "cancelling"
-                    }
-                  >
-                    {batchImportBusy
-                      ? activeBatchImportCheckQuota
-                        ? t("codex.batchImport.cancelScan", "取消扫描")
-                        : t("codex.batchImport.cancelParse", "取消解析")
-                      : t("common.shared.close", "关闭")}
-                  </button>
-                  {!batchImportBusy &&
-                    batchImportPreview?.status === "cancelled" && (
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => void handleResumeBatchImport()}
-                      >
-                        <RefreshCw size={16} />
-                        {activeBatchImportCheckQuota
-                          ? t("codex.batchImport.resumeScan", "继续扫描")
-                          : t("codex.batchImport.resumeParse", "继续解析")}
-                      </button>
-                    )}
+                    <div className="codex-batch-import-list">
+                      {[...batchImportVisibleItems].reverse().map((item) => {
+                        const selectable = batchImportSelectableIdSet.has(
+                          item.itemId,
+                        );
+                        const checked =
+                          selectable &&
+                          batchImportSelectedIds.includes(item.itemId);
+                        return (
+                          <label
+                            className={`codex-batch-import-row status-${item.status}`}
+                            key={item.itemId}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!selectable || batchImportBusy}
+                              onChange={() => toggleBatchImportItem(item.itemId)}
+                            />
+                            <div className="codex-batch-import-row-main">
+                              <div className="codex-batch-import-row-title">
+                                <strong>{maskAccountText(item.label)}</strong>
+                                <span>{item.accountType}</span>
+                              </div>
+                              <div className="codex-batch-import-row-meta">
+                                <span>{item.source}</span>
+                                {item.provider && <span>{item.provider}</span>}
+                                {item.status === "ready" && (
+                                  <span>
+                                    {activeBatchImportCheckQuota
+                                      ? t(
+                                          "codex.batchImport.quotaOk",
+                                          "账号正常",
+                                        )
+                                      : t(
+                                          "codex.batchImport.groups.ready",
+                                          "可导入",
+                                        )}
+                                  </span>
+                                )}
+                                {item.status === "quota_failed" && (
+                                  <span>
+                                    {t("codex.batchImport.quotaFailed", "异常")}
+                                  </span>
+                                )}
+                                {item.status === "existing" && (
+                                  <span>
+                                    {t(
+                                      "codex.batchImport.groups.existing",
+                                      "已存在",
+                                    )}
+                                  </span>
+                                )}
+                                {item.status === "invalid" && (
+                                  <span>
+                                    {t(
+                                      "codex.batchImport.groups.invalid",
+                                      "无效账号",
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                              {(item.quotaError || item.error) && (
+                                <small className="codex-batch-import-row-error">
+                                  {item.quotaError || item.error}
+                                </small>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="codex-batch-import-empty">
+                    <RefreshCw size={18} className="loading-spinner" />
+                    {t("codex.batchImport.preparing", "正在准备导入任务...")}
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer codex-batch-import-footer">
+                {batchImportResult ? (
                   <button
                     className="btn btn-primary"
-                    onClick={() => void handleConfirmBatchImport()}
-                    disabled={
-                      batchImportBusy ||
-                      !batchImportPreview ||
-                      batchImportSelectedSelectableCount === 0
-                    }
+                    onClick={() => void handleCloseBatchImport()}
                   >
-                    {batchImportBusy ? (
-                      <RefreshCw size={16} className="loading-spinner" />
-                    ) : (
-                      <Download size={16} />
-                    )}
-                    {t("codex.batchImport.importSelected", "导入选中账号")}
-                    {batchImportSelectedSelectableCount > 0
-                      ? ` (${batchImportSelectedSelectableCount})`
-                      : ""}
+                    {t("common.shared.close", "关闭")}
                   </button>
-                </>
-              )}
+                ) : (
+                  <>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() =>
+                        batchImportCanCancel
+                          ? void handleCancelBatchImport()
+                          : void handleCloseBatchImport()
+                      }
+                      disabled={batchImportCancelling}
+                    >
+                      {batchImportCanCancel
+                        ? activeBatchImportTask?.status === "queued"
+                          ? t("codex.batchImport.cancelQueued", "取消排队")
+                          : activeBatchImportTask?.status === "importing"
+                            ? t("codex.batchImport.cancelImport", "取消导入")
+                          : activeBatchImportCheckQuota
+                            ? t("codex.batchImport.cancelScan", "取消扫描")
+                            : t("codex.batchImport.cancelParse", "取消解析")
+                        : t("common.shared.close", "关闭")}
+                    </button>
+                    {!batchImportBusy &&
+                      batchImportPreview?.status === "cancelled" && (
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => void handleResumeBatchImport()}
+                        >
+                          <RefreshCw size={16} />
+                          {activeBatchImportCheckQuota
+                            ? t("codex.batchImport.resumeScan", "继续扫描")
+                            : t("codex.batchImport.resumeParse", "继续解析")}
+                        </button>
+                      )}
+                    {!batchImportBusy && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => void handleConfirmBatchImport()}
+                        disabled={
+                          !batchImportPreview ||
+                          batchImportSelectedSelectableCount === 0
+                        }
+                      >
+                        <Download size={16} />
+                        {activeBatchImportCheckQuota
+                          ? t(
+                              "codex.batchImport.importChecked",
+                              "导入已检测账号",
+                            )
+                          : t(
+                              "codex.batchImport.directImport",
+                              "不检测，直接导入",
+                            )}
+                        {batchImportSelectedSelectableCount > 0
+                          ? ` (${batchImportSelectedSelectableCount})`
+                          : ""}
+                      </button>
+                    )}
+                    {!batchImportBusy && (
+                      <button
+                        className="btn btn-success"
+                        onClick={() =>
+                          void handleConfirmBatchImport({
+                            addToApiService: true,
+                          })
+                        }
+                        disabled={
+                          localAccessSaving ||
+                          !batchImportPreview ||
+                          batchImportSelectedSelectableCount === 0
+                        }
+                      >
+                        {localAccessSaving ? (
+                          <RefreshCw size={16} className="loading-spinner" />
+                        ) : (
+                          <Database size={16} />
+                        )}
+                        {activeBatchImportCheckQuota
+                          ? t(
+                              "codex.batchImport.importCheckedAndAddToApiService",
+                              "导入已检测账号并添加到 API 服务",
+                            )
+                          : t(
+                              "codex.batchImport.directImportAndAddToApiService",
+                              "直接导入并添加到 API 服务",
+                            )}
+                        {batchImportSelectedSelectableCount > 0
+                          ? ` (${batchImportSelectedSelectableCount})`
+                          : ""}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {externalImportProgress.visible && (
         <div
@@ -12787,47 +13528,6 @@ export function CodexAccountsPage() {
                       >
                         <X size={14} />
                         <span>{t("codex.batchDelete.clear")}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-              {batchImportSessionId && !batchImportOpen && !batchImportResult && (
-                <div className="codex-batch-import-task">
-                  <div className="codex-batch-import-task__copy">
-                    <strong>{t("codex.batchImport.hiddenTask")}</strong>
-                    <span>
-                      {batchImportBusy
-                        ? t("codex.batchImport.taskRunning", {
-                            current: batchImportProgress?.current ?? 0,
-                            total:
-                              batchImportProgress?.total ??
-                              batchImportPreview?.total ??
-                              0,
-                          })
-                        : batchImportPreview
-                          ? t("codex.batchImport.taskPreview", {
-                              total: batchImportPreview.total,
-                            })
-                          : t("codex.batchImport.preparing")}
-                    </span>
-                  </div>
-                  <div className="codex-batch-import-task__actions">
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setBatchImportOpen(true)}
-                    >
-                      <FileText size={14} />
-                      <span>{t("codex.batchImport.reopen", "查看任务")}</span>
-                    </button>
-                    {!batchImportBusy && (
-                      <button
-                        className="btn btn-secondary"
-                        onClick={handleDismissBatchImportTask}
-                        title={t("codex.batchImport.dismissTask", "丢弃任务")}
-                      >
-                        <X size={14} />
-                        <span>{t("codex.batchImport.dismissTask", "丢弃")}</span>
                       </button>
                     )}
                   </div>
@@ -13708,6 +14408,120 @@ export function CodexAccountsPage() {
                           </div>
                         </div>
                       )}
+                      {apiProviderPresetId !== OPENAI_OFFICIAL_PRESET_ID && (
+                        <>
+                          <div className="api-model-catalog-panel">
+                            <div className="api-model-catalog-header">
+                              <label htmlFor="codex-api-model-catalog-add">
+                                {t("codex.api.modelCatalog.label", "模型列表")}
+                              </label>
+                              <span className="api-model-catalog-count">
+                                {t("codex.api.modelCatalog.count", {
+                                  defaultValue: "{{count}} 个模型",
+                                  count: apiModelCatalogDraft.length,
+                                })}
+                              </span>
+                            </div>
+                            <textarea
+                              id="codex-api-model-catalog-add"
+                              className="form-input api-model-catalog-input"
+                              rows={6}
+                              value={apiModelCatalogInput}
+                              onChange={(event) => {
+                                setApiModelCatalogInput(event.target.value);
+                                setApiModelCatalogError(null);
+                              }}
+                              placeholder={t(
+                                "codex.api.modelCatalog.placeholder",
+                                "每行填写一个模型 ID，也可以使用逗号分隔。",
+                              )}
+                              disabled={addStatus === "loading"}
+                              aria-describedby="codex-api-model-catalog-add-hint"
+                            />
+                            <div className="api-model-catalog-toolbar">
+                              <p
+                                id="codex-api-model-catalog-add-hint"
+                                className="api-model-catalog-hint"
+                              >
+                                {t(
+                                  "codex.api.modelCatalog.editHint",
+                                  "上游结果仅填入当前草稿，可在保存前删除、补充或调整模型。",
+                                )}
+                              </p>
+                              <button
+                                type="button"
+                                className="btn btn-secondary api-model-catalog-fetch"
+                                onClick={() =>
+                                  void handleFetchApiModelCatalog()
+                                }
+                                disabled={
+                                  apiModelCatalogFetching ||
+                                  addStatus === "loading" ||
+                                  !apiKeyInput.trim()
+                                }
+                              >
+                                <RefreshCw
+                                  size={14}
+                                  className={
+                                    apiModelCatalogFetching
+                                      ? "loading-spinner"
+                                      : undefined
+                                  }
+                                />
+                                {apiModelCatalogFetching
+                                  ? t(
+                                      "codex.api.modelCatalog.fetching",
+                                      "获取中...",
+                                    )
+                                  : t(
+                                      "codex.api.modelCatalog.fetch",
+                                      "从上游获取",
+                                    )}
+                              </button>
+                            </div>
+                            {apiModelCatalogError && (
+                              <div
+                                className="add-status error api-model-catalog-error"
+                              >
+                                <CircleAlert size={16} />
+                                <span>{apiModelCatalogError}</span>
+                              </div>
+                            )}
+                          </div>
+                          {apiModelCatalogSyncAvailable && (
+                            <label
+                              className="codex-import-api-service-toggle api-model-catalog-sync-toggle"
+                            >
+                              <span className="codex-import-api-service-toggle-copy">
+                                <strong>
+                                  {t(
+                                    "codex.api.modelCatalog.syncToggle",
+                                    "同步供应商模型到 Codex",
+                                  )}
+                                </strong>
+                                <small>
+                                  {t(
+                                    "codex.api.modelCatalog.syncDescription",
+                                    "保存后使用当前模型列表生成 Cockpit 受管的 Codex 模型目录，不覆盖用户自定义目录。",
+                                  )}
+                                </small>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={apiSyncModelCatalogToCodex}
+                                disabled={addStatus === "loading"}
+                                onChange={(event) => {
+                                  setApiSyncModelCatalogToCodex(
+                                    event.target.checked,
+                                  );
+                                  setApiModelCatalogError(null);
+                                }}
+                              />
+                              <span className="codex-import-api-service-switch" />
+                            </label>
+                          )}
+                        </>
+                      )}
                       <div className="api-key-add-actions">
                         <button
                           className="btn btn-primary"
@@ -13715,6 +14529,7 @@ export function CodexAccountsPage() {
                           disabled={
                             importing ||
                             addStatus === "loading" ||
+                            apiModelCatalogFetching ||
                             !apiKeyInput.trim()
                           }
                         >
@@ -13733,7 +14548,7 @@ export function CodexAccountsPage() {
                       <p className="section-desc">
                         {t(
                           "codex.token.desc",
-                          "粘贴 auth.json、账号 JSON、Sub2API JSON、accessToken 或 refresh_token。",
+                          "粘贴 auth.json、账号 JSON、Sub2API JSON、accessToken、个人访问令牌 at-… 或 refresh_token。",
                         )}
                       </p>
                       <details className="token-format-collapse">
@@ -13747,7 +14562,7 @@ export function CodexAccountsPage() {
                           <p className="token-format-required">
                             {t(
                               "codex.token.formatRequired",
-                              "支持 session JSON、完整 tokens（id_token + access_token）、Sub2API 导出 JSON、仅 accessToken 或仅 refresh_token。仅 refresh_token 会先联网换取完整凭据。",
+                              "支持 session JSON、完整 tokens（id_token + access_token）、Sub2API 导出 JSON、仅 accessToken、个人访问令牌 at-… / personal_access_token，或仅 refresh_token。仅 refresh_token 会先联网换取完整凭据；无 refresh 的 at-… 按 personal_access_token 形态落盘。",
                             )}
                           </p>
                           <div className="token-format-group">
@@ -13765,7 +14580,7 @@ export function CodexAccountsPage() {
                             <div className="token-format-label">
                               {t(
                                 "codex.token.formatRefreshOnlyLabel",
-                                "session / accessToken / refresh_token 示例",
+                                "session / accessToken / at- / refresh_token 示例",
                               )}
                             </div>
                             <pre className="token-format-code">
@@ -13788,7 +14603,7 @@ export function CodexAccountsPage() {
                         onChange={(e) => setTokenInput(e.target.value)}
                         placeholder={t(
                           "codex.token.placeholder",
-                          '示例：直接粘贴 session JSON、accessToken、Sub2API 导出 JSON，或 {"accessToken":"eyJ..."}',
+                          '示例：session JSON、accessToken、at-… 个人访问令牌、Sub2API JSON，或 {"personal_access_token":"at-..."}',
                         )}
                       />
                       <label className="codex-import-api-service-toggle">
@@ -14207,41 +15022,6 @@ export function CodexAccountsPage() {
                                 </button>
                               )}
                             </div>
-                          )}
-                          {oauthBindingTargetKind && (
-                            <label
-                              className="codex-oauth-binding-gateway-toggle"
-                              title={t(
-                                oauthBindingTargetKind === "local_access"
-                                  ? "codex.localAccess.oauthBinding.imageGenerationTooltip"
-                                  : "codex.api.oauthBinding.localGatewayTooltip",
-                                oauthBindingTargetKind === "local_access"
-                                  ? "开启后，API 服务会在本地网关转发普通文本对话前移除 image_generation 工具声明；不会删除生图模型。"
-                                  : "开启后，绑定 OAuth 的 API Key 文本对话会走本地网关，并在转发前移除 image_generation 工具声明；不会删除生图模型。",
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={oauthBindingUseLocalGateway}
-                                onChange={(event) =>
-                                  void handleOAuthBindingLocalGatewayToggle(
-                                    event.target.checked,
-                                  )
-                                }
-                                disabled={oauthBindingSaving}
-                              />
-                              <span
-                                className="codex-oauth-binding-checkbox-ui"
-                                aria-hidden="true"
-                              />
-                              <span>
-                                {t(
-                                  "codex.api.oauthBinding.useLocalGateway",
-                                  "禁用 image_generation",
-                                )}
-                              </span>
-                              <Info size={14} />
-                            </label>
                           )}
                         </div>
                       </div>
@@ -14977,6 +15757,123 @@ export function CodexAccountsPage() {
                         </div>
                       </div>
                     )}
+                    {editingApiProviderPresetId !==
+                      OPENAI_OFFICIAL_PRESET_ID && (
+                      <>
+                        <div className="api-model-catalog-panel">
+                          <div className="api-model-catalog-header">
+                            <label htmlFor="codex-api-model-catalog-edit">
+                              {t("codex.api.modelCatalog.label", "模型列表")}
+                            </label>
+                            <span className="api-model-catalog-count">
+                              {t("codex.api.modelCatalog.count", {
+                                defaultValue: "{{count}} 个模型",
+                                count: editingApiModelCatalogDraft.length,
+                              })}
+                            </span>
+                          </div>
+                          <textarea
+                            id="codex-api-model-catalog-edit"
+                            className="form-input api-model-catalog-input"
+                            rows={6}
+                            value={editingApiModelCatalogInput}
+                            onChange={(event) => {
+                              setEditingApiModelCatalogInput(
+                                event.target.value,
+                              );
+                              setEditingApiModelCatalogError(null);
+                            }}
+                            placeholder={t(
+                              "codex.api.modelCatalog.placeholder",
+                              "每行填写一个模型 ID，也可以使用逗号分隔。",
+                            )}
+                            disabled={savingApiKeyCredentials}
+                            aria-describedby="codex-api-model-catalog-edit-hint"
+                          />
+                          <div className="api-model-catalog-toolbar">
+                            <p
+                              id="codex-api-model-catalog-edit-hint"
+                              className="api-model-catalog-hint"
+                            >
+                              {t(
+                                "codex.api.modelCatalog.editHint",
+                                "上游结果仅填入当前草稿，可在保存前删除、补充或调整模型。",
+                              )}
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn-secondary api-model-catalog-fetch"
+                              onClick={() =>
+                                void handleFetchEditingApiModelCatalog()
+                              }
+                              disabled={
+                                editingApiModelCatalogFetching ||
+                                savingApiKeyCredentials ||
+                                !editingApiKeyCredentialsValue.trim()
+                              }
+                            >
+                              <RefreshCw
+                                size={14}
+                                className={
+                                  editingApiModelCatalogFetching
+                                    ? "loading-spinner"
+                                    : undefined
+                                }
+                              />
+                              {editingApiModelCatalogFetching
+                                ? t(
+                                    "codex.api.modelCatalog.fetching",
+                                    "获取中...",
+                                  )
+                                : t(
+                                    "codex.api.modelCatalog.fetch",
+                                    "从上游获取",
+                                  )}
+                            </button>
+                          </div>
+                          {editingApiModelCatalogError && (
+                            <div
+                              className="add-status error api-model-catalog-error"
+                            >
+                              <CircleAlert size={16} />
+                              <span>{editingApiModelCatalogError}</span>
+                            </div>
+                          )}
+                        </div>
+                        {editingApiModelCatalogSyncAvailable && (
+                          <label
+                            className="codex-import-api-service-toggle api-model-catalog-sync-toggle"
+                          >
+                            <span className="codex-import-api-service-toggle-copy">
+                              <strong>
+                                {t(
+                                  "codex.api.modelCatalog.syncToggle",
+                                  "同步供应商模型到 Codex",
+                                )}
+                              </strong>
+                              <small>
+                                {t(
+                                  "codex.api.modelCatalog.syncDescription",
+                                  "保存后使用当前模型列表生成 Cockpit 受管的 Codex 模型目录，不覆盖用户自定义目录。",
+                                )}
+                              </small>
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={editingApiSyncModelCatalogToCodex}
+                              disabled={savingApiKeyCredentials}
+                              onChange={(event) => {
+                                setEditingApiSyncModelCatalogToCodex(
+                                  event.target.checked,
+                                );
+                                setEditingApiModelCatalogError(null);
+                              }}
+                            />
+                            <span className="codex-import-api-service-switch" />
+                          </label>
+                        )}
+                      </>
+                    )}
                     <div className="api-key-edit-actions">
                       <button
                         className="btn btn-secondary"
@@ -14990,6 +15887,7 @@ export function CodexAccountsPage() {
                         onClick={() => void handleSubmitApiKeyCredentials()}
                         disabled={
                           savingApiKeyCredentials ||
+                          editingApiModelCatalogFetching ||
                           !editingApiKeyCredentialsValue.trim()
                         }
                       >
@@ -16416,6 +17314,7 @@ export function CodexAccountsPage() {
             addressOptions={localAccessAddressOptions}
             onAddressKindChange={handleLocalAccessAddressKindChange}
             accounts={accounts}
+            accountsLoaded={store.accountsLoaded}
             accountGroups={codexGroups}
             memberView={
               localAccessModalMode === "members"
@@ -16514,6 +17413,7 @@ export function CodexAccountsPage() {
       )}
 
       {activeTab === "sessions" && <CodexSessionManager />}
+
 
       {activeTab === "providers" && (
         <CodexModelProviderManager

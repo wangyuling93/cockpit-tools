@@ -5,8 +5,6 @@ use crate::models::codex::{
 use crate::modules::{account, codex_oauth, logger};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
-#[cfg(target_os = "macos")]
-#[cfg(all(target_os = "macos", not(test)))]
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -39,9 +37,14 @@ const CODEX_CONFIG_MODEL_PROVIDER_KEY: &str = "model_provider";
 const CODEX_CONFIG_MODEL_PROVIDERS_KEY: &str = "model_providers";
 const CODEX_CONFIG_MODEL_CATALOG_JSON_KEY: &str = "model_catalog_json";
 const CODEX_CONFIG_EXPERIMENTAL_BEARER_TOKEN_KEY: &str = "experimental_bearer_token";
+const CODEX_CONFIG_HTTP_HEADERS_KEY: &str = "http_headers";
 const CODEX_CONFIG_MODEL_CONTEXT_WINDOW_KEY: &str = "model_context_window";
 const CODEX_CONFIG_MODEL_AUTO_COMPACT_TOKEN_LIMIT_KEY: &str = "model_auto_compact_token_limit";
 const CODEX_MANAGED_MODEL_CATALOG_FILE: &str = "cockpit-provider-model-catalog.json";
+const CODEX_AUTO_REVIEW_MODEL_ID: &str = "codex-auto-review";
+const CODEX_IMAGE_MODEL_ID: &str = "gpt-image-2";
+const CODEX_IMAGEGEN_ACTOR_HEADER: &str = "x-openai-actor-authorization";
+const CODEX_IMAGEGEN_ACTOR_HEADER_VALUE: &str = "cockpit-tools";
 const CODEX_DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
 const CODEX_COCKPIT_API_BASE_URL: &str = "https://chongcodex.cn/v1";
 const CODEX_COCKPIT_API_PROVIDER_ID: &str = "cockpit_api";
@@ -382,6 +385,7 @@ fn apply_api_key_fields(
     api_key: &str,
     provider_config: ApiProviderConfig,
     api_model_catalog: Vec<String>,
+    api_sync_model_catalog_to_codex: bool,
     api_wire_api: Option<String>,
     api_supports_websockets: bool,
     api_supports_vision: bool,
@@ -407,6 +411,7 @@ fn apply_api_key_fields(
     account.api_provider_id = provider_config.provider_id;
     account.api_provider_name = provider_config.provider_name;
     account.api_model_catalog = normalize_api_model_catalog(api_model_catalog);
+    account.api_sync_model_catalog_to_codex = api_sync_model_catalog_to_codex;
     account.api_wire_api = normalize_api_wire_api(api_wire_api);
     account.api_supports_websockets = api_supports_websockets;
     let _ = normalize_api_key_websocket_capability(account);
@@ -1002,6 +1007,100 @@ fn remove_managed_model_catalog_from_doc(doc: &mut Document) -> bool {
     false
 }
 
+fn account_syncs_model_catalog_to_codex(account: &CodexAccount) -> bool {
+    account.is_api_key_auth()
+        && account.api_sync_model_catalog_to_codex
+        && account.api_provider_mode == CodexApiProviderMode::Custom
+        && account
+            .api_wire_api
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or(CODEX_PROVIDER_WIRE_API)
+            .eq_ignore_ascii_case(CODEX_PROVIDER_WIRE_API)
+        && !account.api_model_catalog.is_empty()
+}
+
+fn sync_api_key_model_catalog_to_dir(
+    base_dir: &Path,
+    account: &CodexAccount,
+) -> Result<bool, String> {
+    if !account_syncs_model_catalog_to_codex(account) {
+        return Ok(false);
+    }
+
+    let config_path = get_config_toml_path(base_dir);
+    let existing = fs::read_to_string(&config_path).unwrap_or_default();
+    let mut doc = if existing.trim().is_empty() {
+        Document::new()
+    } else {
+        crate::modules::codex_config_format::read_codex_config_doc_from_str(&existing)
+            .map_err(|e| format!("解析 config.toml 失败: {}", e))?
+    };
+    if let Some(configured_catalog) = doc
+        .get(CODEX_CONFIG_MODEL_CATALOG_JSON_KEY)
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if configured_catalog != CODEX_MANAGED_MODEL_CATALOG_FILE {
+            return Ok(false);
+        }
+    }
+
+    let mut model_ids = normalize_api_model_catalog(account.api_model_catalog.clone());
+    if !model_ids
+        .iter()
+        .any(|model| model.eq_ignore_ascii_case(CODEX_AUTO_REVIEW_MODEL_ID))
+    {
+        model_ids.push(CODEX_AUTO_REVIEW_MODEL_ID.to_string());
+    }
+    let selected_model_is_available = doc
+        .get("model")
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(|selected_model| {
+            model_ids
+                .iter()
+                .any(|model| model.eq_ignore_ascii_case(selected_model))
+        })
+        .unwrap_or(false);
+    if !selected_model_is_available {
+        if let Some(default_model) = model_ids.first() {
+            doc["model"] = value(default_model.as_str());
+        }
+    }
+    let catalog = crate::modules::codex_protocol::build_codex_client_models_response(&model_ids);
+    let content = serde_json::to_string_pretty(&catalog)
+        .map_err(|e| format!("生成 Codex 模型目录失败: {}", e))?;
+    let catalog_path = base_dir.join(CODEX_MANAGED_MODEL_CATALOG_FILE);
+    write_string_atomic(&catalog_path, &content).map_err(|e| {
+        format!(
+            "写入 Codex 模型目录失败: path={}, error={}",
+            catalog_path.display(),
+            e
+        )
+    })?;
+
+    doc[CODEX_CONFIG_MODEL_CATALOG_JSON_KEY] = value(CODEX_MANAGED_MODEL_CATALOG_FILE);
+    let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
+    crate::modules::codex_config_format::write_codex_config_toml_atomic(&config_path, &content)
+        .map_err(|e| format!("写入 config.toml 失败: {}", e))?;
+    Ok(true)
+}
+
+fn sync_or_cleanup_managed_model_catalog_for_dir(
+    base_dir: &Path,
+    account: &CodexAccount,
+) -> Result<(), String> {
+    if account_syncs_model_catalog_to_codex(account) {
+        let _ = sync_api_key_model_catalog_to_dir(base_dir, account)?;
+    } else {
+        let _ = cleanup_managed_model_catalog_for_dir(base_dir)?;
+    }
+    Ok(())
+}
+
 fn cleanup_managed_model_catalog_for_dir(base_dir: &Path) -> Result<bool, String> {
     let mut changed = false;
     let catalog_path = base_dir.join(CODEX_MANAGED_MODEL_CATALOG_FILE);
@@ -1100,11 +1199,77 @@ fn write_windows_builtin_openai_provider_to_doc(
     Ok(())
 }
 
+fn api_key_account_supports_image_generation(account: &CodexAccount) -> bool {
+    account.is_api_key_auth()
+        && account
+            .api_model_catalog
+            .iter()
+            .any(|model| model.trim().eq_ignore_ascii_case(CODEX_IMAGE_MODEL_ID))
+}
+
+fn remove_imagegen_actor_header(provider_table: &mut toml_edit::Table) {
+    let mut remove_http_headers = false;
+    if let Some(headers) = provider_table.get_mut(CODEX_CONFIG_HTTP_HEADERS_KEY) {
+        if let Some(inline) = headers.as_inline_table_mut() {
+            let matching_keys: Vec<String> = inline
+                .iter()
+                .filter(|(key, _)| key.eq_ignore_ascii_case(CODEX_IMAGEGEN_ACTOR_HEADER))
+                .map(|(key, _)| key.to_string())
+                .collect();
+            for key in matching_keys {
+                let _ = inline.remove(&key);
+            }
+            remove_http_headers = inline.is_empty();
+        } else if let Some(table) = headers.as_table_mut() {
+            let matching_keys: Vec<String> = table
+                .iter()
+                .filter(|(key, _)| key.eq_ignore_ascii_case(CODEX_IMAGEGEN_ACTOR_HEADER))
+                .map(|(key, _)| key.to_string())
+                .collect();
+            for key in matching_keys {
+                let _ = table.remove(&key);
+            }
+            remove_http_headers = table.is_empty();
+        }
+    }
+    if remove_http_headers {
+        let _ = provider_table.remove(CODEX_CONFIG_HTTP_HEADERS_KEY);
+    }
+}
+
+fn set_imagegen_actor_header(provider_table: &mut toml_edit::Table) {
+    remove_imagegen_actor_header(provider_table);
+    if provider_table.get(CODEX_CONFIG_HTTP_HEADERS_KEY).is_none() {
+        provider_table[CODEX_CONFIG_HTTP_HEADERS_KEY] =
+            toml_edit::Item::Value(toml_edit::Value::InlineTable(toml_edit::InlineTable::new()));
+    }
+
+    let headers = provider_table
+        .get_mut(CODEX_CONFIG_HTTP_HEADERS_KEY)
+        .expect("http_headers should exist after initialization");
+    if let Some(inline) = headers.as_inline_table_mut() {
+        inline.insert(
+            CODEX_IMAGEGEN_ACTOR_HEADER,
+            toml_edit::Value::from(CODEX_IMAGEGEN_ACTOR_HEADER_VALUE),
+        );
+    } else if let Some(table) = headers.as_table_mut() {
+        table[CODEX_IMAGEGEN_ACTOR_HEADER] = value(CODEX_IMAGEGEN_ACTOR_HEADER_VALUE);
+    } else {
+        let mut inline = toml_edit::InlineTable::new();
+        inline.insert(
+            CODEX_IMAGEGEN_ACTOR_HEADER,
+            toml_edit::Value::from(CODEX_IMAGEGEN_ACTOR_HEADER_VALUE),
+        );
+        *headers = toml_edit::Item::Value(toml_edit::Value::InlineTable(inline));
+    }
+}
+
 fn write_api_key_provider_to_config_toml(
     base_dir: &Path,
     provider_config: &ApiProviderConfig,
     bearer_token: &str,
     supports_websockets: bool,
+    supports_image_generation: bool,
 ) -> Result<(), String> {
     let config_path = get_config_toml_path(base_dir);
     let bearer_token = normalize_api_key(bearer_token)
@@ -1143,9 +1308,14 @@ fn write_api_key_provider_to_config_toml(
     provider_table["name"] = value(provider_name);
     provider_table["base_url"] = value(base_url);
     provider_table["wire_api"] = value(CODEX_PROVIDER_WIRE_API);
-    provider_table["requires_openai_auth"] = value(true);
+    provider_table["requires_openai_auth"] = value(!supports_image_generation);
     provider_table[CODEX_CONFIG_EXPERIMENTAL_BEARER_TOKEN_KEY] = value(bearer_token);
     provider_table["supports_websockets"] = value(supports_websockets);
+    if supports_image_generation {
+        set_imagegen_actor_header(provider_table);
+    } else {
+        remove_imagegen_actor_header(provider_table);
+    }
 
     if let Some(parent) = config_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建 config.toml 目录失败: {}", e))?;
@@ -2512,6 +2682,15 @@ fn apply_api_key_import_metadata(account: &mut CodexAccount, value: &serde_json:
     if let Some(api_wire_api) = read_json_string(value, &["api_wire_api", "apiWireApi"]) {
         account.api_wire_api = normalize_api_wire_api(Some(api_wire_api));
     }
+    if let Some(sync_model_catalog) = read_json_bool(
+        value,
+        &[
+            "api_sync_model_catalog_to_codex",
+            "apiSyncModelCatalogToCodex",
+        ],
+    ) {
+        account.api_sync_model_catalog_to_codex = sync_model_catalog;
+    }
     if let Some(supports_websockets) =
         read_json_bool(value, &["api_supports_websockets", "apiSupportsWebsockets"])
     {
@@ -2605,18 +2784,12 @@ pub fn load_account(account_id: &str) -> Option<CodexAccount> {
     load_account_with_summary(account_id, None).ok().flatten()
 }
 
-fn migrate_bound_oauth_use_local_gateway_if_missing(
-    account: &mut CodexAccount,
-    raw_value: &serde_json::Value,
-) -> bool {
-    if !account.is_api_key_auth()
-        || normalize_optional_ref(account.bound_oauth_account_id.as_deref()).is_none()
-        || raw_value.get("bound_oauth_use_local_gateway").is_some()
-    {
+fn remove_bound_oauth_image_generation_compat(account: &mut CodexAccount) -> bool {
+    if !account.bound_oauth_use_local_gateway {
         return false;
     }
 
-    account.bound_oauth_use_local_gateway = true;
+    account.bound_oauth_use_local_gateway = false;
     true
 }
 
@@ -2656,25 +2829,39 @@ fn load_account_with_summary(
 
     let content = fs::read_to_string(&path)
         .map_err(|error| format!("读取账号详情失败 ({}): {}", path.display(), error))?;
-    if let Ok(mut account) = serde_json::from_str::<CodexAccount>(&content) {
-        let raw_value = serde_json::from_str::<serde_json::Value>(&content).ok();
+
+    // AES-GCM envelope first (#1104), then plaintext + compat paths.
+    if let Ok((mut account, needs_rotation)) =
+        crate::modules::secure_account_storage::deserialize_account_file::<CodexAccount>(
+            &path, &content,
+        )
+    {
         let migrated_index_summary = summary
             .map(|summary| apply_index_summary_to_account_detail(&mut account, summary))
             .unwrap_or(false);
-        let migrated_bound_oauth = raw_value
-            .as_ref()
-            .map(|value| migrate_bound_oauth_use_local_gateway_if_missing(&mut account, value))
-            .unwrap_or(false);
+        let removed_image_generation_compat =
+            remove_bound_oauth_image_generation_compat(&mut account);
         let migrated_wire_api = migrate_apikey_fun_wire_api(&mut account);
         let migrated_websocket = normalize_api_key_websocket_capability(&mut account);
-        if migrated_wire_api || migrated_websocket || migrated_bound_oauth || migrated_index_summary
+        if needs_rotation
+            || migrated_wire_api
+            || migrated_websocket
+            || removed_image_generation_compat
+            || migrated_index_summary
         {
-            if let Err(error) = save_account(&account) {
-                logger::log_warn(&format!(
-                    "[Codex Account][Migration] 账号详情迁移写回失败: account_id={}, error={}",
-                    account.id, error
-                ));
-            }
+            let account_for_rewrite = account.clone();
+            crate::modules::deferred_account_rewrite::schedule_account_rewrite_if_unchanged(
+                "codex",
+                account_for_rewrite.id.clone(),
+                path.clone(),
+                content.as_bytes(),
+                move || {
+                    crate::modules::secure_account_storage::serialize_account_file(
+                        "codex",
+                        &account_for_rewrite,
+                    )
+                },
+            );
         }
         return Ok(Some(account));
     }
@@ -2684,14 +2871,21 @@ fn load_account_with_summary(
     let mut account = parse_codex_account_compat(value.clone(), account_id, summary)?
         .ok_or_else(|| format!("账号详情缺少可识别凭据 ({})", path.display()))?;
     let _ = migrate_apikey_fun_wire_api(&mut account);
-    let _ = migrate_bound_oauth_use_local_gateway_if_missing(&mut account, &value);
+    let _ = remove_bound_oauth_image_generation_compat(&mut account);
 
-    if let Err(error) = save_account(&account) {
-        logger::log_warn(&format!(
-            "[Codex Account][Compat] 账号详情兼容读取成功但标准化写回失败: account_id={}, error={}",
-            account.id, error
-        ));
-    }
+    let account_for_rewrite = account.clone();
+    crate::modules::deferred_account_rewrite::schedule_account_rewrite_if_unchanged(
+        "codex",
+        account_for_rewrite.id.clone(),
+        path.clone(),
+        content.as_bytes(),
+        move || {
+            crate::modules::secure_account_storage::serialize_account_file(
+                "codex",
+                &account_for_rewrite,
+            )
+        },
+    );
 
     Ok(Some(account))
 }
@@ -2700,7 +2894,7 @@ fn load_account_with_summary(
 pub fn save_account(account: &CodexAccount) -> Result<(), String> {
     let path = get_accounts_dir().join(format!("{}.json", &account.id));
     let content =
-        serde_json::to_string_pretty(account).map_err(|e| format!("序列化失败: {}", e))?;
+        crate::modules::secure_account_storage::serialize_account_file("codex", account)?;
     write_string_atomic(&path, &content).map_err(|e| format!("写入账号详情失败: {}", e))?;
     Ok(())
 }
@@ -2709,7 +2903,8 @@ pub fn save_account(account: &CodexAccount) -> Result<(), String> {
 pub fn delete_account_file(account_id: &str) -> Result<(), String> {
     let path = get_accounts_dir().join(format!("{}.json", account_id));
     if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("删除文件失败: {}", e))?;
+        crate::modules::atomic_write::remove_file_locked(&path)
+            .map_err(|e| format!("删除文件失败: {}", e))?;
     }
     Ok(())
 }
@@ -2862,6 +3057,7 @@ pub fn upsert_api_key_account(
     api_provider_id: Option<String>,
     api_provider_name: Option<String>,
     api_model_catalog: Vec<String>,
+    api_sync_model_catalog_to_codex: Option<bool>,
     api_wire_api: Option<String>,
     api_supports_websockets: bool,
     api_supports_vision: bool,
@@ -2881,11 +3077,14 @@ pub fn upsert_api_key_account(
     let mut index = load_account_index();
 
     let mut account = if let Some(mut acc) = load_account(&account_id) {
+        let sync_model_catalog_to_codex =
+            api_sync_model_catalog_to_codex.unwrap_or(acc.api_sync_model_catalog_to_codex);
         apply_api_key_fields(
             &mut acc,
             &api_key,
             provider_config.clone(),
             api_model_catalog.clone(),
+            sync_model_catalog_to_codex,
             api_wire_api.clone(),
             api_supports_websockets,
             api_supports_vision,
@@ -2915,6 +3114,7 @@ pub fn upsert_api_key_account(
         );
         acc.plan_type = Some(API_KEY_LOGIN_PLAN_TYPE.to_string());
         acc.account_name = account_name;
+        acc.api_sync_model_catalog_to_codex = api_sync_model_catalog_to_codex.unwrap_or(false);
         acc.api_wire_api = normalize_api_wire_api(api_wire_api.clone());
         acc.api_supports_websockets = api_supports_websockets;
         let _ = normalize_api_key_websocket_capability(&mut acc);
@@ -3841,6 +4041,17 @@ fn build_auth_file_value(account: &CodexAccount) -> Result<serde_json::Value, St
         return Err("OAuth 账号缺少 access_token，无法写入 auth.json".to_string());
     }
 
+    // Access-token-only accounts: prefer official personal_access_token shape
+    // (no empty id_token / fabricated refresh) when neither id nor refresh exist.
+    if account.tokens.id_token.trim().is_empty()
+        && normalize_optional_ref(account.tokens.refresh_token.as_deref()).is_none()
+    {
+        return Ok(serde_json::json!({
+            "OPENAI_API_KEY": null,
+            "personal_access_token": account.tokens.access_token,
+        }));
+    }
+
     serde_json::to_value(CodexAuthFile {
         auth_mode: None,
         openai_api_key: Some(serde_json::Value::Null),
@@ -3857,6 +4068,7 @@ fn build_auth_file_value(account: &CodexAccount) -> Result<serde_json::Value, St
             ),
             account_id: account.account_id.clone(),
         }),
+        personal_access_token: None,
         last_refresh: Some(serde_json::Value::String(
             chrono::Utc::now()
                 .format("%Y-%m-%dT%H:%M:%S%.6fZ")
@@ -4087,6 +4299,7 @@ pub fn write_auth_file_to_dir(base_dir: &Path, account: &CodexAccount) -> Result
             &api_key,
             account.api_provider_mode == CodexApiProviderMode::Custom
                 && account.api_supports_websockets,
+            api_key_account_supports_image_generation(account),
         )?;
         provider_config
     } else {
@@ -4130,7 +4343,7 @@ pub(crate) fn write_prepared_account_bundle_to_dir(
         ));
     }
     write_managed_projection_to_dir(base_dir, account)?;
-    cleanup_managed_model_catalog_for_dir(base_dir)?;
+    sync_or_cleanup_managed_model_catalog_for_dir(base_dir, account)?;
     Ok(())
 }
 
@@ -4192,6 +4405,9 @@ fn write_api_key_provider_override_to_config_toml(
         &provider_config,
         &api_key,
         api_key_account.api_supports_websockets,
+        // 已绑定 OAuth 时必须继续让 Codex 使用 auth.json / Keychain 登录态；
+        // requires_openai_auth=false 与生图 actor header 仅用于未绑定 OAuth 的 API Key 投影。
+        false,
     )?;
     Ok(provider_config)
 }
@@ -4226,7 +4442,7 @@ fn write_api_key_account_bundle_with_oauth_to_dir(
     let provider_config =
         write_api_key_provider_override_to_config_toml(base_dir, api_key_account)?;
     write_managed_projection_to_dir(base_dir, api_key_account)?;
-    cleanup_managed_model_catalog_for_dir(base_dir)?;
+    sync_or_cleanup_managed_model_catalog_for_dir(base_dir, api_key_account)?;
     logger::log_info(&format!(
         "[Codex切号] 已写入 API Key 账号绑定 OAuth 的组合配置: api_account_id={}, oauth_account_id={}, target_dir={}, has_base_url={}",
         api_key_account.id,
@@ -4251,6 +4467,109 @@ pub fn write_account_bundle_to_dir(base_dir: &Path, account: &CodexAccount) -> R
 
     let account = resolve_account_for_bundle_write(base_dir, account)?;
     write_prepared_account_bundle_to_dir(base_dir, &account)
+}
+
+/// File entry inside a remote Codex projection bundle (#1404 full SSH sync).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodexProjectionFile {
+    pub relative_path: String,
+    pub content: String,
+    pub mode: u32,
+    pub sha256: String,
+}
+
+/// Remote-safe Codex account projection (auth.json + config.toml + marker).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CodexAccountProjectionBundle {
+    pub account_id: String,
+    pub account_email: String,
+    pub token_generation: u64,
+    pub files: Vec<CodexProjectionFile>,
+    pub bundle_hash: String,
+}
+
+fn sha256_hex_bytes(content: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content);
+    format!("{:x}", hasher.finalize())
+}
+
+fn build_bundle_hash(files: &[CodexProjectionFile]) -> String {
+    let mut hasher = Sha256::new();
+    for file in files {
+        hasher.update(file.relative_path.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(file.sha256.as_bytes());
+        hasher.update(b"\0");
+    }
+    format!("{:x}", hasher.finalize())
+}
+
+/// Build a remote projection bundle without writing host keychain secrets.
+pub(crate) fn build_projection_bundle_for_remote(
+    account: &CodexAccount,
+    existing_config_toml: Option<&str>,
+) -> Result<CodexAccountProjectionBundle, String> {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "cockpit-codex-remote-bundle-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("创建远程投影临时目录失败: {}", e))?;
+
+    let build_result = (|| {
+        if let Some(existing_config) = existing_config_toml {
+            let config_path = temp_dir.join(CODEX_CONFIG_FILE_NAME);
+            crate::modules::atomic_write::write_string_atomic(&config_path, existing_config)?;
+        }
+
+        write_account_bundle_to_dir(&temp_dir, account)?;
+
+        let mut files = Vec::new();
+        for (relative_path, mode) in [
+            ("auth.json", 0o600_u32),
+            (CODEX_CONFIG_FILE_NAME, 0o600),
+            (CODEX_AUTH_PROJECTION_FILE_NAME, 0o600),
+        ] {
+            let path = temp_dir.join(relative_path);
+            let content = if path.exists() {
+                fs::read_to_string(&path).map_err(|e| {
+                    format!("读取 Codex 投影文件失败: {}: {}", relative_path, e)
+                })?
+            } else if relative_path == CODEX_CONFIG_FILE_NAME {
+                String::new()
+            } else {
+                return Err(format!("Codex 投影缺少必要文件: {}", relative_path));
+            };
+            let sha256 = sha256_hex_bytes(content.as_bytes());
+            files.push(CodexProjectionFile {
+                relative_path: relative_path.to_string(),
+                content,
+                mode,
+                sha256,
+            });
+        }
+
+        let bundle_hash = build_bundle_hash(&files);
+        Ok(CodexAccountProjectionBundle {
+            account_id: account.id.clone(),
+            account_email: account.email.clone(),
+            token_generation: account.token_generation,
+            files,
+            bundle_hash,
+        })
+    })();
+
+    if let Err(err) = fs::remove_dir_all(&temp_dir) {
+        logger::log_warn(&format!(
+            "[Codex SSH] 清理远程投影临时目录失败: path={}, error={}",
+            temp_dir.display(),
+            err
+        ));
+    }
+
+    build_result
 }
 
 fn configured_codex_wsl_config_dir() -> Option<PathBuf> {
@@ -4384,16 +4703,17 @@ fn managed_projection_dirs_for_account(account_id: &str) -> Vec<PathBuf> {
 
 pub fn cleanup_managed_model_catalogs_on_startup() -> Result<usize, String> {
     let current_account_id = load_account_index().current_account_id;
-    let account_requires_provider_gateway = |account_id: Option<&str>| {
+    let account_requires_managed_catalog = |account_id: Option<&str>| {
         account_id
             .and_then(load_account)
             .map(|account| {
                 crate::modules::codex_local_access::account_requires_provider_gateway(&account)
+                    || account_syncs_model_catalog_to_codex(&account)
             })
             .unwrap_or(false)
     };
-    let current_requires_provider_gateway =
-        account_requires_provider_gateway(current_account_id.as_deref());
+    let current_requires_managed_catalog =
+        account_requires_managed_catalog(current_account_id.as_deref());
     let mut dirs: HashMap<String, (PathBuf, bool)> = HashMap::new();
     let mut add_dir = |dir: PathBuf, preserve_catalog: bool| {
         let key = dir.to_string_lossy().to_string();
@@ -4402,23 +4722,21 @@ pub fn cleanup_managed_model_catalogs_on_startup() -> Result<usize, String> {
             .or_insert((dir, preserve_catalog));
     };
 
-    add_dir(get_codex_home(), current_requires_provider_gateway);
+    add_dir(get_codex_home(), current_requires_managed_catalog);
     if let Some(wsl_dir) = configured_codex_wsl_config_dir() {
-        add_dir(wsl_dir, current_requires_provider_gateway);
+        add_dir(wsl_dir, current_requires_managed_catalog);
     }
     if let Ok(store) = crate::modules::codex_instance::load_instance_store() {
         if let Ok(default_home) = crate::modules::codex_instance::get_default_codex_home() {
             add_dir(
                 default_home,
-                account_requires_provider_gateway(
-                    store.default_settings.bind_account_id.as_deref(),
-                ),
+                account_requires_managed_catalog(store.default_settings.bind_account_id.as_deref()),
             );
         }
         for instance in store.instances {
             add_dir(
                 PathBuf::from(instance.user_data_dir),
-                account_requires_provider_gateway(instance.bind_account_id.as_deref()),
+                account_requires_managed_catalog(instance.bind_account_id.as_deref()),
             );
         }
     }
@@ -4949,6 +5267,38 @@ async fn activate_provider_gateway_after_switch_if_needed(
     Ok(())
 }
 
+/// 若导入结果包含当前激活账号，则重新切号落盘，避免库内 token 已更新但运行中仍用旧凭证。
+/// 成功时返回已重新激活的账号，便于调用方补跑 Hermes/OpenCode/OpenClaw 等切号副作用。
+/// 重新激活失败只记日志，不打断导入成功结果。
+pub async fn reactivate_if_imported_matches_current(
+    imported: &[CodexAccount],
+) -> Option<CodexAccount> {
+    let current_id = load_account_index().current_account_id?;
+    if !imported
+        .iter()
+        .any(|account| account.id.as_str() == current_id.as_str())
+    {
+        return None;
+    }
+
+    match switch_account_managed(&current_id).await {
+        Ok(account) => {
+            logger::log_info(&format!(
+                "[Codex导入] 当前账号已重新激活: id={}, email={}",
+                account.id, account.email
+            ));
+            Some(account)
+        }
+        Err(error) => {
+            logger::log_error(&format!(
+                "[Codex导入] 当前账号重新激活失败（导入已成功）: id={}, error={}",
+                current_id, error
+            ));
+            None
+        }
+    }
+}
+
 pub async fn switch_account_managed(account_id: &str) -> Result<CodexAccount, String> {
     let account = load_account_after_index_repair(account_id)
         .ok_or_else(|| format!("账号不存在: {}", account_id))?;
@@ -5035,6 +5385,7 @@ pub fn import_from_local() -> Result<CodexAccount, String> {
             fallback_provider.provider_id.clone(),
             fallback_provider.provider_name.clone(),
             Vec::new(),
+            Some(false),
             None,
             false,
             false,
@@ -5042,6 +5393,12 @@ pub fn import_from_local() -> Result<CodexAccount, String> {
             None,
             None,
         );
+    }
+
+    if let Some(personal_access_token) =
+        normalize_optional_ref(auth_file.personal_access_token.as_deref())
+    {
+        return upsert_account_from_access_token(personal_access_token, None);
     }
 
     if let Some(tokens) = auth_file.tokens {
@@ -5056,6 +5413,7 @@ pub fn import_from_local() -> Result<CodexAccount, String> {
             fallback_provider.provider_id.clone(),
             fallback_provider.provider_name.clone(),
             Vec::new(),
+            Some(false),
             None,
             false,
             false,
@@ -5091,6 +5449,7 @@ fn import_account_struct(account: CodexAccount) -> Result<CodexAccount, String> 
             account.api_provider_id.clone(),
             account.api_provider_name.clone(),
             account.api_model_catalog.clone(),
+            Some(account.api_sync_model_catalog_to_codex),
             account.api_wire_api.clone(),
             account.api_supports_websockets,
             account.api_supports_vision,
@@ -5826,7 +6185,7 @@ fn extract_refresh_token_only_from_value(value: &serde_json::Value) -> Option<St
         serde_json::Value::String(raw) => normalize_optional_ref(Some(raw)).filter(|token| {
             decode_jwt_payload_value(token).is_none()
                 && !is_opaque_access_token(token)
-                && extract_opaque_access_token_from_text(token).is_none()
+                && extract_opaque_access_token_from_text(raw).is_none()
         }),
         serde_json::Value::Object(_) => first_json_string(
             value,
@@ -5938,6 +6297,29 @@ fn upsert_account_from_access_token(
         access_token,
         CodexAccessTokenImportHints {
             account_note,
+            ..Default::default()
+        },
+    )
+}
+
+/// Named access-token import (community #1448): store as OAuth-shaped account with
+/// optional display name; projection uses personal_access_token when no refresh/id.
+pub fn import_access_token_account(
+    account_name: String,
+    access_token: String,
+) -> Result<CodexAccount, String> {
+    let account_name =
+        normalize_optional_value(Some(account_name)).ok_or("账户名不能为空".to_string())?;
+    let access_token = normalize_optional_value(Some(access_token))
+        .ok_or("Codex access token 不能为空".to_string())?;
+    if !is_importable_access_token(&access_token) {
+        return Err("无效的 Codex access token".to_string());
+    }
+
+    upsert_account_from_access_token_with_hints(
+        access_token,
+        CodexAccessTokenImportHints {
+            account_name: Some(account_name),
             ..Default::default()
         },
     )
@@ -6225,6 +6607,7 @@ async fn import_account_from_json_value(
                     .and_then(|value| value.as_str())
                     .map(|value| value.to_string()),
                 Vec::new(),
+                Some(false),
                 None,
                 false,
                 false,
@@ -6327,6 +6710,7 @@ pub async fn import_from_json(json_content: &str) -> Result<Vec<CodexAccount>, S
                 fallback_provider.provider_id.clone(),
                 fallback_provider.provider_name.clone(),
                 Vec::new(),
+                Some(false),
                 None,
                 false,
                 false,
@@ -6365,6 +6749,7 @@ pub async fn import_from_json(json_content: &str) -> Result<Vec<CodexAccount>, S
                 fallback_provider.provider_id.clone(),
                 fallback_provider.provider_name.clone(),
                 Vec::new(),
+                Some(false),
                 None,
                 false,
                 false,
@@ -6514,6 +6899,9 @@ pub struct CodexBatchImportPreview {
 pub struct CodexBatchImportConfirmResult {
     pub imported: Vec<CodexAccount>,
     pub failed: Vec<CodexFileImportFailure>,
+    pub cancelled: bool,
+    pub processed: usize,
+    pub total: usize,
 }
 
 #[derive(Clone)]
@@ -6581,9 +6969,7 @@ fn get_codex_batch_import_sessions_dir() -> PathBuf {
     let data_dir = account::get_data_dir()
         .or_else(|_| account::resolve_data_dir())
         .unwrap_or_else(|_| PathBuf::from(".antigravity_cockpit"));
-    let dir = data_dir.join(CODEX_BATCH_IMPORT_SESSIONS_DIR);
-    let _ = fs::create_dir_all(&dir);
-    dir
+    data_dir.join(CODEX_BATCH_IMPORT_SESSIONS_DIR)
 }
 
 fn sanitize_codex_batch_import_session_id(session_id: &str) -> Result<String, String> {
@@ -6603,6 +6989,25 @@ fn sanitize_codex_batch_import_session_id(session_id: &str) -> Result<String, St
 fn codex_batch_import_session_snapshot_path(session_id: &str) -> Result<PathBuf, String> {
     let safe_id = sanitize_codex_batch_import_session_id(session_id)?;
     Ok(get_codex_batch_import_sessions_dir().join(format!("{}.json", safe_id)))
+}
+
+fn ensure_codex_batch_import_sessions_dir(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        return Ok(());
+    }
+    if path.exists() {
+        return Err(format!(
+            "创建导入会话目录失败: path={} 不是目录",
+            path.display()
+        ));
+    }
+    fs::create_dir(path).map_err(|error| {
+        format!(
+            "创建导入会话目录失败: path={}, error={}",
+            path.display(),
+            error
+        )
+    })
 }
 
 fn codex_batch_import_snapshot_from_session(
@@ -6645,7 +7050,7 @@ fn save_codex_batch_import_session_snapshot(
 ) -> Result<(), String> {
     let path = codex_batch_import_session_snapshot_path(session_id)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("创建导入会话目录失败: {}", error))?;
+        ensure_codex_batch_import_sessions_dir(parent)?;
     }
     let snapshot = codex_batch_import_snapshot_from_session(session);
     let content = serde_json::to_string_pretty(&snapshot)
@@ -7506,7 +7911,8 @@ pub fn start_codex_batch_import_from_files(
         total: 0,
         items: Vec::new(),
     };
-    save_codex_batch_import_session_snapshot(&session_id, &session)?;
+    // 会话快照用于崩溃恢复，失败时保留当前进程内任务，不能阻断批量导入。
+    save_codex_batch_import_session_snapshot_best_effort(&session_id, &session);
     {
         let mut sessions = CODEX_BATCH_IMPORT_SESSIONS.lock().unwrap();
         sessions.insert(session_id.clone(), session);
@@ -7529,7 +7935,7 @@ pub fn cancel_codex_batch_import(session_id: &str) -> Result<(), String> {
         session.status = "cancelled".to_string();
         session.clone()
     };
-    save_codex_batch_import_session_snapshot(session_id, &session_snapshot)?;
+    save_codex_batch_import_session_snapshot_best_effort(session_id, &session_snapshot);
     Ok(())
 }
 
@@ -7545,12 +7951,12 @@ pub fn resume_codex_batch_import(app: tauri::AppHandle, session_id: &str) -> Res
         }
         if session.next_index >= session.source_items.len() {
             session.status = "ready".to_string();
-            save_codex_batch_import_session_snapshot(session_id, session)?;
+            save_codex_batch_import_session_snapshot_best_effort(session_id, session);
             return Ok(());
         }
         session.cancel.store(false, Ordering::SeqCst);
         session.status = "scanning".to_string();
-        save_codex_batch_import_session_snapshot(session_id, session)?;
+        save_codex_batch_import_session_snapshot_best_effort(session_id, session);
     }
 
     let task_session_id = session_id.to_string();
@@ -7570,26 +7976,58 @@ pub fn get_codex_batch_import_preview(session_id: &str) -> Result<CodexBatchImpo
 }
 
 pub fn confirm_codex_batch_import(
+    app: &tauri::AppHandle,
     session_id: &str,
     item_ids: &[String],
 ) -> Result<CodexBatchImportConfirmResult, String> {
     ensure_storage_writable_for_import()?;
     ensure_codex_batch_import_session_loaded(session_id)?;
     let selected: HashSet<String> = item_ids.iter().cloned().collect();
-    let cached_items = {
-        let sessions = CODEX_BATCH_IMPORT_SESSIONS.lock().unwrap();
+    let (cached_items, cancel, session_snapshot) = {
+        let mut sessions = CODEX_BATCH_IMPORT_SESSIONS.lock().unwrap();
         let session = sessions
-            .get(session_id)
+            .get_mut(session_id)
             .ok_or_else(|| "导入会话不存在".to_string())?;
-        session.items.clone()
+        session.cancel.store(false, Ordering::SeqCst);
+        session.status = "importing".to_string();
+        (
+            session
+                .items
+                .iter()
+                .filter(|cached| selected.contains(&cached.preview.item_id))
+                .cloned()
+                .collect::<Vec<_>>(),
+            session.cancel.clone(),
+            session.clone(),
+        )
     };
+    save_codex_batch_import_session_snapshot_best_effort(session_id, &session_snapshot);
 
     let mut imported = Vec::new();
     let mut failed = Vec::new();
+    let total = cached_items.len();
+    let mut processed = 0usize;
+    emit_codex_batch_import_progress(
+        app,
+        CodexBatchImportProgress {
+            session_id: session_id.to_string(),
+            phase: "importing".to_string(),
+            check_quota: session_snapshot.check_quota,
+            current: 0,
+            total,
+            success: 0,
+            failed: 0,
+            quota_failed: 0,
+            existing: 0,
+            current_label: None,
+        },
+    );
+
     for cached in cached_items {
-        if !selected.contains(&cached.preview.item_id) {
-            continue;
+        if cancel.load(Ordering::SeqCst) {
+            break;
         }
+        let current_label = Some(cached.preview.label.clone());
         let Some(draft) = cached.draft else {
             failed.push(CodexFileImportFailure {
                 email: cached.preview.label,
@@ -7598,40 +8036,74 @@ pub fn confirm_codex_batch_import(
                     .error
                     .unwrap_or_else(|| "无可导入账号".to_string()),
             });
+            processed += 1;
+            emit_codex_batch_import_progress(
+                app,
+                CodexBatchImportProgress {
+                    session_id: session_id.to_string(),
+                    phase: "importing".to_string(),
+                    check_quota: session_snapshot.check_quota,
+                    current: processed,
+                    total,
+                    success: imported.len(),
+                    failed: failed.len(),
+                    quota_failed: 0,
+                    existing: 0,
+                    current_label,
+                },
+            );
             continue;
         };
-        let result = match draft {
-            CodexBatchImportDraft::Account(account) => import_account_struct(account),
-            CodexBatchImportDraft::FullToken {
-                tokens,
-                account_id_hint,
-                note_update,
-            } => {
-                let mut account = upsert_account_with_hints(tokens, account_id_hint, None)?;
-                save_account_note_update_if_present(&mut account, note_update)?;
-                Ok(account)
-            }
-            CodexBatchImportDraft::AccessToken {
-                access_token,
-                hints,
-            } => upsert_account_from_access_token_with_hints(access_token, hints),
-        };
-        match result {
-            Ok(mut account) => {
-                if let Some(quota) = cached.quota.clone() {
-                    account.quota = Some(quota);
-                    account.quota_error = None;
-                    account.usage_updated_at = Some(chrono::Utc::now().timestamp());
-                    save_account(&account)?;
+        let result = (|| -> Result<CodexAccount, String> {
+            let mut account = match draft {
+                CodexBatchImportDraft::Account(account) => import_account_struct(account)?,
+                CodexBatchImportDraft::FullToken {
+                    tokens,
+                    account_id_hint,
+                    note_update,
+                } => {
+                    let mut account = upsert_account_with_hints(tokens, account_id_hint, None)?;
+                    save_account_note_update_if_present(&mut account, note_update)?;
+                    account
                 }
-                imported.push(account);
+                CodexBatchImportDraft::AccessToken {
+                    access_token,
+                    hints,
+                } => upsert_account_from_access_token_with_hints(access_token, hints)?,
+            };
+            if let Some(quota) = cached.quota.clone() {
+                account.quota = Some(quota);
+                account.quota_error = None;
+                account.usage_updated_at = Some(chrono::Utc::now().timestamp());
+                save_account(&account)?;
             }
+            Ok(account)
+        })();
+        match result {
+            Ok(account) => imported.push(account),
             Err(error) => failed.push(CodexFileImportFailure {
                 email: cached.preview.label,
                 error,
             }),
         }
+        processed += 1;
+        emit_codex_batch_import_progress(
+            app,
+            CodexBatchImportProgress {
+                session_id: session_id.to_string(),
+                phase: "importing".to_string(),
+                check_quota: session_snapshot.check_quota,
+                current: processed,
+                total,
+                success: imported.len(),
+                failed: failed.len(),
+                quota_failed: 0,
+                existing: 0,
+                current_label,
+            },
+        );
     }
+    let cancelled = cancel.load(Ordering::SeqCst);
 
     {
         let mut sessions = CODEX_BATCH_IMPORT_SESSIONS.lock().unwrap();
@@ -7639,7 +8111,13 @@ pub fn confirm_codex_batch_import(
     }
     remove_codex_batch_import_session_snapshot(session_id);
 
-    Ok(CodexBatchImportConfirmResult { imported, failed })
+    Ok(CodexBatchImportConfirmResult {
+        imported,
+        failed,
+        cancelled,
+        processed,
+        total,
+    })
 }
 
 fn normalize_auth_file_plan_type(value: Option<&str>) -> Option<String> {
@@ -7764,21 +8242,23 @@ mod tests {
         is_loopback_http_base_url, resolve_api_provider_config, save_account, save_account_index,
         should_accept_authority_snapshot, sync_account_from_auth_dir,
         sync_api_key_account_from_local_state, sync_managed_projection_from_auth_dir,
-        upsert_account, upsert_account_for_reauth,
-        upsert_account_from_access_token, upsert_account_from_access_token_with_hints,
-        upsert_account_from_auth_tokens, validate_api_key_credentials, write_account_bundle_to_dir,
+        upsert_account, upsert_account_for_reauth, upsert_account_from_access_token,
+        upsert_account_from_access_token_with_hints, upsert_account_from_auth_tokens,
+        upsert_api_key_account, validate_api_key_credentials, write_account_bundle_to_dir,
         write_api_key_provider_to_config_toml, write_api_provider_to_config_toml,
         write_managed_projection_to_dir, write_quick_config_to_config_toml, ApiProviderConfig,
         CodexAccessTokenImportHints, CodexAccountIndex, CodexAccountSummary, CodexAuthFile,
         CodexAuthTokens, CodexJsonImportCandidate, LocalCodexOAuthSnapshot,
         CODEX_ACCOUNT_DETAIL_SCHEMA_VERSION, CODEX_AUTHORIZATION_STATUS_PENDING,
         CODEX_AUTO_COMPACT_DEFAULT_LIMIT, CODEX_CONTEXT_WINDOW_1M_VALUE,
+        CODEX_IMAGEGEN_ACTOR_HEADER, CODEX_IMAGEGEN_ACTOR_HEADER_VALUE, CODEX_IMAGE_MODEL_ID,
     };
     use crate::models::codex::{CodexAccount, CodexApiProviderMode, CodexTokens};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use toml_edit::Document;
 
     #[test]
     fn parse_line_delimited_json_values_accepts_one_object_per_line() {
@@ -7928,14 +8408,19 @@ mod tests {
         fn new(prefix: &str) -> Self {
             let home_dir = make_temp_dir(prefix);
             let codex_home = home_dir.join(".codex");
+            let test_data_dir = home_dir.join(".antigravity_cockpit");
             fs::create_dir_all(&codex_home).expect("create codex home");
+            fs::create_dir_all(&test_data_dir).expect("create test data dir");
 
             let previous_home = std::env::var("HOME").ok();
             let previous_codex_home = std::env::var("CODEX_HOME").ok();
-            let previous_data_dir = std::env::var("COCKPIT_TOOLS_DATA_DIR").ok();
+            let previous_data_dir = std::env::var("COCKPIT_TOOLS_TEST_DATA_DIR")
+                .ok()
+                .or_else(|| std::env::var("COCKPIT_TOOLS_DATA_DIR").ok());
             std::env::set_var("HOME", &home_dir);
             std::env::set_var("CODEX_HOME", &codex_home);
-            std::env::set_var("COCKPIT_TOOLS_DATA_DIR", &home_dir);
+            std::env::set_var("COCKPIT_TOOLS_TEST_DATA_DIR", &test_data_dir);
+            std::env::set_var("COCKPIT_TOOLS_DATA_DIR", &test_data_dir);
 
             Self {
                 home_dir,
@@ -7961,11 +8446,34 @@ mod tests {
                 None => std::env::remove_var("CODEX_HOME"),
             }
             match self.previous_data_dir.as_ref() {
-                Some(value) => std::env::set_var("COCKPIT_TOOLS_DATA_DIR", value),
-                None => std::env::remove_var("COCKPIT_TOOLS_DATA_DIR"),
+                Some(value) => {
+                    std::env::set_var("COCKPIT_TOOLS_TEST_DATA_DIR", value);
+                    std::env::set_var("COCKPIT_TOOLS_DATA_DIR", value);
+                }
+                None => {
+                    std::env::remove_var("COCKPIT_TOOLS_TEST_DATA_DIR");
+                    std::env::remove_var("COCKPIT_TOOLS_DATA_DIR");
+                }
             }
             let _ = fs::remove_dir_all(&self.home_dir);
         }
+    }
+
+    #[test]
+    fn test_env_guard_redirects_codex_account_storage() {
+        let _lock = crate::modules::test_support::env_lock()
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        let env = TestEnvGuard::new("codex-account-storage-isolation-test");
+
+        let storage_path = get_accounts_storage_path();
+
+        assert!(
+            storage_path.starts_with(&env.home_dir),
+            "Codex account storage should stay inside the test home, got {} for test home {}",
+            storage_path.display(),
+            env.home_dir.display()
+        );
     }
 
     fn make_jwt(payload: serde_json::Value) -> String {
@@ -8069,7 +8577,7 @@ mod tests {
     }
 
     #[test]
-    fn load_account_migrates_legacy_bound_oauth_api_key_to_disable_image_generation() {
+    fn load_account_keeps_removed_image_generation_compat_disabled() {
         let _lock = crate::modules::test_support::env_lock()
             .lock()
             .expect("lock test env");
@@ -8100,18 +8608,22 @@ mod tests {
 
         let loaded = load_account(&account.id).expect("load account");
 
-        assert!(loaded.bound_oauth_use_local_gateway);
-        let persisted: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(accounts_dir.join(format!("{}.json", account.id)))
-                .expect("read migrated account"),
-        )
-        .expect("parse migrated account");
-        assert_eq!(
-            persisted
-                .get("bound_oauth_use_local_gateway")
-                .and_then(|value| value.as_bool()),
-            Some(true)
-        );
+        assert!(!loaded.bound_oauth_use_local_gateway);
+        let account_path = accounts_dir.join(format!("{}.json", account.id));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            let persisted = fs::read_to_string(&account_path).expect("read migrated account");
+            if persisted.contains("AES-256-GCM") || persisted.contains("ciphertext") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "expected background migration to encrypt account detail on disk"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let reloaded = load_account(&account.id).expect("reload migrated account");
+        assert!(!reloaded.bound_oauth_use_local_gateway);
     }
 
     #[test]
@@ -8173,21 +8685,17 @@ mod tests {
 
         save_account(&account).expect("save account");
 
-        let accounts_dir = get_accounts_dir();
-        let persisted: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(accounts_dir.join(format!("{}.json", account.id)))
-                .expect("read persisted account"),
-        )
-        .expect("parse persisted account");
-        assert_eq!(
-            persisted
-                .get("bound_oauth_use_local_gateway")
-                .and_then(|value| value.as_bool()),
-            Some(false)
-        );
-
+        // On-disk file is AES envelope (#1104); assert via load path.
         let loaded = load_account(&account.id).expect("load account");
         assert!(!loaded.bound_oauth_use_local_gateway);
+
+        let accounts_dir = get_accounts_dir();
+        let raw = fs::read_to_string(accounts_dir.join(format!("{}.json", account.id)))
+            .expect("read persisted account");
+        assert!(
+            raw.contains("AES-256-GCM") || raw.contains("ciphertext"),
+            "expected encrypted account detail on disk"
+        );
     }
 
     fn write_oauth_auth_file(base_dir: &std::path::Path, tokens: &CodexTokens, account_id: &str) {
@@ -8201,6 +8709,7 @@ mod tests {
                 refresh_token: tokens.refresh_token.clone(),
                 account_id: Some(account_id.to_string()),
             }),
+            personal_access_token: None,
             last_refresh: Some(serde_json::Value::String(
                 "2026-04-13T00:00:00.000000Z".to_string(),
             )),
@@ -9087,7 +9596,15 @@ mod tests {
 
         let accounts = list_accounts_checked().expect("list should repair from details");
         assert_eq!(accounts.len(), 2);
-        assert!(accounts.iter().any(|account| account.id == indexed.id));
+        let listed_indexed = accounts
+            .iter()
+            .find(|account| account.id == indexed.id)
+            .expect("indexed account should remain visible");
+        assert_eq!(listed_indexed.plan_type.as_deref(), Some("team"));
+        assert_eq!(
+            listed_indexed.subscription_active_until.as_deref(),
+            Some("2026-08-01T00:00:00Z")
+        );
         assert!(accounts.iter().any(|account| account.id == hidden.id));
 
         let repaired_index = load_account_index();
@@ -9101,7 +9618,18 @@ mod tests {
             Some(indexed.id.as_str())
         );
 
-        let repaired_detail = load_account(&indexed.id).expect("indexed detail should remain");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let repaired_detail = loop {
+            let account = load_account(&indexed.id).expect("indexed detail should remain");
+            if account.plan_type.as_deref() == Some("team") {
+                break account;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "background summary migration should persist"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
         assert_eq!(repaired_detail.plan_type.as_deref(), Some("team"));
         assert_eq!(
             repaired_detail.subscription_active_until.as_deref(),
@@ -9884,7 +10412,7 @@ multi_agent = true
         )
         .expect("resolve provider config");
 
-        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false)
+        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false, false)
             .expect("write config");
 
         let config_path = base_dir.join("config.toml");
@@ -9922,7 +10450,7 @@ multi_agent = true
         )
         .expect("resolve provider config");
 
-        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false)
+        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false, false)
             .expect("write config");
 
         let config_path = base_dir.join("config.toml");
@@ -9951,6 +10479,141 @@ multi_agent = true
     }
 
     #[test]
+    fn api_key_config_toml_enables_imagegen_for_capable_provider() {
+        let base_dir = make_temp_dir("codex-api-key-config-imagegen-test");
+        let config_path = base_dir.join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[model_providers.codex_local_access.http_headers]
+X-Custom = "keep-me"
+"#,
+        )
+        .expect("write existing headers");
+        let provider_config = resolve_api_provider_config(
+            Some("http://127.0.0.1:14998/v1"),
+            Some(CodexApiProviderMode::Custom),
+            Some("codex_local_access"),
+            Some("Codex API Service"),
+        )
+        .expect("resolve provider config");
+
+        write_api_key_provider_to_config_toml(
+            &base_dir,
+            &provider_config,
+            "agt_codex_test",
+            false,
+            true,
+        )
+        .expect("write config");
+
+        let content = fs::read_to_string(&config_path).expect("read config");
+        let parsed = content.parse::<Document>().expect("parse config");
+        let provider = parsed
+            .get("model_providers")
+            .and_then(|item| item.as_table())
+            .and_then(|providers| providers.get("codex_local_access"))
+            .and_then(|item| item.as_table())
+            .expect("codex_local_access provider");
+        assert_eq!(
+            provider
+                .get("requires_openai_auth")
+                .and_then(|item| item.as_bool()),
+            Some(false)
+        );
+        let headers = provider
+            .get("http_headers")
+            .and_then(|item| item.as_table())
+            .expect("http_headers table");
+        assert_eq!(
+            headers
+                .get(CODEX_IMAGEGEN_ACTOR_HEADER)
+                .and_then(|item| item.as_str()),
+            Some(CODEX_IMAGEGEN_ACTOR_HEADER_VALUE)
+        );
+        assert_eq!(
+            headers.get("X-Custom").and_then(|item| item.as_str()),
+            Some("keep-me")
+        );
+
+        fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn api_key_config_toml_removes_imagegen_header_but_keeps_custom_headers() {
+        let base_dir = make_temp_dir("codex-api-key-config-imagegen-cleanup-test");
+        let config_path = base_dir.join("config.toml");
+        fs::write(
+            &config_path,
+            r#"[model_providers.codex_local_access]
+http_headers = { "x-openai-actor-authorization" = "legacy", "X-Custom" = "keep-me" }
+"#,
+        )
+        .expect("write existing headers");
+        let provider_config = resolve_api_provider_config(
+            Some("https://relay.example.com/v1"),
+            Some(CodexApiProviderMode::Custom),
+            Some("relay"),
+            Some("Relay"),
+        )
+        .expect("resolve provider config");
+
+        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false, false)
+            .expect("write config");
+
+        let content = fs::read_to_string(&config_path).expect("read config");
+        let parsed = content.parse::<Document>().expect("parse config");
+        let provider = parsed
+            .get("model_providers")
+            .and_then(|item| item.as_table())
+            .and_then(|providers| providers.get("codex_local_access"))
+            .and_then(|item| item.as_table())
+            .expect("codex_local_access provider");
+        assert_eq!(
+            provider
+                .get("requires_openai_auth")
+                .and_then(|item| item.as_bool()),
+            Some(true)
+        );
+        let headers = provider
+            .get("http_headers")
+            .and_then(|item| item.as_inline_table())
+            .expect("http_headers inline table");
+        assert!(headers.iter().all(|(name, _)| {
+            !name.eq_ignore_ascii_case(CODEX_IMAGEGEN_ACTOR_HEADER)
+        }));
+        assert_eq!(
+            headers.get("X-Custom").and_then(|item| item.as_str()),
+            Some("keep-me")
+        );
+
+        fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn api_key_bundle_enables_imagegen_when_catalog_contains_image_model() {
+        let base_dir = make_temp_dir("codex-api-key-bundle-imagegen-test");
+        let account = CodexAccount::new_api_key(
+            "local-access-runtime".to_string(),
+            "api-service-local".to_string(),
+            "agt_codex_test".to_string(),
+            CodexApiProviderMode::Custom,
+            Some("http://127.0.0.1:14998/v1".to_string()),
+            Some("codex_local_access".to_string()),
+            Some("Codex API Service".to_string()),
+            vec![CODEX_IMAGE_MODEL_ID.to_string()],
+        );
+
+        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
+
+        let content = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
+        assert!(content.contains("requires_openai_auth = false"));
+        assert!(content.contains(CODEX_IMAGEGEN_ACTOR_HEADER));
+        assert!(content.contains(CODEX_IMAGEGEN_ACTOR_HEADER_VALUE));
+
+        fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
+    }
+
+    #[test]
     fn api_key_config_toml_enables_websockets_when_account_supports_them() {
         let base_dir = make_temp_dir("codex-api-key-config-websocket-test");
         let provider_config = resolve_api_provider_config(
@@ -9961,7 +10624,7 @@ multi_agent = true
         )
         .expect("resolve provider config");
 
-        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", true)
+        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", true, false)
             .expect("write config");
 
         let content = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
@@ -10049,7 +10712,7 @@ multi_agent = true
             Some("http://127.0.0.1:14998/v1".to_string()),
             Some("codex_local_access".to_string()),
             Some("Codex API Service".to_string()),
-            Vec::new(),
+            vec![CODEX_IMAGE_MODEL_ID.to_string()],
         );
         api_key_account.bound_oauth_account_id = Some(oauth_account.id.clone());
         let profile_dir = env.home_dir.join("managed-profile");
@@ -10075,7 +10738,108 @@ multi_agent = true
 
         let config = fs::read_to_string(profile_dir.join("config.toml")).expect("read config");
         assert!(config.contains("model_provider = \"codex_local_access\""));
+        assert!(config.contains("requires_openai_auth = true"));
         assert!(config.contains("experimental_bearer_token = \"local-service-key\""));
+        assert!(!config.contains(CODEX_IMAGEGEN_ACTOR_HEADER));
+    }
+
+    #[test]
+    fn responses_api_key_bundle_syncs_saved_model_catalog_when_enabled() {
+        let base_dir = make_temp_dir("codex-api-key-managed-model-catalog-test");
+        fs::write(base_dir.join("config.toml"), "model = \"legacy-model\"\n")
+            .expect("write stale selected model");
+        let mut account = CodexAccount::new_api_key(
+            "custom-api-key".to_string(),
+            "custom@example.com".to_string(),
+            "sk-custom".to_string(),
+            CodexApiProviderMode::Custom,
+            Some("https://relay.example.com/v1".to_string()),
+            Some("relay".to_string()),
+            Some("Relay".to_string()),
+            vec![
+                " custom-a ".to_string(),
+                "custom-b".to_string(),
+                "CUSTOM-A".to_string(),
+            ],
+        );
+        account.api_wire_api = Some("responses".to_string());
+        account.api_sync_model_catalog_to_codex = true;
+
+        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
+
+        let config = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
+        assert!(config.contains("model_catalog_json = \"cockpit-provider-model-catalog.json\""));
+        assert!(config.contains("model = \"custom-a\""));
+        let catalog: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(base_dir.join(super::CODEX_MANAGED_MODEL_CATALOG_FILE))
+                .expect("read managed catalog"),
+        )
+        .expect("parse managed catalog");
+        let slugs = catalog
+            .get("models")
+            .and_then(serde_json::Value::as_array)
+            .expect("models should be an array")
+            .iter()
+            .filter_map(|model| model.get("slug").and_then(serde_json::Value::as_str))
+            .collect::<Vec<_>>();
+        assert_eq!(slugs, vec!["custom-a", "custom-b", "codex-auto-review"]);
+
+        fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn api_key_upsert_without_sync_preference_preserves_instance_model_catalog() {
+        let _lock = crate::modules::test_support::env_lock()
+            .lock()
+            .expect("lock test env");
+        let env = TestEnvGuard::new("codex-api-key-upsert-model-catalog-test");
+        let api_key = "sk-upsert-model-catalog".to_string();
+
+        let created = upsert_api_key_account(
+            api_key.clone(),
+            Some("https://relay.example.com/v1".to_string()),
+            Some(CodexApiProviderMode::Custom),
+            Some("relay".to_string()),
+            Some("Relay".to_string()),
+            vec!["custom-a".to_string()],
+            Some(true),
+            Some("responses".to_string()),
+            false,
+            false,
+            std::collections::HashMap::new(),
+            None,
+            Some("Relay Key".to_string()),
+        )
+        .expect("create API key account");
+        assert!(created.api_sync_model_catalog_to_codex);
+
+        let updated = upsert_api_key_account(
+            api_key,
+            Some("https://relay.example.com/v1".to_string()),
+            Some(CodexApiProviderMode::Custom),
+            Some("relay".to_string()),
+            Some("Relay".to_string()),
+            vec!["custom-b".to_string()],
+            None,
+            Some("responses".to_string()),
+            false,
+            false,
+            std::collections::HashMap::new(),
+            None,
+            None,
+        )
+        .expect("upsert API key account without sync preference");
+        assert!(updated.api_sync_model_catalog_to_codex);
+
+        let profile_dir = env.home_dir.join("instance-profile");
+        write_account_bundle_to_dir(&profile_dir, &updated)
+            .expect("write multi-instance account projection");
+        let config = fs::read_to_string(profile_dir.join("config.toml")).expect("read config");
+        assert!(config.contains("model_catalog_json = \"cockpit-provider-model-catalog.json\""));
+        assert!(config.contains("model = \"custom-b\""));
+        assert!(profile_dir
+            .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
+            .exists());
     }
 
     #[test]
@@ -10102,6 +10866,7 @@ multi_agent = true
             ],
         );
         account.api_wire_api = Some("responses".to_string());
+        account.api_sync_model_catalog_to_codex = true;
 
         write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
 
@@ -10437,7 +11202,7 @@ multi_agent = true
         )
         .expect("resolve provider config");
 
-        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false)
+        write_api_key_provider_to_config_toml(&base_dir, &provider_config, "sk-test", false, false)
             .expect("write config");
 
         let content = fs::read_to_string(&config_path).expect("read config");
@@ -11019,7 +11784,6 @@ pub fn update_account_app_speed(
 pub async fn update_api_key_bound_oauth_account(
     account_id: &str,
     bound_oauth_account_id: Option<String>,
-    bound_oauth_use_local_gateway: bool,
 ) -> Result<CodexAccount, String> {
     let mut account =
         load_account(account_id).ok_or_else(|| format!("账号不存在: {}", account_id))?;
@@ -11033,7 +11797,7 @@ pub async fn update_api_key_bound_oauth_account(
         let _ = validate_api_key_bound_oauth_account(&account, bound_id)?;
     }
     account.bound_oauth_account_id = bound_id.clone();
-    account.bound_oauth_use_local_gateway = bound_id.is_some() && bound_oauth_use_local_gateway;
+    account.bound_oauth_use_local_gateway = false;
     save_account(&account)?;
 
     let is_current = load_account_index()
@@ -11066,6 +11830,7 @@ pub fn update_api_key_credentials(
     api_provider_id: Option<String>,
     api_provider_name: Option<String>,
     api_model_catalog: Vec<String>,
+    api_sync_model_catalog_to_codex: Option<bool>,
     api_wire_api: Option<String>,
     api_supports_websockets: bool,
     api_supports_vision: bool,
@@ -11102,11 +11867,14 @@ pub fn update_api_key_credentials(
         account.id = new_id.clone();
     }
 
+    let sync_model_catalog_to_codex =
+        api_sync_model_catalog_to_codex.unwrap_or(account.api_sync_model_catalog_to_codex);
     apply_api_key_fields(
         &mut account,
         &normalized_key,
         provider_config,
         api_model_catalog,
+        sync_model_catalog_to_codex,
         api_wire_api,
         api_supports_websockets,
         api_supports_vision,

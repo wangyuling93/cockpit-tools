@@ -7,47 +7,67 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
-## [1.3.5] - 2026-07-13
+## [1.3.3] - 2026-07-15
+
+### Added
+
+- **Codex API Service supports random account routing**: new requests can distribute across eligible accounts while preserving session affinity, cooldown, account health, quota reserve, and model eligibility rules.
+- **Optional immediate SSE 200 responses for the sidecar gateway**: commits `200 OK` and an `: accepted` SSE comment before the upstream stream opens; disabled by default, with upstream failures reported as SSE errors after headers are committed.
 
 ### Changed
 
+- **Removed the `image_generation` disable feature**: the previous request filtering and OAuth local-gateway workaround for providers returning `Image generation is not enabled` are no longer used; image generation remains available through the normal Codex API path.
+- **Devin/Windsurf no longer participates in background token keepalive**: Cockpit will not automatically refresh and write back the local login without an explicit user action, avoiding background macOS Keychain prompts; manual account switching and bound-instance startup still inject credentials when requested.
 - **Action toasts auto-dismiss after 3 seconds**: success and info banners such as “refresh succeeded” clear themselves; error messages still stay until closed manually.
-
----
-## [1.3.4] - 2026-07-13
-
-### Changed
-
-- **Gateway mode shows “API Service” plus the “New” badge**: the title and API Service card share the same service name and new-gateway indicator.
-- **Removed CLI quick-launch from the API Service card**: fewer low-frequency actions on the card.
-
----
-## [1.3.3] - 2026-07-13
-
-### Changed
-
-- **Removed the drop shadow from the Codex API Service tab bar**: Overview / Key / Accounts / Models / Logs use a flatter header.
-- **Reordered summary cards**: the Images card is now last in the overview stats row.
-- **Gateway mode shows only “New”**: the New/Old API Service dropdown and switch guide are gone; the UI always displays New.
-- **Hid Service Panel entry points**: service-panel buttons are no longer shown on account cards, table actions, the API Service entry card, or model-provider cards.
-
----
-## [1.3.2] - 2026-07-13
-
-### Changed
-
+- **Gateway mode shows “API Service” plus the “New” badge**: the title and API Service card share the same service name and new-gateway indicator; the New/Old dropdown is removed.
+- **Removed CLI quick-launch and Service Panel entry points from several Codex surfaces**: fewer low-frequency actions on the API Service card, account cards, table actions, and model-provider cards.
+- **Flattened Codex API Service tab bar and reordered summary cards**: removed the tab-bar drop shadow; the Images card is last in the overview stats row.
 - **Shortened Codex-related tab labels**: overview becomes Official, multi-instance becomes Multi-open, session manager becomes Sessions, model providers becomes Third-party; Codex API Service tabs become Overview / Key / Accounts / Models / Logs.
-- **Hid the Codex API Service request-log filter bar**: model, account, API key, kind, status, mode, error, and clear-filter controls are no longer shown; logs load for the selected time range only.
-- **Simplified several Codex toolbars**: search/filter controls were removed from model providers, session manager, and Codex multi-instance views; some low-frequency account-card actions were removed for a tighter layout.
-- **Lowered the main window minimum width to 640**: easier to use on narrow screens and split layouts.
+- **Hid the Codex API Service request-log filter bar**: logs load for the selected time range only.
+- **Simplified several Codex toolbars**: search/filter controls were removed from model providers and Codex multi-instance views; session manager keeps the kind filter for conversation / external / subagent.
+- **Lowered the main window minimum width to 640**: easier to use on narrow screens and split layouts; capsule side nav becomes a top horizontal bar at ≤640px.
+- **Codex API Service auto-refreshes stats every 10s while running**: background reloads preserve port/proxy drafts; inline notices auto-dismiss and can be closed manually.
 
 ### Fixed
 
+- **Fixed Codex API Service startup being rejected for OAuth-bound accounts**: profiles using OAuth `auth.json` / Keychain login state now pass local-gateway takeover validation, while API-key-only profiles continue using the image-generation compatibility configuration.
+- **Fixed Codex accounts failing to batch-import or batch-delete under special Windows mount paths**: batch operations are no longer blocked when their task snapshot directory cannot be created, and existing directories are no longer recreated.
 - **Fixed macOS native-menu static library linking under newer Xcode / SPM layouts**: add the SPM config product directory after `swift-rs` linking so `libMacosNativeMenuSwift.a` can still be found.
 - **Fixed Codex list-line `at-*` access-token import being treated as a refresh token**: prefer embedded personal access tokens before falling back to refresh-token-only parsing.
 
 ---
-## [1.3.1] - 2026-07-13
+## [1.3.2] - 2026-07-15
+
+### Highlights
+
+- **Fixed Codex API Service accounts not appearing and account additions hanging after an upgrade**: pricing and statistics migrations now run in background batches so accounts and existing statistics appear first; maintenance is single-flight and merges safely instead of overwriting newer configuration with a stale snapshot.
+- **Fixed disabling `image_generation` not taking effect for OAuth-bound accounts**
+- **Windows app-path detection now checks running processes**: app discovery no longer performs broad disk scans, and detection tasks have bounded timeouts with clearer guidance to start the target app first.
+
+### Added
+
+- **Grok CLI can optionally sync the official login on account switch**: the setting defaults off and keeps using a separate `GROK_HOME`; when enabled, OAuth switches for the default instance update the official `~/.grok/auth.json`. API keys launch through `XAI_API_KEY`, while additional instances always stay isolated.
+
+### Changed
+
+- **Startup and account-maintenance work now runs without blocking the UI**: wakeup restoration, Deep Link initialization, account-encryption migration, local-account auto-import, and background token-keeper scans no longer block the main window or account reads; slow work has timeouts, deduplication, and failure fallback.
+- **Account-detail migrations now use safe background rewrites**: upgrades return usable accounts before rewriting legacy encryption or formats; if an account is updated or deleted meanwhile, the stale migration result is discarded instead of restoring old data.
+
+### Fixed
+
+- **Fixed Codex session-type filtering being inconsistent with bulk actions**: visible groups, selected sessions, and stale selections now follow the active conversation / external / subagent filter.
+- **Fixed older asynchronous account requests overwriting newer add, delete, or switch results**: account lists and current-account state now accept only the latest response, avoiding regressions to an empty list or stale account.
+- **Fixed deactivated Codex workspaces still appearing healthy**: `deactivated_workspace` now surfaces as an abnormal account state.
+
+---
+## [1.3.1] - 2026-07-14
+
+### Highlights
+
+- **Codex API image generation compatibility restored**: third-party API Service and API Key providers can use built-in Codex image generation again; providers exposing `gpt-image-2` and managed instances now receive the required configuration.
+- **Codex account sync over SSH**: manage hosts, test connections, sync `auth.json` / `config.toml`, verify remote hashes, sync after account switches, and reload the remote Codex app-server/daemon when possible.
+- **Optional Hermes auth sync on Codex switch**: OAuth account switches can update `~/.hermes/auth.json`; API Key accounts are skipped and sync failures do not block switching.
+
 
 ### Added
 
@@ -56,6 +76,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Global “Reduce motion” setting**: tones down page fades, modal transitions, shadows/blur, and smooth scrolling while keeping essential loading feedback.
 - **“Add to API Service” members support backup marks and a routing shortcut**: toggle backup on each member row and switch routing strategy next to Free-account restrict; custom routing still owns priority/weight, and backup applies under every routing strategy.
 - **Codex can import personal access tokens (`at-*`) for API Service / sidecar**: import common JSON exports or line-based token lists; access-token accounts write sidecar auth metadata for reverse-proxy and local-access use.
+- **Codex Token / JSON import accepts personal access tokens (`at-…` / `personal_access_token`)**: paste a single `at-…` line, JSON with that field, or `auth.json`; without refresh/id, auth is stored in the official `personal_access_token` shape (no separate add-account tab). Thanks @daodeqing for the idea and scenario reference in #1448.
+- **Settings → General can set a startup page**: choose a fixed page on cold start, or “Remember last” to restore the previous page (default).
+- **Optional Hermes auth sync on Codex switch**: when enabled in Settings, OAuth account switches write `openai-codex` credentials into `~/.hermes/auth.json` (`providers` + `credential_pool`); API-key accounts are skipped and failures do not block the switch. Thanks @iwillwill-ALLWILL for the idea and scenario reference in #1434.
+- **Theme color packs (Nord / Tokyo Night / Catppuccin / Gruvbox / Everforest)**: Settings → General can layer a color pack on light/dark. Thanks @letr1n1ty for the idea and scenario reference in #1399.
+- **External network kill switch + WebDAV domain allowlist**: when off, blocks WebDAV sync, remote announcements, and auto update checks, and can restrict WebDAV hosts. Thanks @YSheldon for the idea and scenario reference in #1104.
+- **Account detail encryption at rest (AES-256-GCM)**: Antigravity account tokens and provider account detail files are stored in local envelopes with automatic plaintext migration/rotation; index/summary files stay plaintext. Thanks @YSheldon for the idea and scenario reference in #1104.
+- **WebSocket session auth for high-risk account ops**: token export, account add, and account delete over the local WebSocket require the per-process auth token published in `server.json`. Thanks @YSheldon for the idea and scenario reference in #1104.
+- **Codex SSH account sync**: SSH tab manages hosts, tests connection, syncs `auth.json`/`config.toml` with remote hash verification, auto-syncs after switch, and reloads the remote Codex app-server/daemon when possible. Thanks @enyihou for the idea and scenario reference in #1404.
+- **Codex plan badge can use style-only variants (outline / soft / mono)**: quick settings pick a chrome style while the plan text stays the raw plan value. Thanks @vs2pk0 for the idea and scenario reference in #772.
+- **Codex sessions classify as conversation / external / subagent** with a session-manager type filter (defaults to conversations); open rollout files with the OS app, multi-instance same-ID sessions require picking an instance, and total-only token stats display correctly. Thanks @andrew05060414 for the idea and scenario reference in #1510.
+- **Unified Codex batch-import task queue**: one or many JSON files open the same dialog, with a choice between pre-import account checks and direct import without checks; parsing, checking, and account writes can all continue in the background with phase-specific progress, and completed scans prompt for review; the bottom-right stack shows up to three jobs and can expand to the full queue; cancelling an import stops remaining accounts while preserving completed results. Thanks @kerryNie-user for the idea and scenario reference in #1286.
+- **Codex model-provider API keys can be renamed explicitly**: reusing the same key no longer overwrites a saved display name.
+- **CodeBuddy local session file manager**: account page can scan and open local session-related file locations. Thanks @eye-gu for the idea and scenario reference in #1188.
+- **CodeBuddy local session file listing (first slice)**: best-effort scan of common CodeBuddy data paths for session-like JSON/JSONL files. Thanks @eye-gu for the idea and scenario reference in #1188.
+- **Managed local LB provider id `cockpit-codex-lb`** is exposed for wiring local API as a stable provider name. Thanks @Enjoyoer for the idea and scenario reference in #980.
 
 ### Changed
 
@@ -64,13 +99,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **“Add to API Service” member order matches the account overview**: the dialog no longer has its own sort controls—overview order is the member-list order.
 - **Grok account and floating cards show fuller remaining quota**: weekly and product remaining percentages, with compact plan aliases mapped for display.
 - **Floating card follows the main-window platform focus**: e.g. Grok when the main window is on Grok, with the selection remembered across windows instead of staying locked on Antigravity.
+- **Tray minimize can destroy the main WebView to free memory**: close-to-tray destroys the main WebView while tray/backend keep running; reopening from tray recreates the window (falls back to hide on failure). Thanks @F0RLE for the idea and scenario reference in #686.
+- **Codex account cards use denser padding/action spacing** for overview grids. Thanks @amoorkie for the idea and scenario reference in #1287.
 
 ### Fixed
 
+- **Fixed Codex built-in image generation for third-party API Service and API Key providers**: capable providers that expose `gpt-image-2` now write the required auth gate and actor header, and registered multi-instance profiles receive the same configuration independently.
+- **Fixed Codex model-provider batch tests that could not be exited while running**: the dialog can now be closed or the task cancelled at any time; cancellation stops remaining provider tests, interrupts the active request, and cleans up the temporary provider gateway.
+- **Fixed “Show model-specific quota” not restoring GPT-5.3-Codex-Spark rows**: Spark additional rate limits are no longer dropped in the parser, so the quick-settings switch can show or hide them like other `additional:*` windows. Thanks for the idea and scenario reference in #1540.
+- **Fixed Codex token re-import for the active account leaving the running client on the old credential**: when the imported account is already current, Cockpit re-activates it so auth.json / local projection picks up the new token without a manual switch. Thanks @lishunsheng-dev for the idea and scenario reference in #1325.
+- **Fixed Windows API Service bind errors that did not mention reserved/excluded ports**: AddrInUse messages check `netsh` excluded TCP ranges and hint to change the port or inspect Hyper-V/WSL reservations. Thanks @tanzui for the idea and scenario reference in #1297.
+- **Fixed Windows Antigravity data-dir detection when `Antigravity IDE` and `Antigravity` both exist**: prefer the candidate that actually has `state.vscdb`. Thanks @A-Gan for the idea and scenario reference in #1314.
+- **Fixed Local API Service 404 for Responses URLs wrongly appended to a Chat Completions base**: `/v1/chat/completions/v1/responses` (and compact) route to the Responses handlers. Thanks @lawyer112 for the idea and scenario reference in #932.
+- **Fixed Windows updater falling back to NSIS when the install bundle type cannot be proven**: unknown bundle type now falls back to MSI. Thanks @snvtac for the idea and scenario reference in #1320.
 - **Fixed Grok CLI auth and background-refresh races that caused 401s or lost quota**: billing/user calls send the required auth header; soft refresh adopts CLI-rotated local credentials first, retries on invalid grants, and keeps cached quota when a query fails.
 - **Fixed Codex / Grok multi-account batch quota refresh failures under high concurrency**: Codex group and local-access batch refresh go through a backend concurrency limit; Grok full refresh is similarly limited and retries billing transport failures with short backoff; Grok progress bars use remaining percent for width.
 - **Fixed Codex API Service cost estimates that disagreed with tier, long-context, and service_tier handling**: Priority uses absolute rates when present, otherwise a multiplier; long-context adjusts input/cache/output rates for the whole session when total input exceeds the threshold; the default book covers available models such as GPT-5.6.
 - **Fixed “Add to API Service” member-row plan/column misalignment and hard-to-hit backup toggles**: columns stay aligned; clicking the email selects the row, and the full backup control toggles backup without fighting row selection.
+- **Fixed Codex API Service members sometimes appearing empty during startup**: persisted members remain intact until the account list finishes its first load, late stale state responses are ignored, and the dialog can still be closed while loading or saving instead of appearing frozen.
+- **Fixed Windows and Linux release-package build failures**: enabled the Windows system API features required for process detection and removed invalid tray attributes left behind after Gemini CLI removal.
 
 ---
 ## [1.3.0] - 2026-07-13

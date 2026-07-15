@@ -2,6 +2,8 @@
   "common": {
     "confirm": "Подтвердить",
     "cancel": "Отмена",
+    "cancelling": "Отмена...",
+    "cancelled": "Отменено",
     "save": "Сохранить",
     "saving": "Сохранение...",
     "delete": "Удалить",
@@ -240,7 +242,7 @@
     "settings": "Настройки",
     "codex": "Codex​",
     "githubCopilot": "GitHub Copilot​",
-    "windsurf": "Windsurf​",
+    "windsurf": "Devin​",
     "dashboard": "Панель",
     "morePlatforms": "Другие платформы",
     "instances": "Мульти-инстанс",
@@ -270,7 +272,9 @@
     "switchClassicLayoutConfirm": "Переключить сейчас",
     "2faManager": "Управление 2FA",
     "apiRelay": "Релей",
-    "claude": "Claude"
+    "claude": "Claude",
+    "openrouter": "OpenRouter",
+    "opencode": "OpenCode"
   },
   "sponsors": {
     "pageTitle": "Спонсоры",
@@ -663,10 +667,10 @@
       "githubCopilotSettingsTitle": "Настройки GitHub Copilot",
       "ghcpAutoRefresh": "Автообновление квоты GitHub Copilot",
       "ghcpAutoRefreshDesc": "Частота фонового обновления",
-      "windsurfSettingsTitle": "Настройки Windsurf",
-      "windsurfAutoRefresh": "Автообновление квоты Windsurf",
+      "windsurfSettingsTitle": "Настройки Devin",
+      "windsurfAutoRefresh": "Автообновление квоты Devin",
       "windsurfAutoRefreshDesc": "Частота фонового обновления",
-      "windsurfAppPath": "Путь к приложению Windsurf",
+      "windsurfAppPath": "Путь к приложению Devin",
       "windsurfAppPathDesc": "Оставьте пустым, чтобы использовать путь по умолчанию",
       "windsurfAppPathPlaceholder": "Путь по умолчанию",
       "windsurfPathSelect": "Выбрать",
@@ -816,7 +820,25 @@
       "autoImportFromLocalScanEmpty": "Готово: нет локальных входов",
       "autoImportFromLocalScanPartial": "Готово: частичные ошибки",
       "autoImportFromLocalScanFailed": "Ошибка сканирования: {{error}}",
-      "autoImportFromLocalScanCancelled": "Выключено; текущий скан будет проигнорирован"
+      "autoImportFromLocalScanCancelled": "Выключено; текущий скан будет проигнорирован",
+      "startupPage": "Стартовая страница",
+      "startupPageDesc": "Страница при холодном запуске. «Запомнить последнюю» восстанавливает предыдущую.",
+      "startupPageLast": "Запомнить последнюю",
+      "startupPageCodexApi": "Сервис API Codex",
+      "hermesAuthOverwrite": "Синхр. Hermes при смене Codex",
+      "hermesAuthOverwriteDesc": "Только OAuth: пишет openai-codex в ~/.hermes/auth.json (по умолчанию выкл.)",
+      "themeColor": "Цветовой набор",
+      "themeColorDesc": "Наложение палитры на светлую/тёмную тему",
+      "themeColorDefault": "По умолчанию",
+      "themeColorNord": "Nord",
+      "themeColorTokyoNight": "Tokyo Night",
+      "themeColorCatppuccin": "Catppuccin",
+      "themeColorGruvbox": "Gruvbox",
+      "themeColorEverforest": "Everforest",
+      "externalNetwork": "Разрешить внешнюю сеть",
+      "externalNetworkDesc": "Выкл.: блокирует WebDAV, usage OpenRouter, объявления и автопроверку обновлений (локальное работает).",
+      "webdavAllowedDomains": "Белый список WebDAV",
+      "webdavAllowedDomainsDesc": "Через запятую; пусто = без ограничений"
     },
     "network": {
       "apiTitle": "API антигравитационной кабины",
@@ -881,6 +903,7 @@
       "releaseHistoryLoading": "Загрузка примечаний к выпуску...",
       "releaseHistoryEmpty": "Примечаний к выпуску пока нет",
       "releaseHistoryLoadFailed": "Не удалось загрузить: {{error}}",
+      "releaseHistorySectionHighlights": "Важные обновления",
       "releaseHistorySectionAdded": "Добавлен",
       "releaseHistorySectionChanged": "Измененный",
       "releaseHistorySectionFixed": "Зафиксированный",
@@ -1045,6 +1068,19 @@
       "retentionUnit": "days",
       "collapseAll": "Collapse remote backups",
       "expandAll": "Expand all remote backups ({{count}} more)"
+    },
+    "keysVault": {
+      "title": "OpenRouter / OpenCode Key",
+      "desc": "Хранит API-ключи локально. Обновляет usage OpenRouter при внешней сети. Это не полная платформа.",
+      "openRouter": "OpenRouter",
+      "openCode": "OpenCode Go / Zen",
+      "label": "Метка",
+      "empty": "Нет ключей",
+      "added": "Добавлено",
+      "deleted": "Удалено",
+      "refreshed": "Использование обновлено",
+      "usage": "Использование",
+      "tierOther": "Другое"
     }
   },
   "appPath": {
@@ -1741,7 +1777,8 @@
       "title": "Добавить аккаунт Codex",
       "oauth": "OAuth авторизация",
       "token": "Импорт JSON",
-      "local": "Локальный импорт"
+      "local": "Локальный импорт",
+      "accessToken": "Токен доступа"
     },
     "oauth": {
       "desc": "Нажмите ниже и завершите авторизацию OpenAI в браузере",
@@ -1917,6 +1954,7 @@
         "planHighFirst": "Сначала высокий тариф",
         "planLowFirst": "Сначала низкий тариф",
         "expirySoonFirst": "Скорое истечение сначала",
+        "random": "Случайно",
         "custom": "Настраиваемая"
       },
       "statusUnconfigured": "Не настроено",
@@ -1939,7 +1977,12 @@
         "label": "Период",
         "daily": "День",
         "weekly": "Неделя",
-        "monthly": "Месяц"
+        "monthly": "Месяц",
+        "custom": "Свой",
+        "start": "Начало",
+        "end": "Конец",
+        "apply": "Применить",
+        "invalid": "Время окончания не может быть раньше времени начала"
       },
       "enableBeforeActivateTitle": "Сервис не включен",
       "enableBeforeActivateMessage": "API‑сервис сейчас отключен, его нужно сначала включить. Включить и переключить сейчас?",
@@ -2131,7 +2174,12 @@
     },
     "list": {
       "showCodeReviewQuota": "Показать квоту Code Review",
-      "showAdditionalQuota": "Квоты по моделям"
+      "showAdditionalQuota": "Квоты по моделям",
+      "planBadgeStyle": "Стиль бейджа",
+      "planBadgeStyleDefault": "По умолчанию",
+      "planBadgeStyleOutline": "Контур",
+      "planBadgeStyleSoft": "Мягкий",
+      "planBadgeStyleMono": "Моно"
     },
     "time": {
       "today": "Сегодня {{time}}",
@@ -2391,7 +2439,8 @@
         "selectAllSessions": "Выбрать все сессии",
         "clearSelectedSessions": "Снять выбор",
         "copyToInstance": "Копировать в экземпляр",
-        "trash": "Корзина"
+        "trash": "Корзина",
+        "openRollout": "Открыть файл сеанса"
       },
       "confirm": {
         "title": "Переместить в корзину",
@@ -2593,7 +2642,15 @@
         "removeItem": "Убрать",
         "emptyFilteredTitle": "Подходящих сеансов нет",
         "emptyFilteredDesc": "Измените поиск, источник или состояние выбора."
-      }
+      },
+      "kindFilter": "Тип сессии",
+      "kind": {
+        "conversation": "Чаты",
+        "external": "Внешние",
+        "subagent": "Субагент",
+        "all": "Все типы"
+      },
+      "pickInstancePrompt": "Сеанс есть на нескольких экземплярах. Введите ID экземпляра:"
     },
     "api": {
       "baseUrl": "Базовый URL",
@@ -2607,6 +2664,20 @@
       "showApiKey": "Показать API Key",
       "hideApiKey": "Скрыть API Key",
       "apiKeyHiddenHint": "API Key скрыт. Нажмите, чтобы показать.",
+      "modelCatalog": {
+        "label": "Список моделей",
+        "fetch": "Получить у поставщика",
+        "fetching": "Получение...",
+        "count": "Моделей: {{count}}",
+        "placeholder": "Укажите по одному ID модели в строке или разделите ID запятыми.",
+        "editHint": "Полученные модели добавляются только в этот черновик. Проверьте и измените их перед сохранением.",
+        "syncToggle": "Синхронизировать модели поставщика с Codex",
+        "syncDescription": "После сохранения этот список используется для создания каталога моделей Codex под управлением Cockpit. Пользовательские каталоги не перезаписываются.",
+        "fetchCredentialsRequired": "Сначала укажите API Key и Base URL.",
+        "fetchEmpty": "Поставщик не вернул модели. Текущий список сохранён.",
+        "fetchFailed": "Не удалось получить модели поставщика: {{error}}",
+        "syncRequiresModels": "Перед синхронизацией с Codex получите или укажите хотя бы одну модель."
+      },
       "actions": {
         "addAndSwitch": "Добавить и переключить"
       },
@@ -2983,7 +3054,10 @@
         "help": "Включайте только при явной поддержке Responses через WebSocket поставщиком; тип соединения можно проверить в журналах Codex или прокси-сервиса.",
         "enabled": "Включено",
         "disabled": "Отключено"
-      }
+      },
+      "renameApiKeyPrompt": "Переименовать API key",
+      "renameApiKeySuccess": "API key переименован",
+      "renameApiKeyFailed": "Не удалось переименовать API key: {{error}}"
     },
     "quickSwitch": {
       "action": "Быстрое переключение провайдера",
@@ -3220,6 +3294,7 @@
         "maxRetryInterval": "Ожидание retry",
         "disableCooling": "Отключить cooldown",
         "saveOptions": "Сохранить параметры",
+        "immediateSseResponse": "Немедленный SSE 200",
         "optionsSaved": "Параметры маршрута сохранены"
       },
       "validation": {
@@ -3326,8 +3401,20 @@
       "previewSubtitle": "Выберите аккаунты для сохранения",
       "scanSubtitle": "Поочередный разбор и проверка аккаунтов",
       "parseSubtitle": "Разбор файлов аккаунтов",
+      "importSubtitle": "Сохранение выбранных аккаунтов",
+      "finalizing": "Завершение импорта",
+      "finalizingSubtitle": "Обновление списка аккаунтов и связанных настроек",
+      "cancelImport": "Отменить импорт",
+      "importCancelledSummary": "Импорт отменён после обработки {{processed}}/{{total}} аккаунтов.",
+      "importChecked": "Импортировать проверенные аккаунты",
+      "directImport": "Импортировать напрямую без проверки",
+      "importCheckedAndAddToApiService": "Импортировать проверенные аккаунты и добавить в службу API",
+      "directImportAndAddToApiService": "Импортировать напрямую и добавить в службу API",
+      "viewAllTasks": "Показать все задачи ({{count}})",
+      "collapseTasks": "Свернуть задачи",
       "cancelling": "Отмена...",
       "scanDone": "Сканирование завершено",
+      "scanCompleteReview": "Проверка завершена — откройте результат",
       "parseDone": "Разбор завершен",
       "scanning": "Сканирование",
       "parsing": "Разбор",
@@ -3336,7 +3423,7 @@
       "failed": "Ошибки",
       "quotaOk": "Аккаунт OK",
       "quotaFailed": "Ошибка",
-      "checkQuotaToggle": "Проверять аккаунты",
+      "checkQuotaToggle": "Проверить перед импортом",
       "preparing": "Подготовка импорта...",
       "importSelected": "Импортировать выбранные",
       "noSelection": "Сначала выберите аккаунты",
@@ -3359,7 +3446,17 @@
       "taskRunning": "Обработка {{current}} / {{total}}",
       "taskPreview": "Предпросмотр готов: {{total}}",
       "reopen": "Открыть задачу",
-      "dismissTask": "Сбросить"
+      "dismissTask": "Сбросить",
+      "queueCount": "В очереди: {{count}}",
+      "queued": "В очереди",
+      "batchLabel": "Пакет {{index}}",
+      "runInBackground": "Фон",
+      "cancelQueued": "Отменить очередь",
+      "importing": "Импорт",
+      "checkAccounts": "Проверить счета",
+      "importAndAddToApiService": "Импорт + API",
+      "importAndAddToApiServiceSuccess": "Импортировано и добавлено в сервис API.",
+      "addToApiServiceFailed": "Импортировано, но не удалось добавить в службу API: {{error}}."
     },
     "autoRepairMode": {
       "label": "Логика автоисправления",
@@ -3406,6 +3503,71 @@
       "chipSearch": "Поиск",
       "chipPlan": "План",
       "chipFolder": "Папка"
+    },
+    "accessTokenImport": {
+      "nameRequired": "Введите имя аккаунта",
+      "tokenRequired": "Введите access token Codex",
+      "desc": "Сохранить аккаунт по access token. Без refresh/id пишется personal_access_token.",
+      "nameLabel": "Имя аккаунта",
+      "namePlaceholder": "Имя в списке",
+      "tokenLabel": "Access token Codex",
+      "hideToken": "Скрыть",
+      "showToken": "Показать",
+      "submit": "Импорт токена",
+      "success": "Аккаунт access token импортирован: {{name}}"
+    },
+    "ssh": {
+      "tab": "SSH-синхр.",
+      "title": "SSH-синхронизация Codex",
+      "desc": "Сохраните хосты, проверьте связь и отправьте auth.json. После смены аккаунта — автосинхр. выбранного хоста.",
+      "new": "Создать",
+      "empty": "Нет SSH-хостов",
+      "test": "Проверить",
+      "sync": "Синхр.",
+      "saved": "SSH-сервер сохранён",
+      "deleted": "Удалено",
+      "name": "Имя",
+      "host": "Хост",
+      "user": "Пользователь",
+      "port": "Порт",
+      "remoteDir": "Удалённый каталог Codex",
+      "syncSwitch": "SSH на коммутаторе",
+      "syncSwitchDesc": "Включите, чтобы настроить хост SSH; Переключатели Кодекса синхронизируют текущую учетную запись удаленно.",
+      "configure": "Настраивать",
+      "modalTitle": "Настройка синхронизации SSH",
+      "modalHint": "Добавьте и выберите хост SSH с включенной автоматической синхронизацией, чтобы переключатели учетных записей Кодекса обновляли удаленную аутентификацию.",
+      "subtitle": "Выбранный хост получает текущий пакет аутентификации Кодекса после переключения учетной записи.",
+      "addServer": "Добавить сервер",
+      "editServer": "Редактировать сервер",
+      "username": "Имя пользователя",
+      "codexHome": "Удаленный каталог Кодекса",
+      "authMethod": "Метод аутентификации",
+      "agentAuth": "SSH-агент",
+      "privateKeyAuth": "Закрытый ключ",
+      "privateKeyPath": "Ключевой путь",
+      "syncOnSwitch": "Синхронизация после переключения",
+      "emptyTitle": "Нет SSH-серверов",
+      "emptyBody": "Заполните хост слева и сохраните его как цель синхронизации коммутатора.",
+      "selected": "Выбрано",
+      "select": "Выбирать",
+      "testConnection": "Тест",
+      "syncNow": "Синхронизировать сейчас",
+      "connectionOk": "Подключено",
+      "syncVerified": "Синхронизация по SSH проверена",
+      "syncFailed": "SSH-синхронизация не удалась",
+      "syncedAs": "Синхронизировано {{email}} · {{time}}",
+      "neverSynced": "Еще не синхронизировано",
+      "latestVerified": "Последняя синхронизация SSH проверена",
+      "syncSwitchActive": "Включено · {{name}} ({{user}}@{{host}})",
+      "footerHint": "Переключатель включается после сохранения; выключите его в любое время, чтобы остановить автоматическую синхронизацию.",
+      "formLead": "Сведения об удаленном хосте",
+      "namePlaceholder": "например Домашний NAS",
+      "syncOnSwitchHint": "После сохранения и выбора переключатели Кодекса отправляют авторизацию на этот хост.",
+      "addAndSave": "Добавить и сохранить",
+      "serverList": "Серверы",
+      "serverListLead": "Выберите цель синхронизации",
+      "serverCount": "{{count}} серверов",
+      "autoSyncBadge": "Авто"
     }
   },
   "githubCopilot": {
@@ -3622,8 +3784,8 @@
     "inputPercent": "Введите процент",
     "inputCredits": "Введите кредиты",
     "windsurf": {
-      "title": "Настройки Windsurf",
-      "appPath": "Путь к Windsurf"
+      "title": "Настройки Devin",
+      "appPath": "Путь к Devin"
     },
     "windsurfRefreshInterval": "Автообновление квоты",
     "kiro": {
@@ -3641,7 +3803,9 @@
       "appPath": "Путь к Grok CLI",
       "cliPath": "Путь к CLI",
       "cliDetected": "Обнаружено: {{version}} · {{path}}",
-      "cliMissing": "Grok CLI не найден. Укажите свой путь."
+      "cliMissing": "Grok CLI не найден. Укажите свой путь.",
+      "syncOfficialAuthOnSwitch": "Синхронизировать официальный вход",
+      "syncOfficialAuthOnSwitchDesc": "Если включено, при переключении OAuth-аккаунта экземпляра по умолчанию записывается официальный файл ~/.grok/auth.json. Если выключено, используется отдельный GROK_HOME. API-ключи и дополнительные экземпляры не перезаписывают официальный вход."
     },
     "grokRefreshInterval": "Автоматическое обновление квоты",
     "codebuddy": {
@@ -3725,21 +3889,21 @@
     }
   },
   "windsurf": {
-    "title": "Управление аккаунтами Windsurf",
+    "title": "Управление аккаунтами Devin",
     "instances": {
       "unsupported": {
-        "desc": "Мульти-инстанс Windsurf в настоящее время доступен только на macOS."
+        "desc": "Мульти-инстанс Devin в настоящее время доступен только на macOS."
       }
     },
     "empty": {
       "description": "Нажмите «Добавить аккаунт», чтобы начать"
     },
     "addModal": {
-      "title": "Добавить аккаунт Windsurf",
+      "title": "Добавить аккаунт Devin",
       "password": "Вход по почте"
     },
     "password": {
-      "desc": "Войдите с почтой и паролем аккаунта Windsurf, чтобы автоматически получить API key и данные аккаунта.",
+      "desc": "Войдите с почтой и паролем аккаунта Devin, чтобы автоматически получить API key и данные аккаунта.",
       "emailPlaceholder": "Адрес почты",
       "passwordPlaceholder": "Пароль",
       "empty": "Введите почту и пароль",
@@ -3786,14 +3950,14 @@
       "batchFailureMore": "Еще {{count}} с ошибкой"
     },
     "oauth": {
-      "desc": "Нажмите ниже и завершите авторизацию Windsurf в браузере."
+      "desc": "Нажмите ниже и завершите авторизацию Devin в браузере."
     },
     "token": {
-      "desc": "Вставьте токен доступа Windsurf или экспортированные данные JSON."
+      "desc": "Вставьте токен доступа Devin или экспортированные данные JSON."
     },
     "import": {
-      "localDesc": "Импортировать аккаунты Windsurf из локальных вошедших сессий.",
-      "localClient": "Импорт из локального Windsurf"
+      "localDesc": "Импортировать аккаунты Devin из локальных вошедших сессий.",
+      "localClient": "Импорт из локального Devin"
     },
     "credits": {
       "title": "Тариф",
@@ -3817,15 +3981,15 @@
       "autoRecharge": "Автопополнение",
       "remaining": "Осталось {{value}}"
     },
-    "injectToVSCode": "Переключить в Windsurf",
-    "injectSuccess": "Переключение завершено. Windsurf запускается.",
-    "injectRequireClose": "Пожалуйста, закройте Windsurf перед переключением.",
+    "injectToVSCode": "Переключить в Devin",
+    "injectSuccess": "Переключение завершено. Devin запускается.",
+    "injectRequireClose": "Пожалуйста, закройте Devin перед переключением.",
     "flowNotice": {
-      "title": "Руководство по аккаунтам Windsurf (нажмите, чтобы развернуть/свернуть)",
-      "desc": "Для переключения аккаунта требуется чтение локального хранилища аутентификации Windsurf и использование системной службы учетных данных для расшифровки и обратной записи; данные обрабатываются только локально.",
-      "inject": "Переключение в один клик: инструмент читает локальный криптографический материал Windsurf (DPAPI/Keychain/Secret Service), расшифровывает сессию авторизации в state.vscdb, заменяет токен Windsurf и шифрует обратно — всё локально на вашем устройстве.",
-      "reason": "Объем разрешений: чтение базы аутентификации Windsurf (state.vscdb) и вызов системного шифрования (Windows DPAPI / macOS Keychain / Linux Secret Service) для расшифровки и обратной записи.",
-      "storage": "Область чтения: обрабатываются только данные, связанные с сессией входа Windsurf; все процессы выполняются локально."
+      "title": "Руководство по аккаунтам Devin (нажмите, чтобы развернуть/свернуть)",
+      "desc": "Для переключения аккаунта требуется чтение локального хранилища аутентификации Devin и использование системной службы учетных данных для расшифровки и обратной записи; данные обрабатываются только локально.",
+      "inject": "Переключение в один клик: инструмент читает локальный криптографический материал Devin (DPAPI/Keychain/Secret Service), расшифровывает сессию авторизации в state.vscdb, заменяет токен Devin и шифрует обратно — всё локально на вашем устройстве.",
+      "reason": "Объем разрешений: чтение базы аутентификации Devin (state.vscdb) и вызов системного шифрования (Windows DPAPI / macOS Keychain / Linux Secret Service) для расшифровки и обратной записи.",
+      "storage": "Область чтения: обрабатываются только данные, связанные с сессией входа Devin; все процессы выполняются локально."
     }
   },
   "kiro": {
@@ -4003,7 +4167,7 @@
       "goSettings": "Перейти в настройки",
       "goVerification": "Перейти к wakeup-проверке",
       "goWakeup": "Перейти к wakeup-задачам",
-      "goWindsurf": "Перейти в Windsurf",
+      "goWindsurf": "Перейти в Devin",
       "openLayout": "Открыть раскладку платформ"
     },
     "antigravity": {
@@ -4120,11 +4284,11 @@
     "navTitle": "Руководство пользователя",
     "providers": {
       "cautions": {
-        "0": "Перед рискованными или массовыми действиями в Codex / GitHub Copilot / Windsurf / Kiro сделайте резервную копию.",
-        "1": "Перед запуском в Codex / GitHub Copilot / Windsurf / Kiro проверьте фильтры и целевой диапазон."
+        "0": "Перед рискованными или массовыми действиями в Codex / GitHub Copilot / Devin / Kiro сделайте резервную копию.",
+        "1": "Перед запуском в Codex / GitHub Copilot / Devin / Kiro проверьте фильтры и целевой диапазон."
       },
       "keywords": {
-        "0": "Платформы Codex / GitHub Copilot / Windsurf / Kiro",
+        "0": "Платформы Codex / GitHub Copilot / Devin / Kiro",
         "1": "гайд",
         "2": "поток",
         "3": "аккаунт",
@@ -4132,17 +4296,17 @@
         "5": "диагностика"
       },
       "outcomes": {
-        "0": "Поймите, какие задачи решает Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "Используйте рекомендованный поток в Codex / GitHub Copilot / Windsurf / Kiro, чтобы снизить ошибки.",
-        "2": "Перед масштабированием подтвердите один успешный запуск в Codex / GitHub Copilot / Windsurf / Kiro."
+        "0": "Поймите, какие задачи решает Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "Используйте рекомендованный поток в Codex / GitHub Copilot / Devin / Kiro, чтобы снизить ошибки.",
+        "2": "Перед масштабированием подтвердите один успешный запуск в Codex / GitHub Copilot / Devin / Kiro."
       },
       "steps": {
-        "0": "Откройте страницу Codex / GitHub Copilot / Windsurf / Kiro.",
-        "1": "Завершите базовую настройку и необходимые привязки в Codex / GitHub Copilot / Windsurf / Kiro.",
-        "2": "Выполните одно ручное действие в Codex / GitHub Copilot / Windsurf / Kiro и проверьте результат."
+        "0": "Откройте страницу Codex / GitHub Copilot / Devin / Kiro.",
+        "1": "Завершите базовую настройку и необходимые привязки в Codex / GitHub Copilot / Devin / Kiro.",
+        "2": "Выполните одно ручное действие в Codex / GitHub Copilot / Devin / Kiro и проверьте результат."
       },
-      "summary": "Этот раздел объясняет использование Codex / GitHub Copilot / Windsurf / Kiro в повседневном процессе.",
-      "title": "Платформы Codex / GitHub Copilot / Windsurf / Kiro"
+      "summary": "Этот раздел объясняет использование Codex / GitHub Copilot / Devin / Kiro в повседневном процессе.",
+      "title": "Платформы Codex / GitHub Copilot / Devin / Kiro"
     },
     "quickStart": {
       "cautions": {
@@ -4323,6 +4487,12 @@
     },
     "quota": {
       "usedOfTotal": "{{used}} / {{total}}​"
+    },
+    "sessions": {
+      "title": "Локальные файлы сессий",
+      "desc": "Локальные файлы сессий — Локальное сканирование и открытие папки.",
+      "empty": "Файлы сессий не найдены",
+      "open": "Открыть папку"
     }
   },
   "qoder": {
@@ -5000,8 +5170,8 @@
     "search": "Поиск аккаунтов Grok CLI...",
     "flowNotice": {
       "title": "Управление аккаунтами Grok CLI",
-      "desc": "Cockpit управляет аккаунтами в официальном формате учётных данных Grok CLI для фактического переключения аккаунта по умолчанию и привязки изолированных экземпляров.",
-      "permission": "Локальный доступ: чтение стандартного ~/.grok/auth.json и управление отдельными каталогами аккаунтов Grok и GROK_HOME в локальных данных Cockpit.",
+      "desc": "По умолчанию используются отдельные GROK_HOME. При включённой синхронизации смена OAuth-аккаунта экземпляра по умолчанию записывает ~/.grok/auth.json; дополнительные экземпляры остаются изолированными.",
+      "permission": "Локальный доступ: ~/.grok/auth.json можно читать для импорта; запись выполняется только при включённой синхронизации и смене OAuth-аккаунта экземпляра по умолчанию. API-ключи не перезаписывают официальный вход.",
       "network": "Сетевой доступ: авторизация OAuth, обновление учётных данных и запрос использования аккаунта. Учётные данные не отправляются в службы Cockpit."
     },
     "empty": "Аккаунтов Grok CLI пока нет",
@@ -5042,7 +5212,8 @@
       "installHint": "Выполните указанную ниже официальную команду в терминале, а после установки нажмите «Обновить».",
       "selectWorkingDir": "Выберите рабочую папку Grok CLI",
       "workingDirAccountHint": "Рабочая папка привязана к этому аккаунту и будет восстановлена при следующем запуске.",
-      "launchCommandPlaceholder": "Выберите или подтвердите папку, чтобы сформировать команду запуска"
+      "launchCommandPlaceholder": "Выберите или подтвердите папку, чтобы сформировать команду запуска",
+      "reauthLaunchHint": "Срок действия аутентификации аккаунта истек. Повторная авторизация; приведенная ниже команда запуска все еще доступна."
     },
     "switch": {
       "success": "Аккаунт переключён"
@@ -5325,5 +5496,23 @@
       "supports1mLabel": "Заявить 1M",
       "supports1mShort": "1M контекст"
     }
+  },
+  "openrouter": {
+    "title": "OpenRouter",
+    "desc": "Управление ключами OpenRouter, usage и моделями.",
+    "tabKeys": "Ключи и usage",
+    "tabModels": "Модели",
+    "modelsLoaded": "Загружено моделей: {{count}}",
+    "noUsageYet": "Usage ещё не обновлён",
+    "loadModels": "Загрузить модели",
+    "searchModels": "Поиск моделей",
+    "freeOnly": "Только free",
+    "noModels": "Нет моделей — добавьте key и загрузите.",
+    "free": "Бесплатно",
+    "noCtx": "Нет длины контекста"
+  },
+  "opencode": {
+    "title": "OpenCode",
+    "desc": "Управление ключами OpenCode Go/Zen и фильтр по tier."
   }
 }
