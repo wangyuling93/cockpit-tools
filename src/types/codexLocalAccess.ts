@@ -64,7 +64,10 @@ export interface CodexLocalAccessApiKey {
   id: string;
   label: string;
   key: string;
+  providerGateway?: unknown | null;
+  inheritAccountPool?: boolean;
   accountIds?: string[];
+  priorityAccountIds?: string[];
   modelPrefix?: string | null;
   allowedModels: string[];
   excludedModels: string[];
@@ -199,6 +202,8 @@ export interface CodexLocalAccessUsageEvent {
   email: string;
   apiKeyId: string;
   apiKeyLabel: string;
+  /** 多开实例目录 ID（x-cockpit-instance-id） */
+  clientInstanceId?: string;
   modelId: string;
   gatewayMode?: CodexLocalAccessGatewayMode | null;
   requestKind: CodexLocalAccessRequestKind;
@@ -250,6 +255,7 @@ export interface CodexLocalAccessRequestLogQuery {
   modelQuery?: string | null;
   accountQuery?: string | null;
   apiKeyQuery?: string | null;
+  instanceQuery?: string | null;
   gatewayMode?: CodexLocalAccessGatewayMode | null;
   requestKind?: CodexLocalAccessRequestKind | null;
   success?: boolean | null;

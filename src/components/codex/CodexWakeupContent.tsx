@@ -421,7 +421,32 @@ function resolveTaskPreset(task: CodexWakeupTask, presets: CodexWakeupModelPrese
   );
 }
 
-function buildTaskDraft(task: CodexWakeupTask, presets: CodexWakeupModelPreset[]): TaskDraft {
+function filterExistingWakeupAccountIds(
+  accountIds: string[] | undefined,
+  existingAccountIds: Set<string> | Iterable<string>,
+): string[] {
+  const existing =
+    existingAccountIds instanceof Set
+      ? existingAccountIds
+      : new Set(Array.from(existingAccountIds));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const rawId of accountIds ?? []) {
+    const accountId = rawId.trim();
+    if (!accountId || !existing.has(accountId) || seen.has(accountId)) {
+      continue;
+    }
+    seen.add(accountId);
+    result.push(accountId);
+  }
+  return result;
+}
+
+function buildTaskDraft(
+  task: CodexWakeupTask,
+  presets: CodexWakeupModelPreset[],
+  existingAccountIds?: Set<string> | Iterable<string>,
+): TaskDraft {
   const matchedPreset = resolveTaskPreset(task, presets);
   const startupDelayMinutes = normalizeStartupDelayMinutes(task.schedule.startup_delay_minutes);
   return {
@@ -429,7 +454,9 @@ function buildTaskDraft(task: CodexWakeupTask, presets: CodexWakeupModelPreset[]
     createdAt: task.created_at,
     name: task.name,
     enabled: task.enabled,
-    accountIds: task.account_ids,
+    accountIds: existingAccountIds
+      ? filterExistingWakeupAccountIds(task.account_ids, existingAccountIds)
+      : [...task.account_ids],
     prompt: task.prompt ?? '',
     modelPresetId: matchedPreset?.id ?? '',
     model: task.model ?? matchedPreset?.model ?? '',
@@ -940,6 +967,14 @@ export function CodexWakeupContent({
     () => accounts.filter((account) => !isCodexApiKeyAccount(account)),
     [accounts],
   );
+  const oauthAccountIdSet = useMemo(
+    () => new Set(oauthAccounts.map((account) => account.id)),
+    [oauthAccounts],
+  );
+  const resolveTaskAccountIds = useCallback(
+    (task: CodexWakeupTask) => filterExistingWakeupAccountIds(task.account_ids, oauthAccountIdSet),
+    [oauthAccountIdSet],
+  );
   const modelPresetMap = useMemo(
     () => new Map(state.model_presets.map((preset) => [preset.id, preset])),
     [state.model_presets],
@@ -1393,44 +1428,47 @@ export function CodexWakeupContent({
   );
 
   const buildTaskPreviewSession = useCallback(
-    (task: CodexWakeupTask): ExecutionSessionState => ({
-      runId: `preview:${task.id}`,
-      taskId: task.id,
-      triggerType: 'scheduled',
-      title: task.name,
-      runtime: {
-        ...CODEX_WAKEUP_OFFICIAL_RUNTIME,
-        checked_at: Date.now(),
-      },
-      startedAt: 0,
-      durationMs: undefined,
-      total: task.account_ids.length,
-      completed: 0,
-      successCount: 0,
-      failureCount: 0,
-      taskName: task.name,
-      running: false,
-      preview: true,
-      errorText: undefined,
-      records: task.account_ids.map((accountId, index) => {
-        const account = accountMap.get(accountId);
-        const meta = wakeupAccountMetaMap.get(accountId);
-        return {
-          id: `preview:${task.id}:${accountId}:${index}`,
-          accountId,
-          accountEmail: meta?.email || (account?.email || accountId),
-          accountContextText:
-            meta?.contextText || (account ? resolveAccountContextText(account, t) : undefined),
-          triggerType: 'scheduled',
-          status: 'pending' as const,
-          prompt: task.prompt,
-          model: task.model,
-          modelDisplayName: task.model_display_name,
-          modelReasoningEffort: task.model_reasoning_effort,
-        };
-      }),
-    }),
-    [accountMap, t, wakeupAccountMetaMap],
+    (task: CodexWakeupTask): ExecutionSessionState => {
+      const accountIds = resolveTaskAccountIds(task);
+      return {
+        runId: `preview:${task.id}`,
+        taskId: task.id,
+        triggerType: 'scheduled',
+        title: task.name,
+        runtime: {
+          ...CODEX_WAKEUP_OFFICIAL_RUNTIME,
+          checked_at: Date.now(),
+        },
+        startedAt: 0,
+        durationMs: undefined,
+        total: accountIds.length,
+        completed: 0,
+        successCount: 0,
+        failureCount: 0,
+        taskName: task.name,
+        running: false,
+        preview: true,
+        errorText: undefined,
+        records: accountIds.map((accountId, index) => {
+          const account = accountMap.get(accountId);
+          const meta = wakeupAccountMetaMap.get(accountId);
+          return {
+            id: `preview:${task.id}:${accountId}:${index}`,
+            accountId,
+            accountEmail: meta?.email || (account?.email || accountId),
+            accountContextText:
+              meta?.contextText || (account ? resolveAccountContextText(account, t) : undefined),
+            triggerType: 'scheduled',
+            status: 'pending' as const,
+            prompt: task.prompt,
+            model: task.model,
+            modelDisplayName: task.model_display_name,
+            modelReasoningEffort: task.model_reasoning_effort,
+          };
+        }),
+      };
+    },
+    [accountMap, resolveTaskAccountIds, t, wakeupAccountMetaMap],
   );
 
   const openTaskExecutionDetails = useCallback(
@@ -2106,11 +2144,11 @@ export function CodexWakeupContent({
   }, [createEmptyTaskDraftWithRememberedModel]);
 
   const openEditTaskModal = useCallback((task: CodexWakeupTask) => {
-    setTaskDraft(buildTaskDraft(task, state.model_presets));
+    setTaskDraft(buildTaskDraft(task, state.model_presets, oauthAccountIdSet));
     setTaskModalError(null);
     setTaskAccountFilters(createEmptyAccountPickerFilters());
     setShowTaskModal(true);
-  }, [state.model_presets]);
+  }, [oauthAccountIdSet, state.model_presets]);
 
   const openTestModal = useCallback(async () => {
     setTestModalError(null);
@@ -2132,9 +2170,9 @@ export function CodexWakeupContent({
 
     handledOpenTestRequestSignalRef.current = openTestRequest.signal;
     const nextVariant = openTestRequest.variant ?? 'standard';
-    const oauthAccountIdSet = new Set(oauthAccounts.map((account) => account.id));
-    const nextAccountIds = Array.from(new Set(openTestRequest.accountIds ?? [])).filter(
-      (accountId) => oauthAccountIdSet.has(accountId),
+    const nextAccountIds = filterExistingWakeupAccountIds(
+      openTestRequest.accountIds,
+      oauthAccountIdSet,
     );
 
     setTestModalError(null);
@@ -2155,7 +2193,7 @@ export function CodexWakeupContent({
     if (openTestRequest.notice) {
       setNotice({ tone: 'success', text: openTestRequest.notice });
     }
-  }, [oauthAccounts, openTestRequest, resolvedModelSelection, setTestModalError]);
+  }, [oauthAccountIdSet, openTestRequest, resolvedModelSelection, setTestModalError]);
 
   const closeTaskModal = useCallback(() => {
     if (saving) return;
@@ -2321,11 +2359,16 @@ export function CodexWakeupContent({
             )
           : 0
         : undefined;
+    const nextAccountIds = filterExistingWakeupAccountIds(taskDraft.accountIds, oauthAccountIdSet);
+    if (nextAccountIds.length === 0) {
+      setTaskModalError(t('codex.wakeup.taskAccountsRequired'));
+      return;
+    }
     const nextTask: CodexWakeupTask = {
       id: taskDraft.id ?? crypto.randomUUID(),
       name: trimmedName,
       enabled: taskDraft.enabled,
-      account_ids: taskDraft.accountIds,
+      account_ids: nextAccountIds,
       prompt: taskDraft.prompt.trim() || undefined,
       model: selectedTaskPreset.model,
       model_display_name: selectedTaskPreset.name,
@@ -2366,14 +2409,22 @@ export function CodexWakeupContent({
     } catch (error) {
       setTaskModalError(String(error));
     }
-  }, [persistTasks, selectedTaskPreset, state.tasks, t, taskDraft]);
+  }, [oauthAccountIdSet, persistTasks, selectedTaskPreset, state.tasks, t, taskDraft]);
 
   const handleRunTask = useCallback(
     async (task: CodexWakeupTask) => {
+      const accountIds = resolveTaskAccountIds(task);
+      if (accountIds.length === 0) {
+        setNotice({
+          tone: 'error',
+          text: t('codex.wakeup.taskAccountsRequired'),
+        });
+        return;
+      }
       const confirmed = await confirmDialog(
         t('codex.wakeup.manualRunConfirm', {
           name: task.name,
-          count: task.account_ids.length,
+          count: accountIds.length,
         }),
         {
           title: t('common.confirm', '确认'),
@@ -2392,7 +2443,7 @@ export function CodexWakeupContent({
         buildExecutionSession(
           runId,
           'manual_task',
-          task.account_ids,
+          accountIds,
           task.prompt,
           task.id,
           task.name,
@@ -2458,7 +2509,7 @@ export function CodexWakeupContent({
         );
       }
     },
-    [buildExecutionSession, onRefreshAccounts, runTask, t],
+    [buildExecutionSession, onRefreshAccounts, resolveTaskAccountIds, runTask, t],
   );
 
   const handleRunTest = useCallback(async () => {
@@ -2680,7 +2731,8 @@ export function CodexWakeupContent({
       ) : (
         <div className="wakeup-task-grid">
           {sortedTasks.map((task) => {
-            const accountLabels = task.account_ids.map((accountId) => {
+            const existingTaskAccountIds = resolveTaskAccountIds(task);
+            const accountLabels = existingTaskAccountIds.map((accountId) => {
               const meta = wakeupAccountMetaMap.get(accountId);
               const value = meta?.email || accountMap.get(accountId)?.email || accountId;
               return maskAccountText(value);

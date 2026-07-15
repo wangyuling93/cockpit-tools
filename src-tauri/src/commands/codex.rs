@@ -268,6 +268,14 @@ async fn run_codex_batch_delete_job(job_id: String) {
 
         if let Some(account_id) = deleted_account_id_for_cleanup {
             if let Err(error) =
+                codex_wakeup::remove_deleted_accounts_from_tasks(&[account_id.clone()])
+            {
+                logger::log_warn(&format!(
+                    "[Codex Batch Delete] 清理唤醒任务账号引用失败: job_id={}, account_id={}, error={}",
+                    job_id, account_id, error
+                ));
+            }
+            if let Err(error) =
                 codex_local_access::remove_deleted_accounts_from_local_access_pool(&[account_id])
                     .await
             {
@@ -894,6 +902,12 @@ async fn run_codex_post_refresh_checks(app: &AppHandle) {
 #[tauri::command]
 pub async fn delete_codex_account(account_id: String) -> Result<(), String> {
     codex_account::remove_account(&account_id)?;
+    if let Err(error) = codex_wakeup::remove_deleted_accounts_from_tasks(&[account_id.clone()]) {
+        logger::log_warn(&format!(
+            "[Codex] 清理唤醒任务账号引用失败: account_id={}, error={}",
+            account_id, error
+        ));
+    }
     codex_local_access::remove_deleted_accounts_from_local_access_pool(&[account_id]).await?;
     Ok(())
 }
@@ -902,6 +916,13 @@ pub async fn delete_codex_account(account_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn delete_codex_accounts(account_ids: Vec<String>) -> Result<(), String> {
     codex_account::remove_accounts(&account_ids)?;
+    if let Err(error) = codex_wakeup::remove_deleted_accounts_from_tasks(&account_ids) {
+        logger::log_warn(&format!(
+            "[Codex] 批量清理唤醒任务账号引用失败: count={}, error={}",
+            account_ids.len(),
+            error
+        ));
+    }
     codex_local_access::remove_deleted_accounts_from_local_access_pool(&account_ids).await?;
     Ok(())
 }
@@ -969,7 +990,8 @@ fn apply_codex_switch_auth_projections(account: &CodexAccount, user_config: &con
             } else {
                 logger::log_info("OpenCode 未在运行，准备启动");
             }
-            if let Err(e) = process::start_opencode_with_path(Some(&user_config.opencode_app_path)) {
+            if let Err(e) = process::start_opencode_with_path(Some(&user_config.opencode_app_path))
+            {
                 logger::log_warn(&format!("OpenCode 启动失败: {}", e));
             }
         } else if !user_config.opencode_auth_overwrite_on_switch {
@@ -1015,10 +1037,7 @@ async fn reactivate_imported_current_if_needed(imported: &[CodexAccount]) {
         let user_config = config::get_user_config();
         apply_codex_switch_auth_projections(&account, &user_config);
         if let Err(e) = codex_speed::write_official_app_speed(account.app_speed.clone()) {
-            logger::log_warn(&format!(
-                "[Codex导入] 重新激活后写入 app speed 失败: {}",
-                e
-            ));
+            logger::log_warn(&format!("[Codex导入] 重新激活后写入 app speed 失败: {}", e));
         }
     }
 }
@@ -2154,9 +2173,7 @@ async fn run_single_model_provider_chat_test(
             success: false,
             prompt: prompt.to_string(),
             reply: None,
-            error: Some(
-                codex_local_access::MODEL_PROVIDER_CHAT_TEST_CANCELLED_ERROR.to_string(),
-            ),
+            error: Some(codex_local_access::MODEL_PROVIDER_CHAT_TEST_CANCELLED_ERROR.to_string()),
             duration_ms: None,
             timestamp,
         };
@@ -3101,6 +3118,7 @@ pub async fn codex_local_access_query_request_logs(
     model_query: Option<String>,
     account_query: Option<String>,
     api_key_query: Option<String>,
+    instance_query: Option<String>,
     gateway_mode: Option<CodexLocalAccessGatewayMode>,
     request_kind: Option<CodexLocalAccessRequestKind>,
     success: Option<bool>,
@@ -3115,6 +3133,7 @@ pub async fn codex_local_access_query_request_logs(
         model_query,
         account_query,
         api_key_query,
+        instance_query,
         gateway_mode,
         request_kind,
         success,
@@ -3278,6 +3297,8 @@ pub async fn codex_local_access_update_api_key(
     model_prefix: Option<String>,
     allowed_models: Option<Vec<String>>,
     excluded_models: Option<Vec<String>>,
+    account_ids: Option<Vec<String>>,
+    inherit_account_pool: Option<bool>,
 ) -> Result<CodexLocalAccessState, String> {
     codex_local_access::update_local_access_api_key(
         api_key_id,
@@ -3286,8 +3307,20 @@ pub async fn codex_local_access_update_api_key(
         model_prefix,
         allowed_models,
         excluded_models,
+        account_ids,
+        inherit_account_pool,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_set_api_key_account_priority(
+    api_key_id: String,
+    account_id: String,
+    pinned: bool,
+) -> Result<CodexLocalAccessState, String> {
+    codex_local_access::set_local_access_api_key_account_priority(api_key_id, account_id, pinned)
+        .await
 }
 
 #[tauri::command]

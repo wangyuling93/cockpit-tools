@@ -49,9 +49,11 @@ import (
 type contextKey string
 
 const (
-	clientAPIKeyContextKey contextKey = "cockpitClientAPIKey"
-	requestKindContextKey  contextKey = "cockpitRequestKind"
-	requestModelContextKey contextKey = "cockpitRequestModel"
+	clientAPIKeyContextKey      contextKey = "cockpitClientAPIKey"
+	requestKindContextKey       contextKey = "cockpitRequestKind"
+	requestModelContextKey      contextKey = "cockpitRequestModel"
+	clientInstanceIDContextKey  contextKey = "cockpitClientInstanceId"
+	clientInstanceIDHeaderName  = "X-Cockpit-Instance-Id"
 )
 
 const ginUserAPIKeyKey = "userApiKey"
@@ -59,6 +61,8 @@ const ginUserAPIKeyKey = "userApiKey"
 const defaultStreamKeepAliveSeconds = 15
 const quotaReserveMaxSnapshotAge = 3 * time.Minute
 const codexAutoReviewModel = "codex-auto-review"
+const codexSparkModel = "gpt-5.3-codex-spark"
+const codexSparkCatalogTemplateModel = "gpt-5.3-codex"
 const defaultImagesMainModel = "gpt-5.4-mini"
 const defaultImagesToolModel = "gpt-image-2"
 const imagesGenerationsPath = "/v1/images/generations"
@@ -107,10 +111,102 @@ type apiKeySpec struct {
 	Label           string               `json:"label"`
 	Key             string               `json:"key"`
 	ProviderGateway *providerGatewaySpec `json:"providerGateway,omitempty"`
+	AccountIDs      []string             `json:"accountIds"`
 	ModelPrefix     string               `json:"modelPrefix,omitempty"`
 	AllowedModels   []string             `json:"allowedModels"`
 	ExcludedModels  []string             `json:"excludedModels"`
 	Enabled         bool                 `json:"enabled"`
+}
+
+type apiKeyPriorityState struct {
+	PriorityAccountIDs  map[string][]string `json:"priorityAccountIds"`
+	PreferredAccountIDs map[string]string   `json:"preferredAccountIds"`
+}
+
+type apiKeyPriorityStateStore struct {
+	path            string
+	mu              sync.RWMutex
+	lastModUnixNano int64
+	priorities      map[string][]string
+}
+
+func newAPIKeyPriorityStateStore(manifestPath string) *apiKeyPriorityStateStore {
+	store := &apiKeyPriorityStateStore{
+		path:       filepath.Join(filepath.Dir(manifestPath), "api-key-priorities.json"),
+		priorities: make(map[string][]string),
+	}
+	store.reloadIfChanged()
+	return store
+}
+
+func (s *apiKeyPriorityStateStore) priorityAccountIDs(apiKeyID string) []string {
+	if s == nil {
+		return nil
+	}
+	s.reloadIfChanged()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.priorities[strings.TrimSpace(apiKeyID)]...)
+}
+
+func (s *apiKeyPriorityStateStore) reloadIfChanged() {
+	if s == nil || strings.TrimSpace(s.path) == "" {
+		return
+	}
+	info, err := os.Stat(s.path)
+	if err != nil {
+		return
+	}
+	modifiedAt := info.ModTime().UnixNano()
+	s.mu.RLock()
+	unchanged := modifiedAt == s.lastModUnixNano
+	s.mu.RUnlock()
+	if unchanged {
+		return
+	}
+
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		return
+	}
+	var state apiKeyPriorityState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return
+	}
+	next := make(map[string][]string, len(state.PriorityAccountIDs))
+	for apiKeyID, accountIDs := range state.PriorityAccountIDs {
+		apiKeyID = strings.TrimSpace(apiKeyID)
+		if apiKeyID == "" {
+			continue
+		}
+		seen := make(map[string]struct{}, len(accountIDs))
+		priorities := make([]string, 0, len(accountIDs))
+		for _, accountID := range accountIDs {
+			accountID = strings.TrimSpace(accountID)
+			if accountID == "" {
+				continue
+			}
+			if _, exists := seen[accountID]; exists {
+				continue
+			}
+			seen[accountID] = struct{}{}
+			priorities = append(priorities, accountID)
+		}
+		if len(priorities) > 0 {
+			next[apiKeyID] = priorities
+		}
+	}
+	for apiKeyID, accountID := range state.PreferredAccountIDs {
+		apiKeyID = strings.TrimSpace(apiKeyID)
+		accountID = strings.TrimSpace(accountID)
+		if apiKeyID != "" && accountID != "" && len(next[apiKeyID]) == 0 {
+			next[apiKeyID] = []string{accountID}
+		}
+	}
+	s.mu.Lock()
+	s.lastModUnixNano = modifiedAt
+	s.priorities = next
+	s.mu.Unlock()
 }
 
 type providerGatewaySpec struct {
@@ -186,25 +282,26 @@ type customRoutingRule struct {
 }
 
 type usagePayload struct {
-	Type          string       `json:"type"`
-	RequestID     string       `json:"requestId,omitempty"`
-	Provider      string       `json:"provider,omitempty"`
-	Model         string       `json:"model,omitempty"`
-	Alias         string       `json:"alias,omitempty"`
-	AccountID     string       `json:"accountId,omitempty"`
-	AccountEmail  string       `json:"accountEmail,omitempty"`
-	AuthID        string       `json:"authId,omitempty"`
-	APIKeyID      string       `json:"apiKeyId,omitempty"`
-	APIKeyLabel   string       `json:"apiKeyLabel,omitempty"`
-	RequestKind   string       `json:"requestKind,omitempty"`
-	ServiceTier   string       `json:"serviceTier,omitempty"`
-	Success       bool         `json:"success"`
-	Status        int          `json:"status,omitempty"`
-	ErrorCategory string       `json:"errorCategory,omitempty"`
-	ErrorMessage  string       `json:"errorMessage,omitempty"`
-	LatencyMS     int64        `json:"latencyMs,omitempty"`
-	Usage         usageDetails `json:"usage"`
-	RequestedAtMS int64        `json:"requestedAtMs,omitempty"`
+	Type             string       `json:"type"`
+	RequestID        string       `json:"requestId,omitempty"`
+	Provider         string       `json:"provider,omitempty"`
+	Model            string       `json:"model,omitempty"`
+	Alias            string       `json:"alias,omitempty"`
+	AccountID        string       `json:"accountId,omitempty"`
+	AccountEmail     string       `json:"accountEmail,omitempty"`
+	AuthID           string       `json:"authId,omitempty"`
+	APIKeyID         string       `json:"apiKeyId,omitempty"`
+	APIKeyLabel      string       `json:"apiKeyLabel,omitempty"`
+	ClientInstanceID string       `json:"clientInstanceId,omitempty"`
+	RequestKind      string       `json:"requestKind,omitempty"`
+	ServiceTier      string       `json:"serviceTier,omitempty"`
+	Success          bool         `json:"success"`
+	Status           int          `json:"status,omitempty"`
+	ErrorCategory    string       `json:"errorCategory,omitempty"`
+	ErrorMessage     string       `json:"errorMessage,omitempty"`
+	LatencyMS        int64        `json:"latencyMs,omitempty"`
+	Usage            usageDetails `json:"usage"`
+	RequestedAtMS    int64        `json:"requestedAtMs,omitempty"`
 }
 
 type requestDiagnosticPayload struct {
@@ -638,6 +735,42 @@ func extractBearerToken(header string) string {
 	return strings.TrimSpace(parts[1])
 }
 
+func extractClientInstanceID(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(r.Header.Get(clientInstanceIDHeaderName)); value != "" {
+		return value
+	}
+	// Header map is case-insensitive via Get; keep an explicit fallback for odd clients.
+	for key, values := range r.Header {
+		if strings.EqualFold(strings.TrimSpace(key), clientInstanceIDHeaderName) {
+			for _, value := range values {
+				if trimmed := strings.TrimSpace(value); trimmed != "" {
+					return trimmed
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func clientInstanceIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	value, _ := ctx.Value(clientInstanceIDContextKey).(string)
+	return strings.TrimSpace(value)
+}
+
+func withClientInstanceID(ctx context.Context, instanceID string) context.Context {
+	instanceID = strings.TrimSpace(instanceID)
+	if instanceID == "" || ctx == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, clientInstanceIDContextKey, instanceID)
+}
+
 type requestPolicy struct {
 	manifest *manifest
 	emitter  *eventEmitter
@@ -655,6 +788,10 @@ func (p *requestPolicy) middleware() gin.HandlerFunc {
 		requestID := ensureRequestID(c)
 		spec := p.lookupAPIKey(c.Request)
 		requestKind := requestKindFromPath(c.Request.URL.Path)
+		clientInstanceID := extractClientInstanceID(c.Request)
+		if clientInstanceID != "" {
+			c.Request = c.Request.WithContext(withClientInstanceID(c.Request.Context(), clientInstanceID))
+		}
 		model := ""
 		startLogged := false
 		emitStart := func() {
@@ -674,6 +811,9 @@ func (p *requestPolicy) middleware() gin.HandlerFunc {
 			c.Set(ginUserAPIKeyKey, spec.Key)
 			ctx := context.WithValue(c.Request.Context(), clientAPIKeyContextKey, spec)
 			ctx = context.WithValue(ctx, requestKindContextKey, requestKind)
+			if clientInstanceID != "" {
+				ctx = withClientInstanceID(ctx, clientInstanceID)
+			}
 			c.Request = c.Request.WithContext(ctx)
 		}
 
@@ -708,7 +848,7 @@ func (p *requestPolicy) middleware() gin.HandlerFunc {
 		}
 		emitStart()
 		if err != nil {
-			p.emitBlockedRequest(requestID, spec, model, requestKind, startedAt, err.Error())
+			p.emitBlockedRequest(c, requestID, spec, model, requestKind, startedAt, err.Error())
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error": gin.H{
 					"message": err.Error(),
@@ -842,23 +982,28 @@ func (p *requestPolicy) emitRequestCompleted(c *gin.Context, requestID string, s
 	}
 }
 
-func (p *requestPolicy) emitBlockedRequest(requestID string, spec *apiKeySpec, model, requestKind string, startedAt time.Time, message string) {
+func (p *requestPolicy) emitBlockedRequest(c *gin.Context, requestID string, spec *apiKeySpec, model, requestKind string, startedAt time.Time, message string) {
 	if p == nil || spec == nil {
 		return
 	}
+	clientInstanceID := ""
+	if c != nil && c.Request != nil {
+		clientInstanceID = clientInstanceIDFromContext(c.Request.Context())
+	}
 	payload := usagePayload{
-		Type:          "usage",
-		RequestID:     requestID,
-		Model:         model,
-		APIKeyID:      spec.ID,
-		APIKeyLabel:   spec.Label,
-		RequestKind:   requestKind,
-		Success:       false,
-		Status:        http.StatusNotFound,
-		ErrorCategory: "model_not_available",
-		ErrorMessage:  message,
-		LatencyMS:     time.Since(startedAt).Milliseconds(),
-		RequestedAtMS: time.Now().UnixMilli(),
+		Type:             "usage",
+		RequestID:        requestID,
+		Model:            model,
+		APIKeyID:         spec.ID,
+		APIKeyLabel:      spec.Label,
+		ClientInstanceID: clientInstanceID,
+		RequestKind:      requestKind,
+		Success:          false,
+		Status:           http.StatusNotFound,
+		ErrorCategory:    "model_not_available",
+		ErrorMessage:     message,
+		LatencyMS:        time.Since(startedAt).Milliseconds(),
+		RequestedAtMS:    time.Now().UnixMilli(),
 	}
 	if p.tracker != nil {
 		p.tracker.record(payload)
@@ -1016,6 +1161,7 @@ func buildCodexClientModelsResponse(models []string) gin.H {
 	}
 	response := gin.H(sdkopenai.CodexClientModelsResponse(sourceModels))
 	if data, ok := response["models"].([]map[string]any); ok {
+		hydrateCodexCompatibilityModels(data)
 		for index, model := range data {
 			slug, _ := model["slug"].(string)
 			if isHiddenCodexClientModel(slug) {
@@ -1032,6 +1178,33 @@ func buildCodexClientModelsResponse(models []string) gin.H {
 	return response
 }
 
+func hydrateCodexCompatibilityModels(models []map[string]any) {
+	var template map[string]any
+	for _, model := range models {
+		if model["slug"] == codexSparkCatalogTemplateModel {
+			template = model
+			break
+		}
+	}
+	if template == nil {
+		return
+	}
+
+	for index, model := range models {
+		if model["slug"] != codexSparkModel {
+			continue
+		}
+		compatibilityModel := make(map[string]any, len(template))
+		for key, value := range template {
+			compatibilityModel[key] = value
+		}
+		compatibilityModel["slug"] = codexSparkModel
+		compatibilityModel["display_name"] = "GPT-5.3 Codex Spark"
+		compatibilityModel["description"] = "GPT-5.3 Codex Spark"
+		models[index] = compatibilityModel
+	}
+}
+
 func displayNameForModel(model string) string {
 	switch model {
 	case "gpt-5-codex":
@@ -1044,7 +1217,7 @@ func displayNameForModel(model string) string {
 		return "GPT-5.4 Mini"
 	case "gpt-5.3-codex":
 		return "GPT-5.3 Codex"
-	case "gpt-5.3-codex-spark":
+	case codexSparkModel:
 		return "GPT-5.3 Codex Spark"
 	case "gpt-5.2":
 		return "GPT-5.2"
@@ -1494,11 +1667,12 @@ func requestKindFromPath(path string) string {
 }
 
 type cockpitSelector struct {
-	manifest *manifest
-	emitter  *eventEmitter
-	quota    *quotaReserveStateStore
-	mu       sync.Mutex
-	cursor   int
+	manifest   *manifest
+	emitter    *eventEmitter
+	quota      *quotaReserveStateStore
+	priorities *apiKeyPriorityStateStore
+	mu         sync.Mutex
+	cursor     int
 }
 
 type recordingSelector struct {
@@ -1749,6 +1923,7 @@ func (s *backupAccountSelector) Stop() {
 func (s *cockpitSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*coreauth.Auth) (*coreauth.Auth, error) {
 	_ = provider
 	_ = opts
+	auths = s.filterAuthsForAPIKeyScope(ctx, auths)
 	now := time.Now()
 	available := make([]*coreauth.Auth, 0, len(auths))
 	quotaReserveReasons := make([]string, 0)
@@ -1772,12 +1947,85 @@ func (s *cockpitSelector) Pick(ctx context.Context, provider, model string, opts
 	s.mu.Unlock()
 
 	ordered := s.orderAuths(available, start)
+	ordered = s.prioritizeAuthsForAPIKey(ctx, ordered)
 	if len(ordered) == 0 {
 		return nil, noAuthAvailableError(quotaReserveReasons)
 	}
 	selected := ordered[0]
 	s.emitAuthSelected(ctx, selected, provider, model, len(auths), len(available))
 	return selected, nil
+}
+
+func (s *cockpitSelector) prioritizeAuthsForAPIKey(ctx context.Context, auths []*coreauth.Auth) []*coreauth.Auth {
+	if s == nil || ctx == nil || len(auths) <= 1 || s.priorities == nil {
+		return auths
+	}
+	spec, _ := ctx.Value(clientAPIKeyContextKey).(*apiKeySpec)
+	if spec == nil {
+		return auths
+	}
+	priorityAccountIDs := s.priorities.priorityAccountIDs(spec.ID)
+	if len(priorityAccountIDs) == 0 {
+		return auths
+	}
+
+	ordered := make([]*coreauth.Auth, 0, len(auths))
+	selected := make(map[*coreauth.Auth]struct{}, len(priorityAccountIDs))
+	for _, priorityAccountID := range priorityAccountIDs {
+		for _, auth := range auths {
+			account := s.accountForAuth(auth)
+			if account == nil || account.ID != priorityAccountID {
+				continue
+			}
+			if _, alreadySelected := selected[auth]; alreadySelected {
+				break
+			}
+			ordered = append(ordered, auth)
+			selected[auth] = struct{}{}
+			break
+		}
+	}
+	if len(ordered) == 0 {
+		return auths
+	}
+	for _, auth := range auths {
+		if _, alreadySelected := selected[auth]; !alreadySelected {
+			ordered = append(ordered, auth)
+		}
+	}
+	return ordered
+}
+
+func (s *cockpitSelector) filterAuthsForAPIKeyScope(ctx context.Context, auths []*coreauth.Auth) []*coreauth.Auth {
+	if s == nil || s.manifest == nil || ctx == nil {
+		return auths
+	}
+	spec, _ := ctx.Value(clientAPIKeyContextKey).(*apiKeySpec)
+	if spec == nil || len(spec.AccountIDs) == 0 {
+		return auths
+	}
+
+	allowedAccountIDs := make(map[string]struct{}, len(spec.AccountIDs))
+	for _, accountID := range spec.AccountIDs {
+		if accountID = strings.TrimSpace(accountID); accountID != "" {
+			allowedAccountIDs[accountID] = struct{}{}
+		}
+	}
+	if len(allowedAccountIDs) == 0 {
+		return nil
+	}
+
+	scoped := make([]*coreauth.Auth, 0, len(auths))
+	for _, auth := range auths {
+		account := s.accountForAuth(auth)
+		if account == nil {
+			continue
+		}
+		if _, allowed := allowedAccountIDs[account.ID]; allowed {
+			scoped = append(scoped, auth)
+		}
+	}
+	return scoped
 }
 
 func quotaReserveBlockReason(account *accountSpec, now time.Time) string {
@@ -2245,23 +2493,24 @@ func (p *usagePlugin) HandleUsage(ctx context.Context, record coreusage.Record) 
 	status := record.Fail.StatusCode
 	success := !record.Failed
 	p.tracker.record(usagePayload{
-		Type:          "usage",
-		RequestID:     internallogging.GetRequestID(ctx),
-		Provider:      record.Provider,
-		Model:         model,
-		Alias:         record.Alias,
-		AccountID:     stringFromAccount(account, "id"),
-		AccountEmail:  stringFromAccount(account, "email"),
-		AuthID:        record.AuthID,
-		APIKeyID:      stringFromAPIKey(spec, "id"),
-		APIKeyLabel:   stringFromAPIKey(spec, "label"),
-		RequestKind:   requestKind,
-		ServiceTier:   normalizedUsageServiceTier(record.ServiceTier),
-		Success:       success,
-		Status:        status,
-		ErrorCategory: errorCategory(status, record.Fail.Body, success),
-		ErrorMessage:  strings.TrimSpace(record.Fail.Body),
-		LatencyMS:     record.Latency.Milliseconds(),
+		Type:             "usage",
+		RequestID:        internallogging.GetRequestID(ctx),
+		Provider:         record.Provider,
+		Model:            model,
+		Alias:            record.Alias,
+		AccountID:        stringFromAccount(account, "id"),
+		AccountEmail:     stringFromAccount(account, "email"),
+		AuthID:           record.AuthID,
+		APIKeyID:         stringFromAPIKey(spec, "id"),
+		APIKeyLabel:      stringFromAPIKey(spec, "label"),
+		ClientInstanceID: clientInstanceIDFromContext(ctx),
+		RequestKind:      requestKind,
+		ServiceTier:      normalizedUsageServiceTier(record.ServiceTier),
+		Success:          success,
+		Status:           status,
+		ErrorCategory:    errorCategory(status, record.Fail.Body, success),
+		ErrorMessage:     strings.TrimSpace(record.Fail.Body),
+		LatencyMS:        record.Latency.Milliseconds(),
 		Usage: usageDetails{
 			InputTokens:     record.Detail.InputTokens,
 			OutputTokens:    record.Detail.OutputTokens,
@@ -2471,6 +2720,7 @@ func buildCoreAuthSelector(cfg *config.Config, selector coreauth.Selector, m *ma
 			Fallback: selector,
 			TTL:      ttl,
 		})
+		selector = &cockpitSessionAffinitySelector{inner: selector}
 	}
 	if m != nil {
 		selector = &backupAccountSelector{manifest: m, fallback: selector}
@@ -2489,6 +2739,25 @@ func buildCoreAuthManager(cfg *config.Config, selector coreauth.Selector, hook c
 		selector = &recordingSelector{inner: selector, manifest: m, tracker: tracker}
 	}
 	return coreauth.NewManager(tokenStore, selector, hook)
+}
+
+type cockpitSessionAffinitySelector struct {
+	inner coreauth.Selector
+}
+
+func (s *cockpitSessionAffinitySelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*coreauth.Auth) (*coreauth.Auth, error) {
+	if s == nil || s.inner == nil {
+		return nil, errors.New("session affinity selector is unavailable")
+	}
+	if spec, _ := ctx.Value(clientAPIKeyContextKey).(*apiKeySpec); spec != nil && strings.TrimSpace(spec.ID) != "" {
+		metadata := make(map[string]any, len(opts.Metadata)+1)
+		for key, value := range opts.Metadata {
+			metadata[key] = value
+		}
+		metadata[cliproxyexecutor.SessionAffinityNamespaceMetadataKey] = spec.ID
+		opts.Metadata = metadata
+	}
+	return s.inner.Pick(ctx, provider, model, opts, auths)
 }
 
 type sidecarRuntime struct {
@@ -6452,7 +6721,13 @@ func main() {
 	usageTracker := newRequestUsageTracker()
 	policy := &requestPolicy{manifest: m, emitter: emitter, tracker: usageTracker}
 	hook := &authHook{manifest: m, emitter: emitter}
-	selector := &cockpitSelector{manifest: m, emitter: emitter, quota: quotaState}
+	priorityState := newAPIKeyPriorityStateStore(*manifestPath)
+	selector := &cockpitSelector{
+		manifest:   m,
+		emitter:    emitter,
+		quota:      quotaState,
+		priorities: priorityState,
+	}
 	coreManager := buildCoreAuthManager(cfg, selector, hook, m, quotaState, usageTracker)
 
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
