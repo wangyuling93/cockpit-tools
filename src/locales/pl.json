@@ -1699,7 +1699,7 @@
     "minimize": "Minimalizuj do zasobnika",
     "minimizeDesc": "Aplikacja będzie działać w tle",
     "quit": "Zakończ aplikację",
-    "quitDesc": "Całkowicie zamyka aplikację",
+    "quitDesc": "Całkowicie zamyka aplikację i zatrzymuje lokalną usługę API",
     "remember": "Zapamiętaj mój wybór i nie pytaj ponownie"
   },
   "group_settings": {

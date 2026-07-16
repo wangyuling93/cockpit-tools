@@ -3822,8 +3822,7 @@ pub fn handle_window_close(
             modules::logger::log_info("[Window] 窗口已关闭到托盘");
         }
         "quit" => {
-            modules::floating_card_window::request_app_exit();
-            window.app_handle().exit(0);
+            modules::floating_card_window::quit_application(window.app_handle(), "Window");
         }
         _ => {
             return Err("无效的操作".to_string());

@@ -1746,7 +1746,7 @@
     "minimize": "Perkecil ke Tray",
     "minimizeDesc": "Aplikasi akan terus berjalan di latar belakang",
     "quit": "Keluar dari Aplikasi",
-    "quitDesc": "Tutup aplikasi sepenuhnya",
+    "quitDesc": "Keluar sepenuhnya dari aplikasi dan menghentikan layanan API lokal",
     "remember": "Ingat pilihan saya, jangan tanyakan lagi"
   },
   "group_settings": {

@@ -1699,7 +1699,7 @@
     "minimize": "Thu nhỏ vào khay",
     "minimizeDesc": "Ứng dụng sẽ tiếp tục chạy nền",
     "quit": "Thoát ứng dụng",
-    "quitDesc": "Đóng hoàn toàn ứng dụng",
+    "quitDesc": "Thoát hoàn toàn ứng dụng và dừng dịch vụ API cục bộ",
     "remember": "Ghi nhớ lựa chọn của tôi và không hỏi lại"
   },
   "group_settings": {

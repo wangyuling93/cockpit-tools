@@ -539,6 +539,17 @@ pub fn request_app_exit() {
     APP_EXIT_REQUESTED.store(true, Ordering::SeqCst);
 }
 
+/// Full application quit for every entry point (window, tray, native tray, commands).
+///
+/// Marks intentional exit so destroy-to-tray keep-alive cannot cancel `ExitRequested`,
+/// then exits the process. Owned local API sidecars stop via the normal
+/// `ExitRequested` / `shutdown_local_access_gateway_for_app_exit` path.
+pub fn quit_application<R: Runtime>(app: &AppHandle<R>, source: &str) {
+    logger::log_info(&format!("[{source}] 用户选择退出应用"));
+    request_app_exit();
+    app.exit(0);
+}
+
 pub fn should_keep_alive_after_main_window_destroyed() -> bool {
     MAIN_WINDOW_DESTROYED_TO_TRAY.load(Ordering::SeqCst)
         && !APP_EXIT_REQUESTED.load(Ordering::SeqCst)

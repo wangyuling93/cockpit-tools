@@ -1898,7 +1898,7 @@
     "minimize": "最小化到托盘",
     "minimizeDesc": "应用将在后台继续运行",
     "quit": "退出应用",
-    "quitDesc": "完全关闭应用程序",
+    "quitDesc": "完全退出应用，并停止本地 API 服务",
     "remember": "记住我的选择，不再询问"
   },
   "group_settings": {

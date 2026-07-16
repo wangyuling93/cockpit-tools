@@ -1699,7 +1699,7 @@
     "minimize": "Réduire dans la zone de notification",
     "minimizeDesc": "L'application continuera à s'exécuter en arrière-plan",
     "quit": "Quitter l'application",
-    "quitDesc": "Ferme complètement l'application",
+    "quitDesc": "Ferme complètement l'application et arrête le service API local",
     "remember": "Se souvenir de mon choix, ne plus demander"
   },
   "group_settings": {

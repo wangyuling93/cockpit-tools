@@ -1699,7 +1699,7 @@
     "minimize": "最小化到托盤",
     "minimizeDesc": "應用程式將在背景繼續執行",
     "quit": "結束應用程式",
-    "quitDesc": "完全關閉應用程式",
+    "quitDesc": "完全退出應用程式，並停止本機 API 服務",
     "remember": "記住我的選擇，不再詢問"
   },
   "group_settings": {

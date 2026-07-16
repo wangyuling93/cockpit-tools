@@ -471,8 +471,15 @@ mod imp {
                 open_main_window_page("settings");
             }
             "quit" => {
-                if let Some(app) = crate::get_app_handle() {
-                    app.exit(0);
+                match crate::get_app_handle() {
+                    Some(app) => {
+                        crate::modules::floating_card_window::quit_application(app, "NativeTray");
+                    }
+                    None => {
+                        modules::logger::log_warn(
+                            "[NativeTray] 退出失败：AppHandle 不可用",
+                        );
+                    }
                 }
             }
             _ => {}

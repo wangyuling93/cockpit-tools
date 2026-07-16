@@ -1699,7 +1699,7 @@
     "minimize": "In den Tray minimieren",
     "minimizeDesc": "Die App läuft im Hintergrund weiter",
     "quit": "Anwendung beenden",
-    "quitDesc": "Die Anwendung vollständig schließen",
+    "quitDesc": "Beendet die App vollständig und stoppt den lokalen API-Dienst",
     "remember": "Auswahl merken, nicht mehr fragen"
   },
   "group_settings": {

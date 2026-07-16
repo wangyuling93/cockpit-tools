@@ -1699,7 +1699,7 @@
     "minimize": "트레이로 최소화",
     "minimizeDesc": "앱은 백그라운드에서 계속 실행됩니다",
     "quit": "앱 종료",
-    "quitDesc": "애플리케이션을 완전히 종료합니다",
+    "quitDesc": "앱을 완전히 종료하고 로컬 API 서비스도 중지합니다",
     "remember": "내 선택을 기억하고 다시 묻지 않기"
   },
   "group_settings": {

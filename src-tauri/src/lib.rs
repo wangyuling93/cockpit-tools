@@ -516,9 +516,10 @@ pub fn run() {
                         info!("[Window] 窗口已关闭到托盘");
                     }
                     CloseWindowBehavior::Quit => {
-                        modules::floating_card_window::request_app_exit();
-                        info!("[Window] 用户选择退出应用");
-                        window.app_handle().exit(0);
+                        modules::floating_card_window::quit_application(
+                            window.app_handle(),
+                            "Window",
+                        );
                     }
                     CloseWindowBehavior::Ask => {
                         api.prevent_close();

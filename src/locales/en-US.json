@@ -1898,7 +1898,7 @@
     "minimize": "Minimize to Tray",
     "minimizeDesc": "App will continue running in the background",
     "quit": "Quit Application",
-    "quitDesc": "Completely close the application",
+    "quitDesc": "Completely quit the app and stop the local API service",
     "remember": "Remember my choice, don't ask again"
   },
   "group_settings": {

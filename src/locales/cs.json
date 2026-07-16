@@ -1699,7 +1699,7 @@
     "minimize": "Minimalizovat do tray",
     "minimizeDesc": "Aplikace bude dál běžet na pozadí",
     "quit": "Ukončit aplikaci",
-    "quitDesc": "Zcela ukončí aplikaci",
+    "quitDesc": "Zcela ukončí aplikaci a zastaví místní službu API",
     "remember": "Zapamatovat mou volbu a už se neptat"
   },
   "group_settings": {

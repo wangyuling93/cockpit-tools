@@ -1699,7 +1699,7 @@
     "minimize": "Minimizar para a bandeja",
     "minimizeDesc": "O app continuará em execução em segundo plano",
     "quit": "Sair do aplicativo",
-    "quitDesc": "Fechar completamente o aplicativo",
+    "quitDesc": "Encerra completamente o app e para o serviço de API local",
     "remember": "Lembrar minha escolha e não perguntar novamente"
   },
   "group_settings": {

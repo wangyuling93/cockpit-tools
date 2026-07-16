@@ -1699,7 +1699,7 @@
     "minimize": "Tepsiye küçült",
     "minimizeDesc": "Uygulama arka planda çalışmaya devam eder",
     "quit": "Uygulamadan çık",
-    "quitDesc": "Uygulamayı tamamen kapat",
+    "quitDesc": "Uygulamayı tamamen kapatır ve yerel API hizmetini durdurur",
     "remember": "Seçimimi hatırla, tekrar sorma"
   },
   "group_settings": {
