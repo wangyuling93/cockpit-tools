@@ -120,6 +120,10 @@ import {
   writeCodexImportSyncApiService,
 } from "../utils/codexImportPreferences";
 import {
+  CODEX_OPEN_ADD_ACCOUNT_EVENT,
+  type CodexOpenAddAccountDetail,
+} from "../utils/codexAddAccountRequest";
+import {
   CODEX_PLAN_BADGE_STYLE_CHANGED_EVENT,
   getCodexPlanBadgeStyle,
   type CodexPlanBadgeStyle,
@@ -1470,6 +1474,36 @@ export function CodexAccountsPage() {
   ]);
 
   useEffect(() => {
+    const jobId = batchDeleteJob?.jobId;
+    if (!jobId || batchDeleteJob.status !== "running") return;
+
+    let disposed = false;
+    let timer: number | null = null;
+    const pollJob = async () => {
+      let shouldContinue = true;
+      try {
+        const nextJob = await codexService.getCodexBatchDelete(jobId);
+        if (disposed) return;
+        setBatchDeleteJob((current) =>
+          current?.jobId === jobId ? nextJob : current,
+        );
+        shouldContinue = nextJob.status === "running";
+      } catch (error) {
+        console.warn("[Codex Batch Delete] 查询任务进度失败:", error);
+      }
+      if (!disposed && shouldContinue) {
+        timer = window.setTimeout(pollJob, 500);
+      }
+    };
+
+    timer = window.setTimeout(pollJob, 200);
+    return () => {
+      disposed = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [batchDeleteJob?.jobId, batchDeleteJob?.status]);
+
+  useEffect(() => {
     if (!shouldAutoHideBatchDeleteJob(batchDeleteJob)) return;
     let disposed = false;
     const clearCompletedJob = async () => {
@@ -1674,6 +1708,25 @@ export function CodexAccountsPage() {
     setPendingOAuthNoteModalOpen(false);
     closeAddModal();
   }, [closeAddModal]);
+
+  // Keep the shared modal independent from the currently visible Codex page.
+  useEffect(() => {
+    const handleOpenAddAccount = (event: Event) => {
+      const detail = (event as CustomEvent<CodexOpenAddAccountDetail>).detail;
+      if (detail?.autoJoinApiService) {
+        setSyncImportedToApiService(true);
+        writeCodexImportSyncApiService(true);
+      }
+      openCodexAddModal(detail?.tab ?? "oauth");
+    };
+    window.addEventListener(CODEX_OPEN_ADD_ACCOUNT_EVENT, handleOpenAddAccount);
+    return () => {
+      window.removeEventListener(
+        CODEX_OPEN_ADD_ACCOUNT_EVENT,
+        handleOpenAddAccount,
+      );
+    };
+  }, [openCodexAddModal]);
 
   const handleCopyReauthEmail = useCallback(async () => {
     if (!reauthTargetEmail) return;
@@ -4204,6 +4257,23 @@ export function CodexAccountsPage() {
         platformId: "codex",
         reason: "oauth",
       });
+      if (!reauthTargetAccountId && account?.id) {
+        try {
+          await syncImportedAccountsToApiService([account.id]);
+        } catch (error) {
+          setAddStatus("error");
+          setAddMessage(
+            t(
+              "codex.importApiService.syncFailed",
+              "账号已导入，但加入 API 服务失败：{{error}}",
+            ).replace("{{error}}", String(error).replace(/^Error:\s*/, "")),
+          );
+          oauthActiveRef.current = false;
+          oauthCompletingRef.current = false;
+          oauthLoginIdRef.current = null;
+          return;
+        }
+      }
       setAddStatus("success");
       setAddMessage(t("common.shared.oauth.success", "授权成功"));
       oauthActiveRef.current = false;
@@ -4228,6 +4298,7 @@ export function CodexAccountsPage() {
       fetchAccounts,
       fetchCurrentAccount,
       reauthTargetAccountId,
+      syncImportedAccountsToApiService,
       t,
       oauthLog,
       setAddStatus,
@@ -5103,6 +5174,18 @@ export function CodexAccountsPage() {
         platformId: "codex",
         reason: "import",
       });
+      try {
+        await syncImportedAccountsToApiService([account.id]);
+      } catch (error) {
+        page.setAddStatus("error");
+        page.setAddMessage(
+          t(
+            "codex.importApiService.syncFailed",
+            "账号已导入，但加入 API 服务失败：{{error}}",
+          ).replace("{{error}}", String(error).replace(/^Error:\s*/, "")),
+        );
+        return;
+      }
       page.setAddStatus("success");
       page.setAddMessage(
         t("codex.import.successMsg", "导入成功: {{email}}").replace(
@@ -6129,6 +6212,18 @@ export function CodexAccountsPage() {
         platformId: "codex",
         reason: "import",
       });
+      try {
+        await syncImportedAccountsToApiService([account.id]);
+      } catch (error) {
+        page.setAddStatus("error");
+        page.setAddMessage(
+          t(
+            "codex.importApiService.syncFailed",
+            "账号已导入，但加入 API 服务失败：{{error}}",
+          ).replace("{{error}}", String(error).replace(/^Error:\s*/, "")),
+        );
+        return;
+      }
       page.setAddStatus("success");
       page.setAddMessage(
         t("codex.import.successMsg", "导入成功: {{email}}").replace(
@@ -8024,30 +8119,6 @@ export function CodexAccountsPage() {
       }
     },
     [accounts, setMessage, t],
-  );
-
-  const handleRemoveLocalAccessAccount = useCallback(
-    async (accountId: string) => {
-      if (!localAccessCollection) return;
-      try {
-        await handleSaveLocalAccessAccounts(
-          localAccessCollection.accountIds.filter((id) => id !== accountId),
-          {
-            restrictFreeAccounts:
-              localAccessCollection.restrictFreeAccounts ?? true,
-          },
-        );
-      } catch (error) {
-        setMessage({
-          text: t("messages.actionFailed", {
-            action: t("accounts.groups.removeFromGroup"),
-            error: String(error).replace(/^Error:\s*/, ""),
-          }),
-          tone: "error",
-        });
-      }
-    },
-    [handleSaveLocalAccessAccounts, localAccessCollection, setMessage, t],
   );
 
   const tierCounts = useMemo(() => {
@@ -10086,7 +10157,6 @@ export function CodexAccountsPage() {
       : localAccessKeyVisible
         ? localAccessCollection.apiKey
         : `${localAccessCollection.apiKey.slice(0, 10)}••••••••••••`;
-    const previewAccounts = localAccessAccounts.slice(0, 2);
     const localAccessOAuthBindingLabel = t(
       "codex.api.oauthBinding.label",
       "OAuth 绑定",
@@ -10117,11 +10187,6 @@ export function CodexAccountsPage() {
                 )
           }：${quotaReserveStatus.effectiveRemainingPercent}% / ${quotaReserveStatus.effectiveReservePercent}%`
         : null;
-    const hiddenCount = Math.max(
-      0,
-      localAccessAccounts.length - previewAccounts.length,
-    );
-    const showLocalAccessEmptyState = previewAccounts.length === 0;
     const localAccessStatusTone = !localAccessCollection
       ? "disabled"
       : localAccessState?.running
@@ -10141,11 +10206,6 @@ export function CodexAccountsPage() {
       count: localAccessState?.memberCount ?? 0,
       defaultValue: "{{count}} 个账号",
     });
-    const localAccessEmptyMessage = t(
-      "codex.localAccess.emptyMembers",
-      "当前集合暂无账号",
-    );
-
     return (
       <div
         key="codex-local-access-card"
@@ -10388,97 +10448,6 @@ export function CodexAccountsPage() {
                   <CircleAlert size={13} />
                   <span>{quotaReserveWarningLine}</span>
                 </div>
-              )}
-            </div>
-
-            <div className="folder-inline-preview codex-local-access-preview">
-              {showLocalAccessEmptyState ? (
-                <div className="codex-local-access-empty-state">
-                  <span className="codex-local-access-empty-text">
-                    {localAccessEmptyMessage}
-                  </span>
-                  <button
-                    type="button"
-                    className="codex-local-access-empty-action"
-                    onClick={openLocalAccessMemberPicker}
-                    title={t("common.shared.addAccount", "添加账号")}
-                    disabled={localAccessBusy}
-                  >
-                    <FolderPlus size={14} />
-                    <span>{t("common.shared.addAccount", "添加账号")}</span>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {previewAccounts.map((account) => {
-                    const presentation = resolvePresentation(account);
-                    const hourlyQuota = presentation.quotaItems.find(
-                      (item) => item.key === "primary",
-                    );
-                    const weeklyQuota = presentation.quotaItems.find(
-                      (item) => item.key === "secondary",
-                    );
-                    return (
-                      <div
-                        key={`local-access-${account.id}`}
-                        className="folder-preview-item codex-local-access-member"
-                      >
-                        <span
-                          className="folder-preview-email codex-local-access-member-email"
-                          title={maskAccountText(presentation.displayName)}
-                        >
-                          {maskAccountText(presentation.displayName)}
-                        </span>
-                        <span
-                          className={`codex-local-access-member-text codex-local-access-member-quota ${hourlyQuota?.quotaClass || "unknown"}`}
-                          title={hourlyQuota?.hintText || hourlyQuota?.label}
-                        >
-                          {hourlyQuota?.valueText || "-"}
-                        </span>
-                        <span
-                          className={`codex-local-access-member-text codex-local-access-member-quota ${weeklyQuota?.quotaClass || "unknown"}`}
-                          title={weeklyQuota?.label}
-                        >
-                          {weeklyQuota?.valueText || "-"}
-                        </span>
-                        <span
-                          className={`codex-local-access-member-plan tier-badge ${presentation.planClass || "unknown"}`}
-                        >
-                          {presentation.planLabel}
-                        </span>
-                        <button
-                          type="button"
-                          className="folder-preview-remove-btn"
-                          onClick={() =>
-                            void handleRemoveLocalAccessAccount(account.id)
-                          }
-                          title={t("accounts.groups.removeFromGroup")}
-                          aria-label={`${t("accounts.groups.removeFromGroup")}: ${maskAccountText(presentation.displayName)}`}
-                          disabled={localAccessBusy}
-                        >
-                          <LogOut size={12} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {hiddenCount > 0 && (
-                    <button
-                      type="button"
-                      className="folder-preview-item more"
-                      onClick={openLocalAccessMemberPicker}
-                      title={t(
-                        "codex.localAccess.modal.manageMembers",
-                        "管理成员",
-                      )}
-                      aria-label={t(
-                        "codex.localAccess.modal.manageMembers",
-                        "管理成员",
-                      )}
-                    >
-                      +{hiddenCount}
-                    </button>
-                  )}
-                </>
               )}
             </div>
 
@@ -12135,7 +12104,7 @@ export function CodexAccountsPage() {
         ]}
       />
 
-      {batchImportOpen && (
+      {batchImportOpen && createPortal(
           <div className="modal-overlay codex-batch-import-overlay">
             <div
               className="modal-content codex-batch-import-modal"
@@ -12610,7 +12579,8 @@ export function CodexAccountsPage() {
                 )}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
       )}
 
       {externalImportProgress.visible && (
@@ -13527,7 +13497,7 @@ export function CodexAccountsPage() {
             onNextPage={pagination.goToNextPage}
           />
 
-          {showAddModal && (
+          {showAddModal && createPortal(
             <div className="modal-overlay">
               <div
                 className="modal-content codex-add-modal codex-account-add-modal"
@@ -14523,7 +14493,8 @@ export function CodexAccountsPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body,
           )}
 
           {quickSwitchAccountId && (
@@ -16477,7 +16448,7 @@ export function CodexAccountsPage() {
             onSave={handleSaveTags}
           />
 
-          {activeAccountNoteMode && (
+          {activeAccountNoteMode && createPortal(
             <div className="modal-overlay">
               <div
                 className="modal codex-account-note-modal"
@@ -17069,7 +17040,8 @@ export function CodexAccountsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body,
           )}
 
           <CodexGroupAccountPickerModal

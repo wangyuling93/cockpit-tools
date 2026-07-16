@@ -961,7 +961,11 @@ export function CodexLocalAccessModal({
           account,
           restrictFreeAccounts,
         );
-        if (ineligibleReason === "chat_completions_api_key") {
+        // Keep unsupported accounts visible so users know why they cannot join.
+        if (
+          ineligibleReason === "chat_completions_api_key" ||
+          ineligibleReason === "pending_oauth"
+        ) {
           return true;
         }
         if (isCodexLocalAccessEligibleAccount(account, restrictFreeAccounts)) {
@@ -2987,9 +2991,13 @@ export function CodexLocalAccessModal({
                         );
                       const isChatCompletionsApiKeyUnsupported =
                         ineligibleReason === "chat_completions_api_key";
+                      const isPendingOauthUnsupported =
+                        ineligibleReason === "pending_oauth";
+                      const isJoinUnsupported =
+                        isChatCompletionsApiKeyUnsupported ||
+                        isPendingOauthUnsupported;
                       const isChecked =
-                        !isChatCompletionsApiKeyUnsupported &&
-                        selected.has(account.id);
+                        !isJoinUnsupported && selected.has(account.id);
                       const isBackup =
                         customRoutingDraft[account.id]?.isBackup ??
                         customRoutingRuleByAccountId.get(account.id)
@@ -3002,15 +3010,14 @@ export function CodexLocalAccessModal({
                       return (
                         <div
                           key={account.id}
-                          className={`group-account-item${isChecked ? " is-current" : ""}${isChatCompletionsApiKeyUnsupported ? " is-disabled" : ""}`}
+                          className={`group-account-item${isChecked ? " is-current" : ""}${isJoinUnsupported ? " is-disabled" : ""}`}
                         >
                           <input
                             type="checkbox"
                             className="codex-local-access-member-select"
                             checked={isChecked}
                             disabled={
-                              membersInteractionDisabled ||
-                              isChatCompletionsApiKeyUnsupported
+                              membersInteractionDisabled || isJoinUnsupported
                             }
                             onChange={() => toggleSelect(account.id)}
                             aria-label={maskAccountText(
@@ -3026,15 +3033,14 @@ export function CodexLocalAccessModal({
                                   presentation.displayName,
                                 )}
                                 disabled={
-                                  membersInteractionDisabled ||
-                                  isChatCompletionsApiKeyUnsupported
+                                  membersInteractionDisabled || isJoinUnsupported
                                 }
                                 onClick={() => toggleSelect(account.id)}
                               >
                                 {maskAccountText(presentation.displayName)}
                               </button>
                               <span className="codex-local-access-member-backup-slot">
-                                {!isChatCompletionsApiKeyUnsupported ? (
+                                {!isJoinUnsupported ? (
                                   <button
                                     type="button"
                                     className={`codex-local-access-member-backup-field${
@@ -3090,6 +3096,14 @@ export function CodexLocalAccessModal({
                                     {t(
                                       "codex.localAccess.modal.chatApiKeyUnsupported",
                                       "Chat Completions 协议不支持加入 API 服务",
+                                    )}
+                                  </span>
+                                )}
+                                {isPendingOauthUnsupported && (
+                                  <span className="codex-local-access-member-unsupported">
+                                    {t(
+                                      "codex.localAccess.modal.pendingOauthUnsupported",
+                                      "待授权账号不可加入 API 服务",
                                     )}
                                   </span>
                                 )}
