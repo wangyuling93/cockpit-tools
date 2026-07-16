@@ -197,7 +197,10 @@ fn main() {
 
     #[cfg(target_os = "macos")]
     {
-        SwiftLinker::new("12.0")
+        // Native tray menu targets macOS 26+ for Liquid Glass (NSGlassEffectView / glassEffect).
+        // Tray right-click UI will not work on older OS; main window stays React/WebView.
+        // Do not raise the overall app minos solely for this native menu package.
+        SwiftLinker::new("26.0")
             .with_package("MacosNativeMenuSwift", "native/macos-native-menu")
             .link();
         link_macos_native_menu_product_search_path();

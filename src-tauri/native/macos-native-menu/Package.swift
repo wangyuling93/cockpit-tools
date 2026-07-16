@@ -1,10 +1,11 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "MacosNativeMenuSwift",
     platforms: [
-        .macOS(.v12),
+        // Tray Liquid Glass is macOS 26+ only (web/React UI stays web).
+        .macOS(.v26),
     ],
     products: [
         .library(
@@ -19,6 +20,11 @@ let package = Package(
             exclude: [
                 "Resources",
             ]
+        ),
+        // RustActionStub.swift supplies macos_native_menu_dispatch_action for test linking.
+        .testTarget(
+            name: "MacosNativeMenuSwiftTests",
+            dependencies: ["MacosNativeMenuSwift"]
         ),
     ]
 )

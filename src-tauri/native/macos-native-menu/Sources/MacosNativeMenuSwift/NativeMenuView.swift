@@ -3,19 +3,174 @@ import SwiftUI
 
 enum NativeMenuLayout {
     static let width: CGFloat = 310
+    static let minHeight: CGFloat = 120
+    static let cornerRadius: CGFloat = 18
+    static let contentHorizontalPadding: CGFloat = 10
+    static let contentVerticalPadding: CGFloat = 12
 }
 
 enum NativeMenuPalette {
     static let success = Color(hex: "#22C55E")
     static let warning = Color(hex: "#F59E0B")
     static let danger = Color(hex: "#EF4444")
-    static let switcherSelectionBackground = Color(nsColor: .controlAccentColor).opacity(0.12)
-    static let switcherSelectionStroke = Color(nsColor: .controlAccentColor).opacity(0.42)
-    static let switcherHoverBackground = Color(nsColor: .controlColor).opacity(0.55)
+    static let switcherSelectionBackground = Color(nsColor: .controlAccentColor).opacity(0.14)
+    static let switcherHoverBackground = Color.primary.opacity(0.06)
+}
+
+/// Tray panel content only. The real Liquid Glass shell is AppKit `NSGlassEffectView`
+/// on a borderless transparent `NSPanel` (see controller). Do not re-apply a full-panel
+/// SwiftUI glassEffect here — it stacks poorly and was invisible under NSPopover chrome.
+/// React/web app UI is intentionally not involved.
+struct NativeMenuRootView: View {
+    @ObservedObject var controller: NativeMenuPanelController
+
+    var body: some View {
+        Group {
+            if let snapshot = self.controller.snapshot {
+                self.panel(snapshot: snapshot)
+            } else {
+                Color.clear
+                    .frame(width: NativeMenuLayout.width, height: NativeMenuLayout.minHeight)
+            }
+        }
+        .frame(width: NativeMenuLayout.width)
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    @ViewBuilder
+    private func panel(snapshot: NativeMenuSnapshot) -> some View {
+        // AppKit NSGlassEffectView is the shell; keep content transparent.
+        // GlassEffectContainer only where descendant glass chips need merge (switcher tiles).
+        VStack(alignment: .leading, spacing: 0) {
+            if !snapshot.platforms.isEmpty {
+                GlassEffectContainer(spacing: 8) {
+                    NativeMenuSwitcherSectionView(controller: self.controller, snapshot: snapshot)
+                }
+            }
+
+            if let platform = self.controller.selectedPlatform {
+                self.sectionDivider
+
+                NativeMenuAccountSectionView(
+                    controller: self.controller,
+                    platform: platform,
+                    strings: snapshot.strings
+                )
+
+                self.sectionDivider
+
+                NativeMenuNavActionsView(
+                    controller: self.controller,
+                    strings: snapshot.strings
+                )
+            }
+
+            self.sectionDivider
+
+            NativeMenuAppActionsView(
+                controller: self.controller,
+                strings: snapshot.strings
+            )
+        }
+        .padding(.horizontal, NativeMenuLayout.contentHorizontalPadding)
+        .padding(.vertical, NativeMenuLayout.contentVerticalPadding)
+        .frame(width: NativeMenuLayout.width, alignment: .leading)
+    }
+
+    private var sectionDivider: some View {
+        Divider()
+            .overlay(Color.primary.opacity(0.12))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+    }
+}
+
+private struct NativeMenuNavActionsView: View {
+    @ObservedObject var controller: NativeMenuPanelController
+    let strings: NativeMenuStrings
+
+    var body: some View {
+        VStack(spacing: 4) {
+            NativeMenuListButton(
+                title: self.strings.open_details,
+                systemName: "arrow.up.forward.app",
+                action: { self.controller.dispatch(action: .openDetails) }
+            )
+            NativeMenuListButton(
+                title: self.strings.view_all_accounts,
+                systemName: "person.2",
+                action: { self.controller.dispatch(action: .viewAllAccounts) }
+            )
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+}
+
+private struct NativeMenuAppActionsView: View {
+    @ObservedObject var controller: NativeMenuPanelController
+    let strings: NativeMenuStrings
+
+    var body: some View {
+        VStack(spacing: 4) {
+            NativeMenuListButton(
+                title: self.strings.open_cockpit_tools,
+                systemName: "macwindow",
+                action: { self.controller.dispatch(action: .openCockpitTools) }
+            )
+            NativeMenuListButton(
+                title: self.strings.settings,
+                systemName: "gearshape",
+                action: { self.controller.dispatch(action: .settings) }
+            )
+            NativeMenuListButton(
+                title: self.strings.quit,
+                systemName: "power",
+                role: .destructive,
+                action: { self.controller.dispatch(action: .quit) }
+            )
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+}
+
+private struct NativeMenuListButton: View {
+    let title: String
+    let systemName: String
+    var role: ButtonRole? = nil
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(role: self.role, action: self.action) {
+            HStack(spacing: 10) {
+                Image(systemName: self.systemName)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18, alignment: .center)
+                Text(self.title)
+                    .font(.system(size: 13, weight: .medium))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(self.role == .destructive ? Color(nsColor: .systemRed) : Color(nsColor: .labelColor))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(self.hovering ? Color.primary.opacity(0.08) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            self.hovering = inside
+        }
+    }
 }
 
 struct NativeMenuSwitcherSectionView: View {
-    @ObservedObject var controller: NativeMenuPopoverController
+    @ObservedObject var controller: NativeMenuPanelController
     let snapshot: NativeMenuSnapshot
 
     var body: some View {
@@ -31,7 +186,7 @@ struct NativeMenuSwitcherSectionView: View {
 }
 
 struct NativeMenuAccountSectionView: View {
-    @ObservedObject var controller: NativeMenuPopoverController
+    @ObservedObject var controller: NativeMenuPanelController
     let platform: NativeMenuPlatform
     let strings: NativeMenuStrings
 
@@ -136,7 +291,6 @@ struct NativeMenuAccountSectionView: View {
                 }
             }
         }
-        .id(self.controller.renderRevision)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
     }
@@ -198,42 +352,26 @@ private struct ProviderSwitchTile: View {
                 width: NativeMenuSwitcherMetrics.tileSize,
                 height: NativeMenuSwitcherMetrics.tileSize
             )
-            .background(
-                RoundedRectangle(cornerRadius: NativeMenuSwitcherMetrics.tileCornerRadius, style: .continuous)
-                    .fill(self.selectionBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: NativeMenuSwitcherMetrics.tileCornerRadius, style: .continuous)
-                            .strokeBorder(self.selectionStroke, lineWidth: self.selectionStrokeWidth)
-                    )
-            )
             .contentShape(Rectangle())
+            .background {
+                let shape = RoundedRectangle(
+                    cornerRadius: NativeMenuSwitcherMetrics.tileCornerRadius,
+                    style: .continuous
+                )
+                if self.selected {
+                    shape
+                        .fill(NativeMenuPalette.switcherSelectionBackground)
+                        .glassEffect(.regular.tint(Color(nsColor: .controlAccentColor)).interactive(), in: shape)
+                } else if self.hovering {
+                    shape.fill(NativeMenuPalette.switcherHoverBackground)
+                }
+            }
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .onHover { inside in
             self.hovering = inside
         }
-    }
-
-    private var selectionBackground: Color {
-        if self.selected {
-            return NativeMenuPalette.switcherSelectionBackground
-        }
-        if self.hovering {
-            return NativeMenuPalette.switcherHoverBackground
-        }
-        return Color.clear
-    }
-
-    private var selectionStroke: Color {
-        guard self.selected else {
-            return Color.clear
-        }
-        return NativeMenuPalette.switcherSelectionStroke
-    }
-
-    private var selectionStrokeWidth: CGFloat {
-        self.selected ? 1 : 0
     }
 
     private var titleColor: Color {
@@ -401,9 +539,21 @@ private struct ActionCapsuleButton: View {
     let emphasized: Bool
     let disabled: Bool
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
+        Group {
+            if self.emphasized {
+                self.core.buttonStyle(.glassProminent)
+            } else {
+                self.core.buttonStyle(.glass)
+            }
+        }
+        .controlSize(.small)
+        .disabled(self.disabled)
+        .opacity(self.disabled ? 0.56 : 1)
+    }
+
+    private var core: some View {
         Button(action: self.action) {
             HStack(spacing: 6) {
                 Image(systemName: self.icon)
@@ -413,54 +563,23 @@ private struct ActionCapsuleButton: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .foregroundColor(self.foregroundColor)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(self.backgroundColor)
-            )
+            .padding(.horizontal, 4)
         }
-        .buttonStyle(.plain)
-        .disabled(self.disabled)
-        .opacity(self.disabled ? 0.56 : 1)
-        .onHover { inside in
-            self.hovering = inside
-        }
-    }
-
-    private var foregroundColor: Color {
-        self.emphasized ? .white : Color(nsColor: .labelColor)
-    }
-
-    private var backgroundColor: Color {
-        if self.emphasized {
-            return Color(nsColor: .controlAccentColor).opacity(self.hovering && !self.disabled ? 0.88 : 1)
-        }
-        return Color(nsColor: .controlColor).opacity(self.hovering && !self.disabled ? 0.9 : 0.68)
     }
 }
 
 private struct PagerButton: View {
     let systemName: String
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
         Button(action: self.action) {
             Image(systemName: self.systemName)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(nsColor: .labelColor))
                 .frame(width: 22, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(self.hovering ? Color(nsColor: .controlColor) : Color.clear)
-                )
         }
-        .buttonStyle(.plain)
-        .onHover { inside in
-            self.hovering = inside
-        }
+        .buttonStyle(.glass)
+        .controlSize(.mini)
     }
 }
 
@@ -469,7 +588,6 @@ private struct ToolbarIconButton: View {
     let spinning: Bool
     let disabled: Bool
     let action: () -> Void
-    @State private var hovering = false
 
     var body: some View {
         Button(action: self.action) {
@@ -484,23 +602,17 @@ private struct ToolbarIconButton: View {
                 }
             }
             .frame(width: 24, height: 24)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(self.hovering && !self.disabled ? Color(nsColor: .controlColor) : Color.clear)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .controlSize(.small)
         .disabled(self.disabled)
         .opacity(self.disabled && !self.spinning ? 0.78 : 1)
-        .onHover { inside in
-            self.hovering = inside
-        }
     }
 
     private var iconImage: some View {
         Image(systemName: self.systemName)
             .font(.system(size: 13, weight: .medium))
-            .foregroundColor(Color(nsColor: self.spinning ? .labelColor : (self.disabled ? .tertiaryLabelColor : .labelColor)))
+            .foregroundStyle(Color(nsColor: self.spinning ? .labelColor : (self.disabled ? .tertiaryLabelColor : .labelColor)))
     }
 
     private func rotationDegrees(at date: Date) -> Double {

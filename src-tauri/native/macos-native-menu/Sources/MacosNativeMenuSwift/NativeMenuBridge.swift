@@ -65,8 +65,13 @@ public func macos_native_menu_toggle(
 ) {
     guard let snapshotJSONPointer, let statusItemPointer else { return }
     let snapshotJSON = String(cString: snapshotJSONPointer)
+    // Pointer is only consumed on the main actor immediately after hop; bitPattern is Sendable.
+    let statusItemBitPattern = UInt(bitPattern: statusItemPointer)
     runNativeMenuController(label: "toggle") {
-        NativeMenuPopoverController.shared.toggle(
+        guard let statusItemPointer = UnsafeMutableRawPointer(bitPattern: statusItemBitPattern) else {
+            return
+        }
+        NativeMenuPanelController.shared.toggle(
             snapshotJSON: snapshotJSON,
             statusItemPointer: statusItemPointer
         )
@@ -80,6 +85,6 @@ public func macos_native_menu_update_snapshot(
     guard let snapshotJSONPointer else { return }
     let snapshotJSON = String(cString: snapshotJSONPointer)
     runNativeMenuController(label: "update_snapshot") {
-        NativeMenuPopoverController.shared.update(snapshotJSON: snapshotJSON)
+        NativeMenuPanelController.shared.update(snapshotJSON: snapshotJSON)
     }
 }
