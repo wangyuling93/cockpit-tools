@@ -11,7 +11,6 @@ import { isCodexApiKeyAccount, type CodexAccount } from "../types/codex";
 import {
   CODEX_API_SERVICE_BIND_ID,
   CODEX_PROVIDER_GATEWAY_BIND_PREFIX,
-  type CodexLaunchCredentialChange,
   type InstanceProfile,
 } from "../types/instance";
 import { usePlatformRuntimeSupport } from "../hooks/usePlatformRuntimeSupport";
@@ -42,7 +41,6 @@ import { useAutoDismissMessage } from "../hooks/useAutoDismissMessage";
  */
 interface CodexInstancesContentProps {
   accountsForSelect?: CodexAccount[];
-  onLaunchCredentialChange?: (change: CodexLaunchCredentialChange) => void;
 }
 
 interface CodexLaunchModalState {
@@ -64,7 +62,6 @@ function normalizeCodexApiBaseUrl(rawValue?: string | null): string {
 
 export function CodexInstancesContent({
   accountsForSelect,
-  onLaunchCredentialChange,
 }: CodexInstancesContentProps = {}) {
   const { t } = useTranslation();
   const instanceStore = useCodexInstanceStore();
@@ -249,10 +246,6 @@ export function CodexInstancesContent({
   };
 
   const handleInstanceStarted = async (instance: InstanceProfile) => {
-    if (instance.codexLaunchCredentialChange) {
-      onLaunchCredentialChange?.(instance.codexLaunchCredentialChange);
-    }
-
     if ((instance.launchMode ?? "app") !== "cli") {
       return;
     }

@@ -34,6 +34,7 @@ import (
 	responsesconverter "github.com/router-for-me/CLIProxyAPI/v7/internal/translator/openai/openai/responses"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/watcher/synthesizer"
+	sdkhandlers "github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
 	sdkopenai "github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers/openai"
 	sdkauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy"
@@ -76,6 +77,11 @@ const ollamaShowPath = "/api/show"
 const ollamaChatPath = "/api/chat"
 const ollamaBridgeVersion = "0.18.3"
 const maxImageUploadBytes int64 = 64 * 1024 * 1024
+const codexAlphaSearchPath = "/v1/alpha/search"
+const codexDirectAlphaSearchPath = "/backend-api/codex/alpha/search"
+const defaultCodexAlphaSearchURL = "https://chatgpt.com/backend-api/codex/alpha/search"
+const maxCodexAlphaSearchRequestBytes = 16 << 20
+const maxCodexAlphaSearchResponseBytes = 32 << 20
 
 var (
 	streamOpenTimeout      = 10 * time.Second
@@ -93,8 +99,9 @@ type manifest struct {
 	ExcludedModels     []string            `json:"excludedModels"`
 	RoutingStrategy    string              `json:"routingStrategy"`
 	CustomRoutingRules []customRoutingRule `json:"customRoutingRules"`
-	ImmediateSSEResponse bool              `json:"immediateSseResponse"`
-	DebugLogs          *bool               `json:"debugLogs,omitempty"`
+	ImmediateSSEResponse       bool              `json:"immediateSseResponse"`
+	MaxConcurrentImageRequests int               `json:"maxConcurrentImageRequests"`
+	DebugLogs                  *bool               `json:"debugLogs,omitempty"`
 
 	apiKeyByValue     map[string]*apiKeySpec
 	accountByID       map[string]*accountSpec
@@ -396,13 +403,97 @@ type requestUsageTracker struct {
 	mu               sync.Mutex
 	records          map[string][]usagePayload
 	selectedAccounts map[string]selectedAccountRecord
+	imageJobs        map[string]map[string]struct{}
+	imageInFlight    map[string]int
+	imageJobsChanged chan struct{}
 }
 
 func newRequestUsageTracker() *requestUsageTracker {
 	return &requestUsageTracker{
 		records:          make(map[string][]usagePayload),
 		selectedAccounts: make(map[string]selectedAccountRecord),
+		imageJobs:        make(map[string]map[string]struct{}),
+		imageInFlight:    make(map[string]int),
+		imageJobsChanged: make(chan struct{}),
 	}
+}
+
+func (t *requestUsageTracker) imageInFlightCount(authID string) int {
+	if t == nil {
+		return 0
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.imageInFlight[strings.TrimSpace(authID)]
+}
+
+func (t *requestUsageTracker) tryReserveImageJob(requestID, authID string, maxConcurrent int) bool {
+	if t == nil {
+		return true
+	}
+	requestID = strings.TrimSpace(requestID)
+	authID = strings.TrimSpace(authID)
+	if requestID == "" || authID == "" {
+		return false
+	}
+	if maxConcurrent < 1 {
+		maxConcurrent = 1
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	jobs := t.imageJobs[requestID]
+	if jobs == nil {
+		jobs = make(map[string]struct{})
+		t.imageJobs[requestID] = jobs
+	}
+	if _, alreadyReserved := jobs[authID]; alreadyReserved {
+		return true
+	}
+	if t.imageInFlight[authID] >= maxConcurrent {
+		return false
+	}
+	jobs[authID] = struct{}{}
+	t.imageInFlight[authID]++
+	return true
+}
+
+func (t *requestUsageTracker) imageJobChangeSignal() <-chan struct{} {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	changed := t.imageJobsChanged
+	t.mu.Unlock()
+	return changed
+}
+
+func (t *requestUsageTracker) notifyImageJobChangeLocked() {
+	if t == nil || t.imageJobsChanged == nil {
+		return
+	}
+	close(t.imageJobsChanged)
+	t.imageJobsChanged = make(chan struct{})
+}
+
+func (t *requestUsageTracker) releaseImageJobs(requestID string) {
+	if t == nil {
+		return
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for authID := range t.imageJobs[requestID] {
+		if t.imageInFlight[authID] <= 1 {
+			delete(t.imageInFlight, authID)
+		} else {
+			t.imageInFlight[authID]--
+		}
+	}
+	delete(t.imageJobs, requestID)
+	t.notifyImageJobChangeLocked()
 }
 
 func (t *requestUsageTracker) record(payload usagePayload) {
@@ -969,6 +1060,7 @@ func (p *requestPolicy) emitRequestCompleted(c *gin.Context, requestID string, s
 	if p.tracker == nil || !shouldEmitRequestDiagnostic(c.Request) {
 		return
 	}
+	p.tracker.releaseImageJobs(requestID)
 	if payload, ok := p.tracker.finalize(requestID, usageFinalizeInput{
 		spec:          spec,
 		requestKind:   requestKind,
@@ -1655,6 +1747,9 @@ func requestKindFromPath(path string) string {
 		return "image_generation"
 	case strings.Contains(path, "/images/edits"):
 		return "image_edit"
+	case strings.Contains(path, "/alpha/search"):
+		// Responses Lite web.run uses a standalone search endpoint.
+		return "text"
 	case strings.Contains(path, "/chat/completions"),
 		strings.Contains(path, "/responses"),
 		strings.Contains(path, "/v1/messages"),
@@ -1671,6 +1766,7 @@ type cockpitSelector struct {
 	emitter    *eventEmitter
 	quota      *quotaReserveStateStore
 	priorities *apiKeyPriorityStateStore
+	tracker    *requestUsageTracker
 	mu         sync.Mutex
 	cursor     int
 }
@@ -1679,6 +1775,28 @@ type recordingSelector struct {
 	inner    coreauth.Selector
 	manifest *manifest
 	tracker  *requestUsageTracker
+}
+
+type imageRequestSelector struct {
+	imageFallback coreauth.Selector
+	fallback      coreauth.Selector
+}
+
+func (s *imageRequestSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*coreauth.Auth) (*coreauth.Auth, error) {
+	requestKind, _ := ctx.Value(requestKindContextKey).(string)
+	if isImageRequestKind(requestKind) && s.imageFallback != nil {
+		return s.imageFallback.Pick(ctx, provider, model, opts, auths)
+	}
+	if s.fallback == nil {
+		return nil, fmt.Errorf("image request selector fallback is not initialized")
+	}
+	return s.fallback.Pick(ctx, provider, model, opts, auths)
+}
+
+func (s *imageRequestSelector) Stop() {
+	if stoppable, ok := s.fallback.(coreauth.StoppableSelector); ok {
+		stoppable.Stop()
+	}
 }
 
 func (s *recordingSelector) Pick(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*coreauth.Auth) (*coreauth.Auth, error) {
@@ -1946,10 +2064,32 @@ func (s *cockpitSelector) Pick(ctx context.Context, provider, model string, opts
 	s.cursor++
 	s.mu.Unlock()
 
+	requestKind, _ := ctx.Value(requestKindContextKey).(string)
 	ordered := s.orderAuths(available, start)
-	ordered = s.prioritizeAuthsForAPIKey(ctx, ordered)
+	if isImageRequestKind(requestKind) {
+		ordered = s.orderImageAuths(available, start)
+	} else {
+		ordered = s.prioritizeAuthsForAPIKey(ctx, ordered)
+	}
 	if len(ordered) == 0 {
 		return nil, noAuthAvailableError(quotaReserveReasons)
+	}
+	if isImageRequestKind(requestKind) && s.tracker != nil {
+		requestID := internallogging.GetRequestID(ctx)
+		for {
+			changed := s.tracker.imageJobChangeSignal()
+			for _, candidate := range s.orderImageAuths(available, start) {
+				if s.tracker.tryReserveImageJob(requestID, candidate.ID, s.maxConcurrentImageRequests()) {
+					s.emitAuthSelected(ctx, candidate, provider, model, len(auths), len(available))
+					return candidate, nil
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-changed:
+			}
+		}
 	}
 	selected := ordered[0]
 	s.emitAuthSelected(ctx, selected, provider, model, len(auths), len(available))
@@ -2026,6 +2166,38 @@ func (s *cockpitSelector) filterAuthsForAPIKeyScope(ctx context.Context, auths [
 		}
 	}
 	return scoped
+}
+
+func (s *cockpitSelector) maxConcurrentImageRequests() int {
+	if s == nil || s.manifest == nil || s.manifest.MaxConcurrentImageRequests < 1 {
+		return 1
+	}
+	return s.manifest.MaxConcurrentImageRequests
+}
+
+func isImageRequestKind(requestKind string) bool {
+	switch strings.TrimSpace(requestKind) {
+	case "image_generation", "image_edit":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *cockpitSelector) orderImageAuths(auths []*coreauth.Auth, start int) []*coreauth.Auth {
+	if len(auths) <= 1 || s == nil || s.tracker == nil {
+		return s.orderAuths(auths, start)
+	}
+	out := append([]*coreauth.Auth(nil), auths...)
+	sort.SliceStable(out, func(i, j int) bool {
+		leftJobs := s.tracker.imageInFlightCount(out[i].ID)
+		rightJobs := s.tracker.imageInFlightCount(out[j].ID)
+		if leftJobs != rightJobs {
+			return leftJobs < rightJobs
+		}
+		return s.rotatedIndex(s.accountForAuth(out[i]), start) < s.rotatedIndex(s.accountForAuth(out[j]), start)
+	})
+	return out
 }
 
 func quotaReserveBlockReason(account *accountSpec, now time.Time) string {
@@ -2712,15 +2884,21 @@ func buildCoreAuthSelector(cfg *config.Config, selector coreauth.Selector, m *ma
 		selector = &coreauth.RoundRobinSelector{}
 	}
 	if cfg != nil && cfg.Routing.SessionAffinity {
+		imageFallback := selector
 		ttl := time.Hour
 		if parsed, err := time.ParseDuration(strings.TrimSpace(cfg.Routing.SessionAffinityTTL)); err == nil && parsed > 0 {
 			ttl = parsed
 		}
+		// Session affinity + per-client-key namespace, with image requests bypassing affinity.
 		selector = coreauth.NewSessionAffinitySelectorWithConfig(coreauth.SessionAffinityConfig{
 			Fallback: selector,
 			TTL:      ttl,
 		})
 		selector = &cockpitSessionAffinitySelector{inner: selector}
+		selector = &imageRequestSelector{
+			imageFallback: imageFallback,
+			fallback:      selector,
+		}
 	}
 	if m != nil {
 		selector = &backupAccountSelector{manifest: m, fallback: selector}
@@ -2765,6 +2943,169 @@ type sidecarRuntime struct {
 	service *cliproxy.Service
 	cancel  context.CancelFunc
 	done    chan error
+}
+
+// CodexAlphaSearch selects a Codex OAuth credential and forwards the standalone
+// search payload to the ChatGPT Codex alpha search backend.
+func (r *sidecarRuntime) CodexAlphaSearch(ctx context.Context, model string, body []byte, headers http.Header) (int, http.Header, []byte, error) {
+	if r == nil || r.manager == nil {
+		return 0, nil, nil, errors.New("Codex auth manager is unavailable")
+	}
+	upstreamBody := sanitizeCodexAlphaSearchBody(body)
+	selectionHeaders := http.Header{}
+	if headers != nil {
+		selectionHeaders = headers.Clone()
+	}
+	opts := cliproxyexecutor.Options{
+		Headers:         selectionHeaders,
+		OriginalRequest: body,
+		Metadata: map[string]any{
+			cliproxyexecutor.RequestedModelMetadataKey: model,
+			cliproxyexecutor.RequestPathMetadataKey:    codexAlphaSearchPath,
+		},
+	}
+	selected, err := r.manager.SelectAuthByKind(ctx, "codex", model, coreauth.AuthKindOAuth, opts)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if selected == nil {
+		return 0, nil, nil, errors.New("no Codex OAuth account available for alpha search")
+	}
+
+	upstreamHeaders := buildCodexAlphaSearchHeaders(selectionHeaders, selected)
+	upstreamURL := resolveCodexAlphaSearchURL(selected)
+	req, err := r.manager.NewHttpRequest(ctx, selected, http.MethodPost, upstreamURL, upstreamBody, upstreamHeaders)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	// Ensure ChatGPT account binding for OAuth (PrepareRequest only injects Bearer).
+	if accountID := codexAuthChatGPTAccountID(selected); accountID != "" {
+		req.Header.Set("Chatgpt-Account-Id", accountID)
+	}
+
+	resp, err := r.manager.HttpRequest(ctx, selected, req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxCodexAlphaSearchResponseBytes))
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("failed to read Codex search response: %w", err)
+	}
+	return resp.StatusCode, resp.Header.Clone(), payload, nil
+}
+
+func sanitizeCodexAlphaSearchBody(body []byte) []byte {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil || payload == nil {
+		return body
+	}
+	removed := false
+	for _, field := range []string{"prompt_cache_key", "prompt_cache_retention"} {
+		if _, exists := payload[field]; exists {
+			delete(payload, field)
+			removed = true
+		}
+	}
+	if !removed {
+		return body
+	}
+	sanitized, err := json.Marshal(payload)
+	if err != nil {
+		return body
+	}
+	return sanitized
+}
+
+func resolveCodexAlphaSearchURL(auth *coreauth.Auth) string {
+	baseURL := ""
+	if auth != nil && auth.Attributes != nil {
+		baseURL = strings.TrimSpace(auth.Attributes["base_url"])
+	}
+	if baseURL == "" {
+		return defaultCodexAlphaSearchURL
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	switch {
+	case strings.HasSuffix(strings.ToLower(baseURL), "/alpha/search"):
+		return baseURL
+	case strings.HasSuffix(strings.ToLower(baseURL), "/codex"):
+		return baseURL + "/alpha/search"
+	case strings.HasSuffix(strings.ToLower(baseURL), "/backend-api"):
+		return baseURL + "/codex/alpha/search"
+	default:
+		return baseURL + "/alpha/search"
+	}
+}
+
+func codexAuthChatGPTAccountID(auth *coreauth.Auth) string {
+	if auth == nil {
+		return ""
+	}
+	if auth.Metadata != nil {
+		if accountID, ok := auth.Metadata["account_id"].(string); ok {
+			if accountID = strings.TrimSpace(accountID); accountID != "" {
+				return accountID
+			}
+		}
+		if accountID, ok := auth.Metadata["chatgpt_account_id"].(string); ok {
+			if accountID = strings.TrimSpace(accountID); accountID != "" {
+				return accountID
+			}
+		}
+	}
+	if auth.Attributes != nil {
+		if accountID := strings.TrimSpace(auth.Attributes["chatgpt_account_id"]); accountID != "" {
+			return accountID
+		}
+	}
+	return ""
+}
+
+func buildCodexAlphaSearchHeaders(src http.Header, auth *coreauth.Auth) http.Header {
+	headers := make(http.Header)
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+	headers.Set("Originator", "codex_cli_rs")
+	for _, name := range []string{
+		"Version",
+		"User-Agent",
+		"Session_id",
+		"X-Session-ID",
+		"X-Client-Request-Id",
+		"X-Openai-Actor-Authorization",
+		"x-openai-actor-authorization",
+	} {
+		if src == nil {
+			continue
+		}
+		if value := strings.TrimSpace(src.Get(name)); value != "" {
+			headers.Set(name, value)
+		}
+	}
+	// Preserve agtools diagnostic headers used by Cockpit.
+	if src != nil {
+		for key, values := range src {
+			trimmed := strings.TrimSpace(key)
+			if trimmed == "" || !strings.HasPrefix(strings.ToLower(trimmed), "x-agtools-") {
+				continue
+			}
+			canonical := http.CanonicalHeaderKey(trimmed)
+			headers.Del(canonical)
+			for _, value := range values {
+				value = strings.TrimSpace(value)
+				if value != "" {
+					headers.Add(canonical, value)
+				}
+			}
+		}
+	}
+	if accountID := codexAuthChatGPTAccountID(auth); accountID != "" {
+		headers.Set("Chatgpt-Account-Id", accountID)
+	}
+	return headers
 }
 
 func newSidecarRuntime(ctx context.Context, configPath string, cfg *config.Config, m *manifest, manager *coreauth.Manager) (*sidecarRuntime, error) {
@@ -2976,8 +3317,9 @@ func readManifestCodexTokenAuth(account *accountSpec, authDir, path string) (*co
 		Status:   status,
 		Disabled: disabled,
 		Attributes: map[string]string{
-			"path":      path,
-			"auth_kind": manifestAccountAuthKind(account),
+			"path":        path,
+			"auth_kind":   manifestAccountAuthKind(account),
+			"websockets":  "true",
 		},
 		Metadata:        metadata,
 		CreatedAt:       info.ModTime(),
@@ -3315,12 +3657,19 @@ type executorRuntime interface {
 	ExecuteStream(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (*cliproxyexecutor.StreamResult, error)
 }
 
+// codexAlphaSearcher forwards Responses Lite web.run search requests using the
+// same OAuth account pool as /v1/responses.
+type codexAlphaSearcher interface {
+	CodexAlphaSearch(ctx context.Context, model string, body []byte, headers http.Header) (status int, respHeaders http.Header, payload []byte, err error)
+}
+
 type relayServer struct {
-	runtime  executorRuntime
-	cfg      *config.Config
-	manifest *manifest
-	emitter  *eventEmitter
-	policy   *requestPolicy
+	runtime            executorRuntime
+	cfg                *config.Config
+	manifest           *manifest
+	emitter            *eventEmitter
+	policy             *requestPolicy
+	responsesWebsocket gin.HandlerFunc
 }
 
 func (s *relayServer) router() *gin.Engine {
@@ -3329,12 +3678,17 @@ func (s *relayServer) router() *gin.Engine {
 	router.Use(corsMiddleware())
 	router.Use(s.policy.middleware())
 	router.GET("/v1/models", s.handleModels)
+	// Codex Responses WebSocket upgrade uses GET /v1/responses (not POST/SSE).
+	router.GET("/v1/responses", s.handleResponsesWebsocket)
 	router.POST("/v1/responses", s.handleResponses)
 	router.POST("/v1/responses/compact", s.handleResponsesCompact)
 	// Compatibility: some clients set chat-completions base and still append /v1/responses.
 	router.POST("/v1/chat/completions/v1/responses", s.handleResponses)
 	router.POST("/v1/chat/completions/v1/responses/compact", s.handleResponsesCompact)
 	router.POST("/v1/chat/completions", s.handleChatCompletions)
+	// Responses Lite web.run independent search endpoint.
+	router.POST(codexAlphaSearchPath, s.handleCodexAlphaSearch)
+	router.POST(codexDirectAlphaSearchPath, s.handleCodexAlphaSearch)
 	router.POST(anthropicMessagesPath, s.handleAnthropicMessages)
 	router.POST(anthropicCountTokensPath, s.handleAnthropicCountTokens)
 	router.GET(geminiModelsPath, s.handleGeminiModels)
@@ -3382,8 +3736,103 @@ func (s *relayServer) handleResponses(c *gin.Context) {
 	s.handleExecutorRequest(c, sdktranslator.FormatOpenAIResponse, "")
 }
 
+func (s *relayServer) handleResponsesWebsocket(c *gin.Context) {
+	if _, ok := s.requireAPIKey(c); !ok {
+		return
+	}
+	if s.responsesWebsocket == nil {
+		writeAPIError(
+			c,
+			http.StatusServiceUnavailable,
+			"responses websocket unavailable",
+			"service_unavailable",
+		)
+		return
+	}
+	s.responsesWebsocket(c)
+}
+
 func (s *relayServer) handleResponsesCompact(c *gin.Context) {
 	s.handleExecutorRequest(c, sdktranslator.FormatOpenAIResponse, "responses/compact")
+}
+
+// handleCodexAlphaSearch proxies Codex web.run search requests to the ChatGPT
+// Codex alpha search backend. Unlike /v1/responses, the body is already in
+// Codex search format and must not pass through protocol translation.
+func (s *relayServer) handleCodexAlphaSearch(c *gin.Context) {
+	spec, ok := s.requireAPIKey(c)
+	if !ok {
+		return
+	}
+	if spec.ProviderGateway != nil {
+		writeAPIError(c, http.StatusNotFound, "provider gateway does not support /v1/alpha/search", "not_found")
+		return
+	}
+	searcher, ok := s.runtime.(codexAlphaSearcher)
+	if !ok || searcher == nil {
+		writeAPIError(c, http.StatusServiceUnavailable, "Codex alpha search runtime is unavailable", "service_unavailable")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxCodexAlphaSearchRequestBytes))
+	if err != nil {
+		writeAPIError(c, http.StatusBadRequest, "failed to read search request", "invalid_request")
+		return
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		writeAPIError(c, http.StatusBadRequest, "request body is required", "invalid_request")
+		return
+	}
+
+	var routing struct {
+		ID    string `json:"id"`
+		Model string `json:"model"`
+	}
+	_ = json.Unmarshal(body, &routing)
+	model := strings.TrimSpace(routing.Model)
+	if model == "" {
+		if ctxModel, _ := c.Request.Context().Value(requestModelContextKey).(string); strings.TrimSpace(ctxModel) != "" {
+			model = strings.TrimSpace(ctxModel)
+		}
+	}
+	if model != "" {
+		canonical := canonicalModelForClientModel(s.manifest, spec, model)
+		if !validateClientModelVisible(s.manifest, spec, model, canonical) {
+			writeAPIError(c, http.StatusNotFound, fmt.Sprintf("模型 %s 不在当前 API Key 的可用模型范围内", model), "model_not_available")
+			return
+		}
+		model = canonical
+	}
+
+	headers := c.Request.Header.Clone()
+	if sessionID := strings.TrimSpace(routing.ID); sessionID != "" {
+		headers.Set("X-Session-ID", sessionID)
+		if headers.Get("Session_id") == "" {
+			headers.Set("Session_id", sessionID)
+		}
+	}
+
+	startedAt := time.Now()
+	s.emitExecutorDiagnostic(c, "executor_started", model, "alpha_search", startedAt, "")
+	status, respHeaders, payload, err := searcher.CodexAlphaSearch(relayContext(c), model, body, headers)
+	if err != nil {
+		s.emitExecutorDiagnostic(c, "executor_failed", model, "alpha_search", startedAt, err.Error())
+		s.writeExecutorError(c, err)
+		return
+	}
+	s.emitExecutorDiagnostic(c, "executor_completed", model, "alpha_search", startedAt, "")
+	writeUpstreamHeaders(c.Writer.Header(), respHeaders)
+	contentType := ""
+	if respHeaders != nil {
+		contentType = respHeaders.Get("Content-Type")
+	}
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	if status <= 0 {
+		status = http.StatusOK
+	}
+	c.Data(status, contentType, payload)
 }
 
 func (s *relayServer) handleChatCompletions(c *gin.Context) {
@@ -3716,19 +4165,41 @@ func (s *relayServer) handleImagesRelayRequest(c *gin.Context, imageReq imageRel
 	req, opts := buildExecutorRequest(c, imageReq.body, model, sdktranslator.FormatOpenAIResponse, "", true)
 	startedAt := time.Now()
 	timeouts := s.streamTimeoutsForRequest(c.Request, imageReq.body, defaultImagesToolModel)
+	immediateSSE := imageReq.stream && s.manifest != nil && s.manifest.ImmediateSSEResponse
+	var immediateFlusher http.Flusher
+	if immediateSSE {
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			writeAPIError(c, http.StatusInternalServerError, "streaming not supported", "streaming_not_supported")
+			return
+		}
+		setEventStreamHeaders(c.Writer.Header())
+		c.Status(http.StatusOK)
+		_, _ = c.Writer.Write([]byte(": accepted\n\n"))
+		flusher.Flush()
+		immediateFlusher = flusher
+	}
 	streamCtx, cancelStream := context.WithCancel(relayContext(c))
 	defer cancelStream()
 	result, err := s.executeStreamWithOpenTimeout(c, streamCtx, []string{"codex"}, req, opts, model, startedAt, timeouts.open)
 	if err != nil {
+		if immediateSSE {
+			writeImagesStreamError(c, immediateFlusher, err)
+			return
+		}
 		s.writeExecutorError(c, err)
 		return
 	}
 	if result == nil || result.Chunks == nil {
+		if immediateSSE {
+			writeImagesStreamError(c, immediateFlusher, relayStatusError{status: http.StatusBadGateway, message: "upstream stream is unavailable"})
+			return
+		}
 		writeAPIError(c, http.StatusBadGateway, "upstream stream is unavailable", "bad_gateway")
 		return
 	}
 	if imageReq.stream {
-		s.forwardImagesStream(c, streamCtx, result, imageReq, timeouts.idle)
+		s.forwardImagesStream(c, streamCtx, result, imageReq, timeouts.idle, immediateSSE)
 		return
 	}
 	out, err := collectImagesResponse(streamCtx, result.Chunks, imageReq.responseFormat, timeouts.idle)
@@ -3740,15 +4211,17 @@ func (s *relayServer) handleImagesRelayRequest(c *gin.Context, imageReq imageRel
 	c.Data(http.StatusOK, "application/json", out)
 }
 
-func (s *relayServer) forwardImagesStream(c *gin.Context, ctx context.Context, result *cliproxyexecutor.StreamResult, imageReq imageRelayRequest, idleTimeout time.Duration) {
+func (s *relayServer) forwardImagesStream(c *gin.Context, ctx context.Context, result *cliproxyexecutor.StreamResult, imageReq imageRelayRequest, idleTimeout time.Duration, headersCommitted bool) {
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		writeAPIError(c, http.StatusInternalServerError, "streaming not supported", "streaming_not_supported")
 		return
 	}
-	setEventStreamHeaders(c.Writer.Header())
-	writeUpstreamHeaders(c.Writer.Header(), result.Headers)
-	c.Status(http.StatusOK)
+	if !headersCommitted {
+		setEventStreamHeaders(c.Writer.Header())
+		writeUpstreamHeaders(c.Writer.Header(), result.Headers)
+		c.Status(http.StatusOK)
+	}
 
 	writeEvent := func(eventName string, payload []byte) {
 		if strings.TrimSpace(eventName) != "" {
@@ -3758,15 +4231,7 @@ func (s *relayServer) forwardImagesStream(c *gin.Context, ctx context.Context, r
 		flusher.Flush()
 	}
 	writeErr := func(err error) {
-		status := statusCodeFromError(err)
-		payload, _ := json.Marshal(map[string]any{
-			"error": map[string]any{
-				"message": errorMessage(err),
-				"type":    "upstream_error",
-				"code":    status,
-			},
-		})
-		writeEvent("error", payload)
+		writeImagesStreamError(c, flusher, err)
 	}
 
 	acc := &imageSSEAccumulator{}
@@ -3812,6 +4277,21 @@ func (s *relayServer) forwardImagesStream(c *gin.Context, ctx context.Context, r
 			}
 		}
 	}
+}
+
+func writeImagesStreamError(c *gin.Context, flusher http.Flusher, err error) {
+	if c == nil || flusher == nil {
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"error": map[string]any{
+			"message": errorMessage(err),
+			"type":    "upstream_error",
+			"code":    statusCodeFromError(err),
+		},
+	})
+	_, _ = fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", string(payload))
+	flusher.Flush()
 }
 
 func forwardImageResponseFrame(frame []byte, imageReq imageRelayRequest, writeEvent func(string, []byte), writeErr func(error)) bool {
@@ -6727,6 +7207,7 @@ func main() {
 		emitter:    emitter,
 		quota:      quotaState,
 		priorities: priorityState,
+		tracker:    usageTracker,
 	}
 	coreManager := buildCoreAuthManager(cfg, selector, hook, m, quotaState, usageTracker)
 
@@ -6747,12 +7228,21 @@ func main() {
 	defer runtime.Stop()
 	emitter.emitStartupStage("start_http_server")
 
+	// Reuse the same coreManager so WS upgrades share OAuth pool, routing and
+	// session affinity with POST /v1/responses.
+	var sdkCfg *config.SDKConfig
+	if cfg != nil {
+		sdkCfg = &cfg.SDKConfig
+	}
+	baseHandlers := sdkhandlers.NewBaseAPIHandlers(sdkCfg, coreManager)
+	responsesHandler := sdkopenai.NewOpenAIResponsesAPIHandler(baseHandlers)
 	relay := &relayServer{
-		runtime:  runtime,
-		cfg:      cfg,
-		manifest: m,
-		emitter:  emitter,
-		policy:   policy,
+		runtime:            runtime,
+		cfg:                cfg,
+		manifest:           m,
+		emitter:            emitter,
+		policy:             policy,
+		responsesWebsocket: responsesHandler.ResponsesWebsocket,
 	}
 	if err := runRelayHTTPServer(ctx, cfg, relay.router(), emitter); err != nil && !errors.Is(err, context.Canceled) {
 		emitter.emit(map[string]any{"type": "error", "message": err.Error()})

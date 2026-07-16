@@ -56,6 +56,7 @@ import {
 } from "../utils/codexAccountOverview";
 import {
   formatCodexQuotaPoolPercent,
+  formatCodexQuotaPoolWindowLabel,
   summarizeCodexQuotaPool,
   type CodexQuotaPoolItem,
 } from "../utils/codexQuotaPool";
@@ -287,10 +288,15 @@ function createTestChatMessage(
 function formatQuotaPoolLabel(
   baseLabel: string,
   pool: CodexQuotaPoolItem,
-  hourlyLabel: string,
   weeklyLabel: string,
 ): string {
-  return `${baseLabel} · ${hourlyLabel} ${formatCodexQuotaPoolPercent(pool.hourly)} · ${weeklyLabel} ${formatCodexQuotaPoolPercent(pool.weekly)}`;
+  const quotaText = pool.windows
+    .map(
+      (window) =>
+        `${formatCodexQuotaPoolWindowLabel(window.label, weeklyLabel)} ${formatCodexQuotaPoolPercent(window.percentage)}`,
+    )
+    .join(" · ");
+  return quotaText ? `${baseLabel} · ${quotaText}` : baseLabel;
 }
 
 function summarizeQuotaPoolsByPlan(
@@ -432,7 +438,6 @@ export function CodexLocalAccessModal({
   const stats = state?.stats;
   const quotaPoolLabels = useMemo(
     () => ({
-      hourly: t("codex.localAccess.quotaPool.hourlyShort", "5h"),
       weekly: t("codex.localAccess.quotaPool.weeklyShort", "周"),
       title: t("codex.localAccess.quotaPool.title", "额度池"),
     }),
@@ -816,11 +821,9 @@ export function CodexLocalAccessModal({
       formatQuotaPoolLabel(
         t("common.shared.filter.all", { count: tierCounts.all }),
         quotaPoolSummary.all,
-        quotaPoolLabels.hourly,
         quotaPoolLabels.weekly,
       ),
     [
-      quotaPoolLabels.hourly,
       quotaPoolLabels.weekly,
       quotaPoolSummary.all,
       t,
@@ -842,13 +845,11 @@ export function CodexLocalAccessModal({
           label: formatQuotaPoolLabel(
             option.label,
             pool,
-            quotaPoolLabels.hourly,
             quotaPoolLabels.weekly,
           ),
         };
       }),
     [
-      quotaPoolLabels.hourly,
       quotaPoolLabels.weekly,
       quotaPoolByPlan,
       t,
@@ -1260,13 +1261,11 @@ export function CodexLocalAccessModal({
       formatQuotaPoolLabel(
         t("common.shared.filter.all", { count: customRoutingTierCounts.all }),
         customRoutingQuotaPoolSummary.all,
-        quotaPoolLabels.hourly,
         quotaPoolLabels.weekly,
       ),
     [
       customRoutingQuotaPoolSummary.all,
       customRoutingTierCounts.all,
-      quotaPoolLabels.hourly,
       quotaPoolLabels.weekly,
       t,
     ],
@@ -1289,7 +1288,6 @@ export function CodexLocalAccessModal({
           label: formatQuotaPoolLabel(
             option.label,
             pool,
-            quotaPoolLabels.hourly,
             quotaPoolLabels.weekly,
           ),
         };
@@ -1297,7 +1295,6 @@ export function CodexLocalAccessModal({
     [
       customRoutingQuotaPoolByPlan,
       customRoutingTierCounts,
-      quotaPoolLabels.hourly,
       quotaPoolLabels.weekly,
       t,
     ],
@@ -2402,14 +2399,18 @@ export function CodexLocalAccessModal({
                         <span className="codex-local-access-quota-pool-plan">
                           {item.key} ({item.count})
                         </span>
-                        <span className="codex-local-access-quota-pool-value">
-                          {quotaPoolLabels.hourly}{" "}
-                          {formatCodexQuotaPoolPercent(item.hourly)}
-                        </span>
-                        <span className="codex-local-access-quota-pool-value">
-                          {quotaPoolLabels.weekly}{" "}
-                          {formatCodexQuotaPoolPercent(item.weekly)}
-                        </span>
+                        {item.windows.map((window) => (
+                          <span
+                            key={window.key}
+                            className="codex-local-access-quota-pool-value"
+                          >
+                            {formatCodexQuotaPoolWindowLabel(
+                              window.label,
+                              quotaPoolLabels.weekly,
+                            )}{" "}
+                            {formatCodexQuotaPoolPercent(window.percentage)}
+                          </span>
+                        ))}
                       </div>
                     ))}
                   </div>
