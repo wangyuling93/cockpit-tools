@@ -2155,7 +2155,6 @@ mod imp {
         }
     }
 
-
     fn resource_account_roots<'a>(
         quota_raw: Option<&'a Value>,
         usage_raw: Option<&'a Value>,
@@ -3585,7 +3584,6 @@ mod imp {
             .collect();
         (cards, current_id, recommended)
     }
-
 
     fn build_grok_cards(lang: &str) -> (Vec<AccountCard>, Option<String>, Option<String>) {
         let mut accounts = modules::grok_account::list_accounts_checked().unwrap_or_default();
