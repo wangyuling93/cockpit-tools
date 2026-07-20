@@ -7,6 +7,23 @@ All notable changes to Cockpit Tools will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+## [1.3.10] - 2026-07-19
+
+### Added
+
+- **Codex API Service can show account count and quotas in the ChatGPT client**: the feature is enabled by default; after restarting the corresponding Codex instance, the API Service account count together with 5-hour and weekly quota appears below the composer and follows window and composer layout changes. Users who do not need the feature or encounter display issues can turn it off in Settings.
+- **Codex Token / JSON input shows per-account progress for bulk imports**: JSON arrays, Sub2API account arrays, newline-delimited JSON, and token lines are imported sequentially while the status area and import button show real progress such as `1/10` and `2/10`; single-account objects remain intact, and partial failures preserve successful imports while reporting the failed count and reasons.
+
+### Changed
+
+- **Codex account deletion now provides fast, immediate feedback**: an account disappears from the UI as soon as it is removed from local persistent storage, while API Service pool cleanup and gateway synchronization continue in the background instead of blocking the delete action.
+
+### Fixed
+
+- **Fixed Codex accounts remaining temporarily visible after Windows batch deletion**: the account list now reconciles with the local account store as batch progress advances and when a job is paused, completed, or manually cleared; deleting every account is allowed to synchronize an empty list, and deletion events refresh the floating card window, so a failed switch is no longer required before stale accounts disappear.
+- **Fixed the Add Note button in the Codex authorization dialog losing its project styling**: note actions rendered inside the portal now use the same pill-button styling as the accounts page instead of falling back to the browser-native button appearance.
+
+---
 ## [1.3.9] - 2026-07-17
 
 ### Changed

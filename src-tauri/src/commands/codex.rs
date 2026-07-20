@@ -17,7 +17,7 @@ use crate::modules::{
     opencode_auth, process,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -262,31 +262,17 @@ async fn cleanup_accounts_from_api_service_best_effort(scope: &str, account_ids:
     .await;
 }
 
-async fn cleanup_batch_accounts_from_api_service(job_id: &str, account_ids: Vec<String>) {
-    cleanup_accounts_from_api_service_best_effort(&format!("batch_job:{}", job_id), &account_ids)
-        .await;
+fn spawn_accounts_cleanup_from_api_service(scope: String, account_ids: Vec<String>) {
+    if account_ids.is_empty() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        cleanup_accounts_from_api_service_best_effort(&scope, &account_ids).await;
+    });
 }
 
 async fn run_codex_batch_delete_job(job_id: String) {
     loop {
-        let cleanup_request = {
-            let mut jobs = CODEX_BATCH_DELETE_JOBS.lock().unwrap();
-            let Some(job) = jobs.get_mut(&job_id) else {
-                return;
-            };
-            if job.api_service_cleaned {
-                None
-            } else {
-                job.api_service_cleaned = true;
-                Some((job.account_ids.clone(), job.clone()))
-            }
-        };
-        if let Some((cleanup_ids, snapshot)) = cleanup_request {
-            save_codex_batch_delete_job_snapshot_best_effort(&job_id, &snapshot);
-            cleanup_batch_accounts_from_api_service(&job_id, cleanup_ids).await;
-            continue;
-        }
-
         let next_account_id = {
             let mut jobs = CODEX_BATCH_DELETE_JOBS.lock().unwrap();
             let Some(job) = jobs.get_mut(&job_id) else {
@@ -306,9 +292,32 @@ async fn run_codex_batch_delete_job(job_id: String) {
                     "completed".to_string()
                 };
                 job.updated_at = now_unix_seconds();
+                let cleanup_ids = if job.api_service_cleaned {
+                    None
+                } else {
+                    job.api_service_cleaned = true;
+                    let failed_ids = job
+                        .errors
+                        .iter()
+                        .map(|error| error.account_id.as_str())
+                        .collect::<HashSet<_>>();
+                    Some(
+                        job.account_ids
+                            .iter()
+                            .filter(|account_id| !failed_ids.contains(account_id.as_str()))
+                            .cloned()
+                            .collect(),
+                    )
+                };
                 let snapshot = job.clone();
                 drop(jobs);
                 save_codex_batch_delete_job_snapshot_best_effort(&job_id, &snapshot);
+                if let Some(account_ids) = cleanup_ids {
+                    spawn_accounts_cleanup_from_api_service(
+                        format!("batch_job:{}", job_id),
+                        account_ids,
+                    );
+                }
                 return;
             }
             job.status = "running".to_string();
@@ -472,6 +481,7 @@ fn retry_failed_codex_batch_delete_job(job_id: &str) -> Result<CodexBatchDeleteJ
         job.failed = 0;
         job.errors = Vec::new();
         job.next_index = 0;
+        job.api_service_cleaned = false;
         job.status = "running".to_string();
         job.updated_at = now_unix_seconds();
         save_codex_batch_delete_job_snapshot_best_effort(job_id, job);
@@ -956,13 +966,6 @@ async fn run_codex_post_refresh_checks(app: &AppHandle) {
 /// 删除 Codex 账号
 #[tauri::command]
 pub async fn delete_codex_account(account_id: String) -> Result<(), String> {
-    // Persist API Service pool cleanup first, but never let gateway reconciliation
-    // prevent the user from deleting the local credential.
-    cleanup_accounts_from_api_service_best_effort(
-        "single_delete",
-        std::slice::from_ref(&account_id),
-    )
-    .await;
     codex_account::remove_account(&account_id)?;
     if let Err(error) = codex_wakeup::remove_deleted_accounts_from_tasks(&[account_id.clone()]) {
         logger::log_warn(&format!(
@@ -970,13 +973,15 @@ pub async fn delete_codex_account(account_id: String) -> Result<(), String> {
             account_id, error
         ));
     }
+    // 本地删除成功后立即返回；API 服务账号池持久化与网关重载在后台完成，
+    // 避免外部进程延迟让用户误以为账号没有删除。
+    spawn_accounts_cleanup_from_api_service("single_delete".to_string(), vec![account_id]);
     Ok(())
 }
 
 /// 批量删除 Codex 账号
 #[tauri::command]
 pub async fn delete_codex_accounts(account_ids: Vec<String>) -> Result<(), String> {
-    cleanup_accounts_from_api_service_best_effort("multi_delete", &account_ids).await;
     codex_account::remove_accounts(&account_ids)?;
     if let Err(error) = codex_wakeup::remove_deleted_accounts_from_tasks(&account_ids) {
         logger::log_warn(&format!(
@@ -985,6 +990,7 @@ pub async fn delete_codex_accounts(account_ids: Vec<String>) -> Result<(), Strin
             error
         ));
     }
+    spawn_accounts_cleanup_from_api_service("multi_delete".to_string(), account_ids);
     Ok(())
 }
 
