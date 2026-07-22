@@ -8401,6 +8401,17 @@ export function CodexAccountsPage() {
     [t],
   );
 
+  const resolveSingleExportBaseName = useCallback(
+    (account: CodexAccount) => {
+      const display = (
+        resolvePresentation(account).displayName || account.id
+      ).trim();
+      const atIndex = display.indexOf("@");
+      return atIndex > 0 ? display.slice(0, atIndex) : display;
+    },
+    [resolvePresentation],
+  );
+
   const resolvePlanKey = useCallback(
     (account: CodexAccount) => getCodexPlanFilterKey(account),
     [],
@@ -10982,6 +10993,18 @@ export function CodexAccountsPage() {
                     />
                   </button>
                 )}
+                <button
+                  className="card-action-btn export-btn"
+                  onClick={() =>
+                    void handleExportByIds(
+                      [account.id],
+                      resolveSingleExportBaseName(account),
+                    )
+                  }
+                  title={t("common.shared.export.title", "导出")}
+                >
+                  <Upload size={14} />
+                </button>
                 <button
                   className="card-action-btn danger"
                   onClick={() => handleDelete(account.id)}
