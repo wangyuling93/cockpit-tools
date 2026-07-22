@@ -786,9 +786,6 @@ export function CodexApiServicePage() {
   const [selectedTimeoutPresetId, setSelectedTimeoutPresetId] =
     useState<TimeoutPresetId>("long_wait");
   const [timeoutPresetNameDraft, setTimeoutPresetNameDraft] = useState("");
-  const [sessionAffinityDraft, setSessionAffinityDraft] = useState(true);
-  const [sessionAffinityTtlDraft, setSessionAffinityTtlDraft] =
-    useState("3600");
   const [responsesWebsocketsEnabledDraft, setResponsesWebsocketsEnabledDraft] =
     useState(false);
   const [maxRetryCredentialsDraft, setMaxRetryCredentialsDraft] = useState("0");
@@ -1353,6 +1350,28 @@ export function CodexApiServicePage() {
   }, [addressKind]);
 
   useEffect(() => {
+    if (
+      !collection?.enabled ||
+      (!state?.preparing &&
+        !state?.refreshingAccounts &&
+        (state?.running || Boolean(state?.lastError)))
+    ) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void reloadState();
+    }, 750);
+    return () => window.clearInterval(timer);
+  }, [
+    collection?.enabled,
+    reloadState,
+    state?.preparing,
+    state?.refreshingAccounts,
+    state?.running,
+    state?.lastError,
+  ]);
+
+  useEffect(() => {
     persistRequestLogPageSize(requestLogPageSize);
   }, [requestLogPageSize]);
 
@@ -1451,10 +1470,6 @@ export function CodexApiServicePage() {
     );
     setAccountModelRuleSelected(new Set());
     setAccountModelRuleBulkText("");
-    setSessionAffinityDraft(collection?.sessionAffinity ?? true);
-    setSessionAffinityTtlDraft(
-      formatSeconds(collection?.sessionAffinityTtlMs ?? 3600000),
-    );
     setResponsesWebsocketsEnabledDraft(
       collection?.responsesWebsocketsEnabled ?? false,
     );
@@ -1475,8 +1490,6 @@ export function CodexApiServicePage() {
     collection?.modelAliases,
     collection?.excludedModels,
     collection?.accountModelRules,
-    collection?.sessionAffinity,
-    collection?.sessionAffinityTtlMs,
     collection?.responsesWebsocketsEnabled,
     collection?.maxRetryCredentials,
     collection?.maxRetryIntervalMs,
@@ -2559,17 +2572,6 @@ export function CodexApiServicePage() {
   };
 
   const handleSaveRoutingOptions = async () => {
-    const ttlSeconds = parseIntegerDraft(sessionAffinityTtlDraft, 60, 86400);
-    if (ttlSeconds === null) {
-      setError(
-        t("codex.apiService.validation.numberRange", {
-          min: 60,
-          max: 86400,
-          defaultValue: "请输入 {{min}} 到 {{max}} 之间的数字",
-        }),
-      );
-      return;
-    }
     const maxRetryCredentials = parseIntegerDraft(
       maxRetryCredentialsDraft,
       0,
@@ -2619,8 +2621,9 @@ export function CodexApiServicePage() {
       async () => {
         const next =
           await codexLocalAccessService.updateCodexLocalAccessRoutingOptions({
-            sessionAffinity: sessionAffinityDraft,
-            sessionAffinityTtlMs: ttlSeconds * 1000,
+            sessionAffinity: collection?.sessionAffinity ?? true,
+            sessionAffinityTtlMs:
+              collection?.sessionAffinityTtlMs ?? 60 * 60 * 1000,
             responsesWebsocketsEnabled: responsesWebsocketsEnabledDraft,
             maxRetryCredentials,
             maxRetryIntervalMs: maxRetryIntervalSeconds * 1000,
@@ -3228,11 +3231,25 @@ export function CodexApiServicePage() {
                     className={`codex-api-service-status ${state?.running ? "running" : collection?.enabled ? "stopped" : "disabled"}`}
                   >
                     {collection?.enabled
-                      ? state?.running
+                      ? state?.preparing
+                        ? t("instances.status.starting", "启动中")
+                        : state?.running
                         ? t("codex.localAccess.statusRunning", "运行中")
                         : t("codex.localAccess.statusStopped", "未运行")
                       : t("codex.localAccess.statusDisabled", "已停用")}
                   </span>
+                  {state?.preparing && state.preparationTotal > 0 && (
+                    <span className="codex-api-service-current-tag">
+                      {t("common.loading", "加载中...")} {state.preparationCompleted}/
+                      {state.preparationTotal}
+                    </span>
+                  )}
+                  {state?.refreshingAccounts && state.accountRefreshTotal > 0 && (
+                    <span className="codex-api-service-current-tag">
+                      {t("common.loading", "加载中...")} {state.accountRefreshCompleted}/
+                      {state.accountRefreshTotal}
+                    </span>
+                  )}
                   <span
                     className="codex-api-service-gateway-mode"
                     title={t("codex.localAccess.gatewayModeLabel", "网关模式")}
@@ -3262,7 +3279,13 @@ export function CodexApiServicePage() {
               type="button"
               className="btn btn-secondary"
               onClick={handleOpenTestDialog}
-              disabled={!collection || busy || activating || testDialogRunning}
+              disabled={
+                !collection ||
+                busy ||
+                activating ||
+                state?.preparing ||
+                testDialogRunning
+              }
             >
               <ShieldCheck
                 size={14}
@@ -3274,7 +3297,13 @@ export function CodexApiServicePage() {
               type="button"
               className={`btn ${apiServiceIsCurrent ? "btn-secondary" : "btn-primary"}`}
               onClick={() => void handleActivateService()}
-              disabled={!collection || busy || activating || testDialogRunning}
+              disabled={
+                !collection ||
+                busy ||
+                activating ||
+                state?.preparing ||
+                testDialogRunning
+              }
               title={t("codex.localAccess.activateAction", "启动 API 服务")}
             >
               {activating ? (
@@ -4503,37 +4532,6 @@ export function CodexApiServicePage() {
                     onChange={(value) => void handleUpdateRouting(value)}
                     disabled={busy || !collection}
                     ariaLabel={t("codex.localAccess.routingLabel", "调度策略")}
-                  />
-                </label>
-                <label>
-                  <span>
-                    {t("codex.apiService.routing.sessionAffinity", "会话亲和")}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={sessionAffinityDraft}
-                    onChange={(event) =>
-                      setSessionAffinityDraft(event.target.checked)
-                    }
-                    disabled={busy || !collection}
-                  />
-                </label>
-                <label>
-                  <span>
-                    {t(
-                      "codex.apiService.routing.sessionAffinityTtl",
-                      "亲和 TTL",
-                    )}
-                  </span>
-                  <input
-                    type="number"
-                    min={60}
-                    max={86400}
-                    value={sessionAffinityTtlDraft}
-                    onChange={(event) =>
-                      setSessionAffinityTtlDraft(event.target.value)
-                    }
-                    disabled={busy || !collection}
                   />
                 </label>
                 <label>
