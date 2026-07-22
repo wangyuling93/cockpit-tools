@@ -592,11 +592,6 @@
   color: #fff;
 }
 
-[data-theme="dark"] .card-actions {
-  background: #1e293b;
-  border-color: rgba(255,255,255,0.05);
-}
-
 [data-theme="dark"] .card-date {
   background: rgba(255,255,255,0.05);
   color: #94a3b8;
