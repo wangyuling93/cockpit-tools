@@ -5429,6 +5429,22 @@ export function CodexAccountsPage() {
     );
   };
 
+  const handleLaunchLocalAccessCli = () => {
+    if (cliLaunchModal || cliLaunchingAccountId) return;
+    if (!localAccessCollection) {
+      setMessage({
+        text: t("codex.localAccess.testUnavailable", "当前 API 服务地址不可用"),
+        tone: "error",
+      });
+      return;
+    }
+    openCodexCliLaunchModal(
+      "apiService",
+      CODEX_API_SERVICE_BIND_ID,
+      t("codex.localAccess.title", "API 服务"),
+    );
+  };
+
   const updateCodexCliWorkingDir = (workingDir: string) => {
     setCliLaunchModal((prev) =>
       prev
@@ -10793,6 +10809,18 @@ export function CodexAccountsPage() {
             {renderAccountSpeedSelect(account)}
             <div className="card-footer">
               <div className="card-actions">
+                <button
+                  className="card-action-btn"
+                  onClick={() => void handleLaunchCodexCli(account)}
+                  disabled={cliLaunchingAccountId === account.id}
+                  title={t("codex.cli.quickLaunch", "CLI 快速启动")}
+                >
+                  {cliLaunchingAccountId === account.id ? (
+                    <RefreshCw size={14} className="loading-spinner" />
+                  ) : (
+                    <Terminal size={14} />
+                  )}
+                </button>
                 {!isApiKeyAccount && !isNewApiAccount && (
                   <button
                     className={`card-action-btn ${hasCodexAccountNoteDetails(account) ? "active" : ""}`}
@@ -11352,6 +11380,22 @@ export function CodexAccountsPage() {
                     disabled={localAccessBusy}
                   >
                     <FolderPlus size={14} />
+                  </button>
+                  <button
+                    className="card-action-btn"
+                    onClick={() => void handleLaunchLocalAccessCli()}
+                    title={t("codex.cli.quickLaunch", "CLI 快速启动")}
+                    disabled={
+                      localAccessBusy ||
+                      !localAccessCollection ||
+                      cliLaunchingAccountId === CODEX_API_SERVICE_BIND_ID
+                    }
+                  >
+                    {cliLaunchingAccountId === CODEX_API_SERVICE_BIND_ID ? (
+                      <RefreshCw size={14} className="loading-spinner" />
+                    ) : (
+                      <Terminal size={14} />
+                    )}
                   </button>
                   <button
                     className="card-action-btn"
@@ -12023,6 +12067,18 @@ export function CodexAccountsPage() {
           </td>
           <td className="sticky-action-cell table-action-cell">
             <div className="action-buttons">
+              <button
+                className="action-btn"
+                onClick={() => void handleLaunchCodexCli(account)}
+                disabled={cliLaunchingAccountId === account.id}
+                title={t("codex.cli.quickLaunch", "CLI 快速启动")}
+              >
+                {cliLaunchingAccountId === account.id ? (
+                  <RefreshCw size={14} className="loading-spinner" />
+                ) : (
+                  <Terminal size={14} />
+                )}
+              </button>
               {renderAddLocalAccessAccountButton(account, "action-btn")}
               {!isApiKeyAccount && !isNewApiAccount && (
                 <button
