@@ -17,7 +17,8 @@
 #
 # By default the workflow uploads an Actions artifact only. Enable
 # `publish_github_release` to create a fork-local prerelease whose tag is
-# `macos-arm64-v{package.json version}`.
+# `macos-arm64-v{package.json version}`. If that tag already exists, publishing
+# uses `macos-arm64-v{version}-{7-character source commit}` instead.
 
 name: macos-arm64-dmg-signed
 
@@ -31,8 +32,8 @@ on:
         default: false
       tag:
         description: >-
-          Optional prerelease tag. It must match the package version using the
-          form macos-arm64-vX.Y.Z.
+          Optional prerelease tag. Use macos-arm64-vX.Y.Z or the automatically
+          derived macos-arm64-vX.Y.Z-<7-character source commit> form.
         required: false
         type: string
         default: ""
@@ -61,6 +62,7 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          PUBLISH_GITHUB_RELEASE: ${{ inputs.publish_github_release }}
           TAG_PREFIX: macos-arm64-v
         run: |
           set -euo pipefail
@@ -70,14 +72,30 @@ jobs:
           [[ "${release_version}" =~ ^${version_re}$ ]] \
             || { echo "Unsupported package version: ${release_version}" >&2; exit 1; }
 
-          if [[ -n "${INPUT_TAG}" ]]; then
-            release_tag="${INPUT_TAG}"
-          else
-            release_tag="${TAG_PREFIX}${release_version}"
-          fi
+          base_tag="${TAG_PREFIX}${release_version}"
+          short_sha="$(git rev-parse --short=7 HEAD)"
+          commit_tag="${base_tag}-${short_sha}"
+          release_tag="${INPUT_TAG:-${base_tag}}"
 
-          [[ "${release_tag}" == "${TAG_PREFIX}${release_version}" ]] \
-            || { echo "Tag must be ${TAG_PREFIX}${release_version}" >&2; exit 1; }
+          [[ "${release_tag}" == "${base_tag}" || "${release_tag}" == "${commit_tag}" ]] \
+            || { echo "Tag must be ${base_tag} or ${commit_tag}" >&2; exit 1; }
+
+          if [[ "${PUBLISH_GITHUB_RELEASE}" == "true" && "${release_tag}" == "${base_tag}" ]]; then
+            set +e
+            existing_tag_ref="$(
+              git ls-remote --exit-code --refs origin "refs/tags/${base_tag}" 2>/dev/null
+            )"
+            tag_lookup_status=$?
+            set -e
+
+            if [[ ${tag_lookup_status} -eq 0 && -n "${existing_tag_ref}" ]]; then
+              release_tag="${commit_tag}"
+              echo "Tag ${base_tag} already exists; using source-specific tag ${release_tag}"
+            elif [[ ${tag_lookup_status} -ne 2 ]]; then
+              echo "Could not check whether tag ${base_tag} exists" >&2
+              exit "${tag_lookup_status}"
+            fi
+          fi
 
           {
             echo "release_tag=${release_tag}"
