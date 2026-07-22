@@ -22,33 +22,6 @@
 
 ---
 
-## 赞助商
-
-<table>
-  <tr>
-    <td width="120" align="center">
-      <a href="https://apikey.fun/register?aff=COCKPIT">
-        <img src="src/assets/icons/apikey-fun.png" alt="APIKEY.FUN" width="72" />
-      </a>
-    </td>
-    <td>
-      <a href="https://apikey.fun/register?aff=COCKPIT"><strong>APIKEY.FUN</strong></a> 是一家专业的企业级 AI 中转站，致力于为企业和个人开发者提供稳定、高效、低成本的 AI 模型 API 接入服务。平台支持 Claude、OpenAI、Gemini 等主流热门模型，价格低至官方原价的 7%。通过本项目 <a href="https://apikey.fun/register?aff=COCKPIT"><strong>专属链接</strong></a> 注册，还可享受最高 <strong>充值永久 95 折</strong> 专属优惠。
-    </td>
-  </tr>
-  <tr>
-    <td width="120" align="center">
-      <a href="https://roxybrowser.cn?code=0326VTDA">
-        <img src="src/assets/icons/roxybrowser.jpg" alt="RoxyBrowser" width="96" />
-      </a>
-    </td>
-    <td>
-      <a href="https://roxybrowser.cn?code=0326VTDA"><strong>RoxyBrowser（Roxy浏览器）</strong></a> 是面向多账号运营与 AI 自动化场景的指纹浏览器，支持独立浏览器指纹环境、Cookie / 存储隔离、Roxy 原生住宅 IP、团队协作与 API / MCP 自动化能力，适合需要管理 AI 账号矩阵、降低账号关联风险、提升长期使用稳定性的用户。通过 Cockpit <a href="https://roxybrowser.cn?code=0326VTDA"><strong>邀请链接</strong></a> 注册或购买，可享受 10% 粉丝折扣。
-    </td>
-  </tr>
-</table>
-
----
-
 ## 功能概览
 
 ### 1. 仪表盘 (Dashboard)
@@ -419,32 +392,6 @@ npm run tauri dev
 ```bash
 npm run tauri build
 ```
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=jlcodes99/cockpit-tools&type=Date)](https://star-history.com/#jlcodes99/cockpit-tools&Date)
-
----
-
-## 💬 交流群
-
-QQ 交流群、微信群或新建的 Telegram 畅聊群都可以加入。
-
-新建 Telegram 畅聊群：[点击加入](https://t.me/+Y8gMv4SlZUU2MWY1)
-
-| QQ 群 | 微信（个人） |
-| :---: | :---: |
-| <img src="docs/images/qq_group_20260404_183718.png" width="200" /> | <img src="docs/images/wechat_info.jpg" width="200" /> |
-
----
-
-## ☕ 赞助项目
-
-如果不介意，请 [☕ 赞赏支持一下](docs/DONATE.md)
-
-您的每一份支持都是对开源项目最大的鼓励！无论金额大小，都代表着您对这个项目的认可。
 
 ---
 

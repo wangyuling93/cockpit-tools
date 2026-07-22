@@ -364,26 +364,6 @@ npm run tauri build
 
 ---
 
-## Histórico do Star
-
-[![Gráfico do Histórico do Star](https://api.star-history.com/svg?repos=jlcodes99/cockpit-tools&type=Date)](https://star-history.com/#jlcodes99/cockpit-tools&Date)
-
----
-
-## Comunidade
-
-Grupo de bate-papo no Telegram recém-criado: [Junte-se ao grupo](https://t.me/+Y8gMv4SlZUU2MWY1)
-
----
-
-## Patrocínio
-
-Se você achar este projeto útil, considere apoiá-lo aqui: [☕ Doar](docs/DONATE.pt-br.md)
-
-Toda contribuição ajuda a manter o desenvolvimento de código aberto. Obrigado!
-
----
-
 ## Agradecimentos
 
 - Lógica de troca de contas do Antigravity IDE baseada em: [Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager)

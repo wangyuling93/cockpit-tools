@@ -21,33 +21,6 @@ A **universal AI IDE account management tool**, currently supporting **Antigravi
 
 ---
 
-## Sponsors
-
-<table>
-  <tr>
-    <td width="120" align="center">
-      <a href="https://apikey.fun/register?aff=COCKPIT">
-        <img src="src/assets/icons/apikey-fun.png" alt="APIKEY.FUN" width="72" />
-      </a>
-    </td>
-    <td>
-      <a href="https://apikey.fun/register?aff=COCKPIT"><strong>APIKEY.FUN</strong></a> is a professional enterprise-grade AI relay focused on stable, efficient, and low-cost AI model API access for companies and individual developers. It supports popular models such as Claude, OpenAI, and Gemini, with prices as low as 7% of official pricing. Register through this project <a href="https://apikey.fun/register?aff=COCKPIT"><strong>exclusive link</strong></a> to receive an exclusive <strong>permanent 5% top-up discount</strong>.
-    </td>
-  </tr>
-  <tr>
-    <td width="120" align="center">
-      <a href="https://roxybrowser.cn?code=0326VTDA">
-        <img src="src/assets/icons/roxybrowser.jpg" alt="RoxyBrowser" width="96" />
-      </a>
-    </td>
-    <td>
-      <a href="https://roxybrowser.cn?code=0326VTDA"><strong>RoxyBrowser</strong></a> is an anti-detect browser for multi-account operations and AI automation, supporting isolated browser fingerprint environments, Cookie / storage isolation, Roxy native residential IPs, team collaboration, and API / MCP automation. It helps users manage AI account matrices, reduce account association risk, and improve long-term stability. Register or purchase through the Cockpit <a href="https://roxybrowser.cn?code=0326VTDA"><strong>invite link</strong></a> to get a 10% fan discount.
-    </td>
-  </tr>
-</table>
-
----
-
 ## Feature Overview
 
 ### 1. Dashboard
@@ -422,26 +395,6 @@ npm run tauri dev
 ```bash
 npm run tauri build
 ```
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=jlcodes99/cockpit-tools&type=Date)](https://star-history.com/#jlcodes99/cockpit-tools&Date)
-
----
-
-## Community
-
-Newly created Telegram chat group: [Join the group](https://t.me/+Y8gMv4SlZUU2MWY1)
-
----
-
-## Sponsor
-
-If you find this project useful, consider supporting it here: [☕ Donate](docs/DONATE.en.md)
-
-Every bit of support helps sustain open-source development. Thank you!
 
 ---
 
