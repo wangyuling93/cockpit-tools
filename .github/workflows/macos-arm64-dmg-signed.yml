@@ -188,7 +188,7 @@ jobs:
             echo "SIGNING_KEYCHAIN_PATH=${keychain_path}"
           } >> "${GITHUB_ENV}"
 
-      - name: Build signed and notarized ARM64 DMG
+      - name: Build signed ARM64 DMG
         shell: bash
         env:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -208,6 +208,52 @@ jobs:
             --bundles dmg \
             --config src-tauri/tauri.ci.conf.json \
             2>&1 | tee build-macos-arm64.log
+
+      - name: Notarize and staple signed DMG
+        shell: bash
+        env:
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?Missing codesigning secret APPLE_APP_SPECIFIC_PASSWORD}"
+          : "${APPLE_ID:?Missing codesigning variable APPLE_ID}"
+          : "${APPLE_TEAM_ID:?Missing codesigning variable APPLE_TEAM_ID}"
+
+          dmg_dir="target/${TARGET}/release/bundle/dmg"
+          dmg_count="$(find "${dmg_dir}" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          [[ "${dmg_count}" == "1" ]] \
+            || { echo "Expected one DMG in ${dmg_dir}, found ${dmg_count}" >&2; exit 1; }
+          dmg_path="$(find "${dmg_dir}" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+
+          report_dir="macos-notarization/${TARGET}"
+          report_path="${report_dir}/dmg-notarytool-submit.json"
+          mkdir -p "${report_dir}"
+
+          xcrun notarytool submit "${dmg_path}" \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --wait \
+            --timeout 45m \
+            --output-format json \
+            | tee "${report_path}"
+
+          python3 - "${report_path}" <<'PY'
+          import json
+          import sys
+
+          report_path = sys.argv[1]
+          with open(report_path, encoding="utf-8") as report_file:
+              report = json.load(report_file)
+          if report.get("status") != "Accepted":
+              raise SystemExit(f"DMG notarization was not accepted: {report}")
+          PY
+
+          xcrun stapler staple -v "${dmg_path}"
+          xcrun stapler validate -v "${dmg_path}"
 
       - name: Verify signed and stapled DMG
         shell: bash
@@ -280,6 +326,15 @@ jobs:
         with:
           name: cockpit-tools-macos-arm64-build-log
           path: build-macos-arm64.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload DMG notarization report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cockpit-tools-macos-arm64-notarization
+          path: macos-notarization/aarch64-apple-darwin/
           if-no-files-found: warn
           retention-days: 14
 
