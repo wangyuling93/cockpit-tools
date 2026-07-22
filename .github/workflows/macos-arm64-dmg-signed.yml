@@ -1,0 +1,356 @@
+# Fork-local Apple Silicon release for a signed and notarized Cockpit Tools DMG.
+#
+# This workflow is intentionally separate from the canonical multi-platform
+# release workflow. Apple credentials are exposed only to the protected
+# `codesigning` GitHub environment job.
+#
+# Environment secrets:
+#   APPLE_DEVELOPER_ID_P12
+#   APPLE_DEVELOPER_ID_P12_PASSWORD
+#   APPLE_APP_SPECIFIC_PASSWORD
+# Environment variables:
+#   APPLE_ID
+#   APPLE_TEAM_ID
+#
+# Run:
+#   Actions -> macos-arm64-dmg-signed -> Run workflow
+#
+# By default the workflow uploads an Actions artifact only. Enable
+# `publish_github_release` to create a fork-local prerelease whose tag is
+# `macos-arm64-v{package.json version}`.
+
+name: macos-arm64-dmg-signed
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_github_release:
+        description: Create a GitHub prerelease (and tag) from the signed DMG
+        required: false
+        type: boolean
+        default: false
+      tag:
+        description: >-
+          Optional prerelease tag. It must match the package version using the
+          form macos-arm64-vX.Y.Z.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.tag || 'package-version' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    name: Resolve package version
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve version and tag
+        id: resolve
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          TAG_PREFIX: macos-arm64-v
+        run: |
+          set -euo pipefail
+
+          release_version="$(node -p "require('./package.json').version")"
+          version_re='[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?'
+          [[ "${release_version}" =~ ^${version_re}$ ]] \
+            || { echo "Unsupported package version: ${release_version}" >&2; exit 1; }
+
+          if [[ -n "${INPUT_TAG}" ]]; then
+            release_tag="${INPUT_TAG}"
+          else
+            release_tag="${TAG_PREFIX}${release_version}"
+          fi
+
+          [[ "${release_tag}" == "${TAG_PREFIX}${release_version}" ]] \
+            || { echo "Tag must be ${TAG_PREFIX}${release_version}" >&2; exit 1; }
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "release_version=${release_version}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Cockpit Tools ${release_version}; release tag ${release_tag}"
+
+  build-sign-and-package:
+    needs: resolve-version
+    name: Build, sign, and notarize ARM64 DMG
+    runs-on: macos-26
+    timeout-minutes: 180
+    environment:
+      name: codesigning
+    permissions:
+      contents: read
+    env:
+      CARGO_INCREMENTAL: "0"
+      TARGET: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Verify macOS and Xcode toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sw_vers
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "${xcode_version}"
+          grep -Eq '^Xcode 26\.' <<< "${xcode_version}"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: sidecars/cockpit-cliproxy/go.mod
+          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Import Developer ID certificate
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_DEVELOPER_ID_P12:?Missing codesigning secret APPLE_DEVELOPER_ID_P12}"
+          : "${APPLE_DEVELOPER_ID_P12_PASSWORD:?Missing codesigning secret APPLE_DEVELOPER_ID_P12_PASSWORD}"
+          : "${APPLE_TEAM_ID:?Missing codesigning variable APPLE_TEAM_ID}"
+
+          certificate_path="${RUNNER_TEMP}/developer-id-application.p12"
+          keychain_path="${RUNNER_TEMP}/cockpit-tools-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::${keychain_password}"
+
+          printf '%s' "${APPLE_DEVELOPER_ID_P12}" | base64 --decode > "${certificate_path}"
+          chmod 0600 "${certificate_path}"
+
+          security create-keychain -p "${keychain_password}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+          security import "${certificate_path}" \
+            -k "${keychain_path}" \
+            -P "${APPLE_DEVELOPER_ID_P12_PASSWORD}" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "${keychain_password}" \
+            "${keychain_path}"
+          security list-keychains -d user -s "${keychain_path}"
+
+          signing_identity="$({
+            security find-identity -v -p codesigning "${keychain_path}" || true
+          } | awk '/Developer ID Application:/ { print $2; exit }')"
+          if [[ -z "${signing_identity}" ]]; then
+            echo "No Developer ID Application identity was imported" >&2
+            security find-identity -v -p codesigning "${keychain_path}" || true
+            exit 1
+          fi
+
+          certificate_subject="$({
+            security find-certificate -c "Developer ID Application" -p "${keychain_path}"
+          } | openssl x509 -noout -subject -nameopt RFC2253)"
+          [[ "${certificate_subject}" == *"OU=${APPLE_TEAM_ID}"* ]] \
+            || { echo "Certificate does not belong to Apple Team ${APPLE_TEAM_ID}" >&2; exit 1; }
+
+          {
+            echo "APPLE_SIGNING_IDENTITY=${signing_identity}"
+            echo "SIGNING_KEYCHAIN_PATH=${keychain_path}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Build signed and notarized ARM64 DMG
+        shell: bash
+        env:
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?Missing codesigning secret APPLE_APP_SPECIFIC_PASSWORD}"
+          : "${APPLE_ID:?Missing codesigning variable APPLE_ID}"
+          : "${APPLE_TEAM_ID:?Missing codesigning variable APPLE_TEAM_ID}"
+
+          export APPLE_PASSWORD="${APPLE_APP_SPECIFIC_PASSWORD}"
+          npx tauri build \
+            --ci \
+            --target "${TARGET}" \
+            --bundles dmg \
+            --config src-tauri/tauri.ci.conf.json \
+            2>&1 | tee build-macos-arm64.log
+
+      - name: Verify signed and stapled DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dmg_dir="target/${TARGET}/release/bundle/dmg"
+          dmg_count="$(find "${dmg_dir}" -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          [[ "${dmg_count}" == "1" ]] \
+            || { echo "Expected one DMG in ${dmg_dir}, found ${dmg_count}" >&2; exit 1; }
+          dmg_path="$(find "${dmg_dir}" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+
+          hdiutil verify "${dmg_path}"
+          codesign --verify --strict --verbose=2 "${dmg_path}"
+          xcrun stapler validate -v "${dmg_path}"
+
+          mount_dir="${RUNNER_TEMP}/cockpit-tools-dmg-mount"
+          rm -rf "${mount_dir}"
+          mkdir -p "${mount_dir}"
+          hdiutil attach "${dmg_path}" -nobrowse -readonly -mountpoint "${mount_dir}"
+          cleanup_mount() {
+            diskutil eject "${mount_dir}" >/dev/null
+          }
+          trap cleanup_mount EXIT
+
+          app_count="$(find "${mount_dir}" -maxdepth 1 -type d -name '*.app' | wc -l | tr -d ' ')"
+          [[ "${app_count}" == "1" ]] \
+            || { echo "Expected one app in the DMG, found ${app_count}" >&2; exit 1; }
+          app_path="$(find "${mount_dir}" -maxdepth 1 -type d -name '*.app' -print -quit)"
+
+          codesign --verify --deep --strict --verbose=2 "${app_path}"
+          spctl --assess --type execute --verbose=4 "${app_path}"
+          while IFS= read -r binary_path; do
+            lipo "${binary_path}" -verify_arch arm64
+          done < <(find "${app_path}/Contents/MacOS" -maxdepth 1 -type f -print)
+
+          cleanup_mount
+          trap - EXIT
+
+      - name: Stage signed DMG
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release/stage_release_assets.cjs \
+            --platform macos \
+            --mac-arch aarch64 \
+            --assets-dir "target/${TARGET}/release/bundle" \
+            --output-dir release-assets
+
+          dmg_count="$(find release-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          [[ "${dmg_count}" == "1" ]] \
+            || { echo "Expected one staged DMG, found ${dmg_count}" >&2; exit 1; }
+          dmg_path="$(find release-assets -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          echo "dmg_name=$(basename "${dmg_path}")" >> "${GITHUB_OUTPUT}"
+          shasum -a 256 "${dmg_path}"
+          ls -lah release-assets
+
+      - name: Upload signed DMG
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cockpit-tools-macos-arm64-signed-dmg
+          path: release-assets/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cockpit-tools-macos-arm64-build-log
+          path: build-macos-arm64.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Delete temporary signing keychain
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${SIGNING_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "${SIGNING_KEYCHAIN_PATH}" || true
+          fi
+          rm -f "${RUNNER_TEMP}/developer-id-application.p12"
+
+  publish:
+    if: ${{ inputs.publish_github_release }}
+    needs:
+      - resolve-version
+      - build-sign-and-package
+    name: Publish GitHub prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download signed DMG
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cockpit-tools-macos-arm64-signed-dmg
+          path: release-assets
+
+      - name: Verify release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_count="$(find release-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')"
+          [[ "${dmg_count}" == "1" ]] \
+            || { echo "Expected one downloaded DMG, found ${dmg_count}" >&2; exit 1; }
+          ls -lah release-assets
+
+      - name: Write release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          notes_path="${RUNNER_TEMP}/release-notes.md"
+          dmg_name="$(basename "$(find release-assets -maxdepth 1 -type f -name '*.dmg' -print -quit)")"
+          {
+            echo "Signed, notarized, and stapled Cockpit Tools build for Apple Silicon."
+            echo
+            echo "Asset: \`${dmg_name}\`"
+            echo
+            echo "Architecture: \`aarch64-apple-darwin\`."
+            echo
+            echo "Built from \`${GITHUB_SHA}\`."
+          } > "${notes_path}"
+          echo "path=${notes_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create GitHub prerelease
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Cockpit Tools ${{ needs.resolve-version.outputs.release_version }} (macOS ARM64)
+          tag_name: ${{ needs.resolve-version.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          body_path: ${{ steps.notes.outputs.path }}
+          files: release-assets/*.dmg
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          make_latest: false
+          prerelease: true
