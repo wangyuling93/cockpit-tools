@@ -97,6 +97,7 @@ jobs:
       contents: read
     env:
       CARGO_INCREMENTAL: "0"
+      SCCACHE_CACHE_SIZE: 10G
       TARGET: aarch64-apple-darwin
 
     steps:
@@ -116,6 +117,70 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin
+
+      - name: Install sccache
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
+        with:
+          tool: sccache@0.16.0
+
+      - name: Configure sccache backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ACTIONS_RESULTS_URL:-}${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
+            echo "::add-mask::${ACTIONS_RUNTIME_TOKEN}"
+            echo "SCCACHE_GHA_ENABLED=true" >> "${GITHUB_ENV}"
+            echo "Using sccache GitHub backend"
+          else
+            echo "SCCACHE_GHA_ENABLED=false" >> "${GITHUB_ENV}"
+            echo "SCCACHE_DIR=${GITHUB_WORKSPACE}/.sccache" >> "${GITHUB_ENV}"
+            echo "Using sccache local disk + actions/cache fallback"
+          fi
+          echo "SCCACHE_ERROR_LOG=${RUNNER_TEMP}/sccache-server.log" >> "${GITHUB_ENV}"
+          echo "RUSTC_WRAPPER=sccache" >> "${GITHUB_ENV}"
+
+      - name: Start sccache server with diagnostics
+        shell: bash
+        env:
+          SCCACHE_LOG: debug
+        run: |
+          set -euo pipefail
+          version_output="$(sccache --version)"
+          echo "${version_output}"
+          [[ "${version_output}" == "sccache 0.16.0" ]] \
+            || { echo "Expected sccache 0.16.0" >&2; exit 1; }
+          sccache --start-server
+
+      - name: Restore sccache cache (fallback)
+        if: ${{ env.SCCACHE_GHA_ENABLED != 'true' }}
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('Cargo.lock') }}-
+            sccache-${{ runner.os }}-${{ env.TARGET }}-release-
+
+      # Cache crate downloads, but not target/: sccache covers reusable compiler
+      # output without retaining signed bundles or a very large target tree.
+      - name: Cache cargo registry and git deps
+        id: cargo-deps-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
+
+      - name: Report cargo deps cache status
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "cargo-deps cache-hit=${{ steps.cargo-deps-cache.outputs.cache-hit }}"
+          du -sh ~/.cargo/registry ~/.cargo/git 2>/dev/null || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -337,6 +402,31 @@ jobs:
           path: macos-notarization/aarch64-apple-darwin/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Save sccache cache (fallback)
+        if: always() && !cancelled() && env.SCCACHE_GHA_ENABLED != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ github.workspace }}/.sccache/
+          key: sccache-${{ runner.os }}-${{ env.TARGET }}-release-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+
+      - name: Report sccache stats and diagnostics
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          sccache --stop-server
+
+          if [[ -s "${SCCACHE_ERROR_LOG:-}" ]]; then
+            echo "::group::sccache server diagnostic tail"
+            tail -n 400 "${SCCACHE_ERROR_LOG}" |
+              sed -E 's#https?://[^[:space:]]+#<redacted-url>#g'
+            echo "::endgroup::"
+          else
+            echo "No sccache server diagnostic log was produced."
+          fi
 
       - name: Delete temporary signing keychain
         if: always()
