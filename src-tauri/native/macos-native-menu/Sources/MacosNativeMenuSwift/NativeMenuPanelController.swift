@@ -259,7 +259,13 @@ final class NativeMenuPanelController: ObservableObject {
         glass.cornerRadius = NativeMenuLayout.cornerRadius
         glass.tintColor = nil
         if #available(macOS 27.0, *) {
-            glass.effectIsInteractive = true
+            // GitHub's macOS 26 runner has an SDK 26 toolchain, which cannot
+            // type-check this macOS 27 beta property. Keep the runtime feature
+            // without making the package require an SDK 27 compiler.
+            let setter = NSSelectorFromString("setEffectIsInteractive:")
+            if glass.responds(to: setter) {
+                glass.setValue(true, forKey: "effectIsInteractive")
+            }
         }
         glass.autoresizingMask = [.width, .height]
         glass.contentView = hosting.view
