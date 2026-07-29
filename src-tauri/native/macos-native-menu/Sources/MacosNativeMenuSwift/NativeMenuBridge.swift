@@ -92,6 +92,7 @@ public func macos_native_menu_update_snapshot(
 /// tray-icon 在 NSStatusBarButton 上叠加 `TaoTrayTarget` 子视图接收鼠标事件。
 /// 直接改 button 的 title/attributedTitle 会拉宽状态栏项，但不会同步放大该点击层，
 /// 结果是图标/文字区域“看起来在”，左右键却完全无响应。
+@MainActor
 func syncTrayClickTargetFrame(for button: NSStatusBarButton) {
     button.layoutSubtreeIfNeeded()
     let bounds = button.bounds
@@ -115,6 +116,7 @@ func syncTrayClickTargetFrame(for button: NSStatusBarButton) {
     }
 }
 
+@MainActor
 func syncTrayClickTargetFrameSoon(for button: NSStatusBarButton) {
     syncTrayClickTargetFrame(for: button)
     // 状态栏变宽后 bounds 有时会在下一帧才稳定，补一次异步对齐。
@@ -134,15 +136,22 @@ public func macos_native_menu_update_status_item(
     guard let statusItemPointer else { return }
     let accountPrefix = accountPrefixPointer.map(String.init(cString:)) ?? ""
     let valueTextRaw = valueTextPointer.map(String.init(cString:)) ?? ""
+    // Same Sendable hop as toggle: pointer is only consumed on the main actor.
+    let statusItemBitPattern = UInt(bitPattern: statusItemPointer)
+    let remaining = remainingPercent
+    let isEnabled = enabled
 
     runNativeMenuController(label: "update_status_item") {
+        guard let statusItemPointer = UnsafeMutableRawPointer(bitPattern: statusItemBitPattern) else {
+            return
+        }
         let statusItem = Unmanaged<NSStatusItem>
             .fromOpaque(statusItemPointer)
             .takeUnretainedValue()
         guard let button = statusItem.button else { return }
 
         statusItem.length = NSStatusItem.variableLength
-        guard enabled != 0 else {
+        guard isEnabled != 0 else {
             button.attributedTitle = NSAttributedString(string: "")
             button.title = ""
             button.imagePosition = .imageOnly
@@ -168,8 +177,8 @@ public func macos_native_menu_update_status_item(
 
         // remainingPercent 仅用于着色：>=0 按剩余额度色阶；池合计可能 >100，按 0–100 夹紧配色。
         let valueColor: NSColor
-        if remainingPercent >= 0 {
-            let tone = min(max(Int(remainingPercent), 0), 100)
+        if remaining >= 0 {
+            let tone = min(max(Int(remaining), 0), 100)
             if tone <= 30 {
                 valueColor = .systemRed
             } else if tone <= 60 {
