@@ -13,16 +13,22 @@
 #   APPLE_TEAM_ID
 #
 # Run:
-#   Actions -> macos-arm64-dmg-signed -> Run workflow
+#   - Automatically on every push to `main` (artifact upload only; no GitHub
+#     release/tag unless you re-run via workflow_dispatch with publish enabled)
+#   - Manually: Actions -> macos-arm64-dmg-signed -> Run workflow
 #
 # By default the workflow uploads an Actions artifact only. Enable
-# `publish_github_release` to create a fork-local prerelease whose tag is
-# `macos-arm64-v{package.json version}`. If that tag already exists, publishing
-# uses `macos-arm64-v{version}-{7-character source commit}` instead.
+# `publish_github_release` (manual dispatch only) to create a fork-local
+# prerelease whose tag is `macos-arm64-v{package.json version}`. If that tag
+# already exists, publishing uses
+# `macos-arm64-v{version}-{7-character source commit}` instead.
 
 name: macos-arm64-dmg-signed
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       publish_github_release:
@@ -42,7 +48,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.tag || 'package-version' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.tag || github.sha || 'package-version' }}
   cancel-in-progress: false
 
 jobs:
