@@ -13,14 +13,13 @@
 #   APPLE_TEAM_ID
 #
 # Run:
-#   - Automatically on every push to `main` (artifact upload only; no GitHub
-#     release/tag unless you re-run via workflow_dispatch with publish enabled)
+#   - Automatically on every push to `main`: build, sign, notarize, then
+#     create/update a GitHub prerelease and verify it (fail-closed).
 #   - Manually: Actions -> macos-arm64-dmg-signed -> Run workflow
+#     "Create a GitHub prerelease" defaults to true (checked).
 #
-# By default the workflow uploads an Actions artifact only. Enable
-# `publish_github_release` (manual dispatch only) to create a fork-local
-# prerelease whose tag is `macos-arm64-v{package.json version}`. If that tag
-# already exists, publishing uses
+# Prerelease tag is `macos-arm64-v{package.json version}`. If that tag already
+# exists, publishing uses
 # `macos-arm64-v{version}-{7-character source commit}` instead.
 
 name: macos-arm64-dmg-signed
@@ -35,7 +34,7 @@ on:
         description: Create a GitHub prerelease (and tag) from the signed DMG
         required: false
         type: boolean
-        default: false
+        default: true
       tag:
         description: >-
           Optional prerelease tag. Use macos-arm64-vX.Y.Z or the automatically
@@ -68,7 +67,8 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ inputs.tag }}
-          PUBLISH_GITHUB_RELEASE: ${{ inputs.publish_github_release }}
+          # Auto-run (push) always publishes; manual follows the checkbox.
+          PUBLISH_GITHUB_RELEASE: ${{ github.event_name == 'push' || inputs.publish_github_release == true }}
           TAG_PREFIX: macos-arm64-v
         run: |
           set -euo pipefail
@@ -462,7 +462,9 @@ jobs:
           rm -f "${RUNNER_TEMP}/developer-id-application.p12"
 
   publish:
-    if: ${{ inputs.publish_github_release }}
+    # Auto-run (push to main) always creates/updates a GitHub prerelease.
+    # Manual runs follow the "Create a GitHub prerelease" checkbox (default true).
+    if: ${{ github.event_name == 'push' || inputs.publish_github_release == true }}
     needs:
       - resolve-version
       - build-sign-and-package
@@ -509,6 +511,7 @@ jobs:
             echo "Built from \`${GITHUB_SHA}\`."
           } > "${notes_path}"
           echo "path=${notes_path}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_name=${dmg_name}" >> "${GITHUB_OUTPUT}"
 
       - name: Create GitHub prerelease
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
@@ -521,5 +524,77 @@ jobs:
           files: release-assets/*.dmg
           overwrite_files: true
           fail_on_unmatched_files: true
+          draft: false
           make_latest: false
           prerelease: true
+
+      - name: Verify GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          EXPECTED_ASSET: ${{ steps.notes.outputs.dmg_name }}
+        run: |
+          set -euo pipefail
+          : "${RELEASE_TAG:?missing release tag}"
+          : "${EXPECTED_ASSET:?missing expected DMG name}"
+          meta_path="${RUNNER_TEMP}/published-prerelease.json"
+          gh release view "${RELEASE_TAG}" \
+            --json tagName,isPrerelease,isDraft,targetCommitish,assets \
+            > "${meta_path}"
+
+          python3 - "${meta_path}" "${RELEASE_TAG}" "${GITHUB_SHA}" "${EXPECTED_ASSET}" <<'PY'
+          import json
+          import sys
+
+          path, expected_tag, expected_sha, expected_asset = sys.argv[1:5]
+          with open(path, encoding="utf-8") as handle:
+              release = json.load(handle)
+
+          errors = []
+          if release.get("tagName") != expected_tag:
+              errors.append(
+                  f"tagName {release.get('tagName')!r} != {expected_tag!r}"
+              )
+          if release.get("isPrerelease") is not True:
+              errors.append(
+                  f"isPrerelease must be true, got {release.get('isPrerelease')!r}"
+              )
+          if release.get("isDraft") is not False:
+              errors.append(
+                  f"isDraft must be false, got {release.get('isDraft')!r}"
+              )
+          target = release.get("targetCommitish")
+          if not target:
+              errors.append("targetCommitish is empty")
+          elif isinstance(target, str) and len(target) == 40 and target != expected_sha:
+              errors.append(
+                  f"targetCommitish SHA {target!r} != {expected_sha!r}"
+              )
+
+          assets = release.get("assets")
+          if not isinstance(assets, list):
+              errors.append("assets is not a list")
+              asset_names = []
+          else:
+              asset_names = [
+                  asset.get("name")
+                  for asset in assets
+                  if isinstance(asset, dict)
+              ]
+          if expected_asset not in asset_names:
+              errors.append(
+                  f"missing asset {expected_asset!r}; have {asset_names!r}"
+              )
+
+          if errors:
+              print("Published release failed prerelease checks:", file=sys.stderr)
+              for error in errors:
+                  print(f"  - {error}", file=sys.stderr)
+              raise SystemExit(1)
+
+          print(
+              f"Verified prerelease {expected_tag} "
+              f"(isPrerelease=true, isDraft=false, asset={expected_asset})"
+          )
+          PY
