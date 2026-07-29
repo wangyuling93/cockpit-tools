@@ -59,7 +59,11 @@ final class NativeMenuPanelController: ObservableObject {
 
         let statusItem = Unmanaged<NSStatusItem>.fromOpaque(statusItemPointer).takeUnretainedValue()
         self.statusItem = statusItem
-        self.apply(snapshot: snapshot)
+        // 开启菜单栏额度时：打开托盘菜单强制选中配置平台与当前账号。
+        self.apply(
+            snapshot: snapshot,
+            preferSnapshotSelection: snapshot.shouldPreferSelectedPlatform
+        )
         self.ensurePanel()
         self.layoutGlassContent()
 
@@ -196,7 +200,8 @@ final class NativeMenuPanelController: ObservableObject {
 
     func update(snapshotJSON: String) {
         guard let snapshot = self.decodeSnapshot(from: snapshotJSON) else { return }
-        self.apply(snapshot: snapshot)
+        // 菜单已打开时的增量刷新：保留用户正在浏览的平台/账号。
+        self.apply(snapshot: snapshot, preferSnapshotSelection: false)
         self.finishRefreshIfNeeded()
         self.refreshPanelLayout()
     }
@@ -212,19 +217,29 @@ final class NativeMenuPanelController: ObservableObject {
         }
     }
 
-    private func apply(snapshot: NativeMenuSnapshot) {
+    private func apply(snapshot: NativeMenuSnapshot, preferSnapshotSelection: Bool) {
         self.snapshot = snapshot
 
         let validPlatformIds = Set(snapshot.platforms.map(\.id))
-        if !validPlatformIds.contains(self.selectedPlatformId) {
-            self.selectedPlatformId = snapshot.selected_platform_id
-        }
-        if self.selectedPlatformId.isEmpty {
+        if preferSnapshotSelection
+            || !validPlatformIds.contains(self.selectedPlatformId)
+            || self.selectedPlatformId.isEmpty
+        {
             self.selectedPlatformId = snapshot.selected_platform_id
         }
 
         var nextViewedAccountIds = self.viewedAccountIds
         for platform in snapshot.platforms {
+            // 打开菜单且需要跟随菜单栏配置时：该平台强制回到「当前账号」。
+            if preferSnapshotSelection, platform.id == snapshot.selected_platform_id {
+                if let currentId = platform.currentOrFirstAccountId {
+                    nextViewedAccountIds[platform.id] = currentId
+                } else {
+                    nextViewedAccountIds.removeValue(forKey: platform.id)
+                }
+                continue
+            }
+
             let currentViewedId = nextViewedAccountIds[platform.id]
             if let currentViewedId,
                platform.cards.contains(where: { $0.id == currentViewedId })

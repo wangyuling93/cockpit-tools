@@ -85,6 +85,7 @@ import type {
   CodexLocalAccessCollection,
   CodexLocalAccessCustomRoutingRule,
   CodexLocalAccessGatewayMode,
+  CodexLocalAccessRequestKind,
   CodexLocalAccessModelAlias,
   CodexLocalAccessModelPricing,
   CodexLocalAccessRoutingStrategy,
@@ -124,6 +125,9 @@ import "./CodexApiServicePage.css";
 
 type ServiceTab = "overview" | "keys" | "accounts" | "models" | "logs";
 type StatsLogTab = "accounts" | "logs" | "models" | "keys";
+type RequestLogKindFilter = "all" | CodexLocalAccessRequestKind;
+type RequestLogStatusFilter = "all" | "success" | "failed";
+type RequestLogGatewayModeFilter = "all" | CodexLocalAccessGatewayMode;
 type CopyField =
   | "baseUrl"
   | "lanBaseUrl"
@@ -696,7 +700,7 @@ function instanceDisplayName(
   t: ReturnType<typeof useTranslation>["t"],
 ): string {
   if (instance.isDefault) {
-    return t("instances.defaultName", "默认实例");
+    return t("instances.defaultName", "Default Instance");
   }
   const name = instance.name?.trim();
   return name || instance.id;
@@ -709,7 +713,7 @@ function resolveClientInstanceLabel(
 ): string {
   const id = clientInstanceId?.trim() ?? "";
   if (!id) {
-    return t("codex.apiService.logs.instanceUnknown", "实例 -");
+    return t("codex.apiService.logs.instanceUnknown", "Instance -");
   }
   const matched = instances.find((instance) => {
     const dirId = clientInstanceIdFromUserDataDir(instance.userDataDir || "");
@@ -865,6 +869,9 @@ export function CodexApiServicePage() {
   const [selectedTimeoutPresetId, setSelectedTimeoutPresetId] =
     useState<TimeoutPresetId>("long_wait");
   const [timeoutPresetNameDraft, setTimeoutPresetNameDraft] = useState("");
+  const [sessionAffinityDraft, setSessionAffinityDraft] = useState(true);
+  const [sessionAffinityTtlDraft, setSessionAffinityTtlDraft] =
+    useState("3600");
   const [responsesWebsocketsEnabledDraft, setResponsesWebsocketsEnabledDraft] =
     useState(false);
   const [maxRetryCredentialsDraft, setMaxRetryCredentialsDraft] = useState("0");
@@ -881,7 +888,17 @@ export function CodexApiServicePage() {
     useState<CodexLocalAccessUsageEventPage | null>(null);
   const [requestLogLoading, setRequestLogLoading] = useState(false);
   const [requestLogError, setRequestLogError] = useState("");
-  // Keep instance list for log display labels; request-log filters stay hidden.
+  const [requestLogKindFilter, setRequestLogKindFilter] =
+    useState<RequestLogKindFilter>("all");
+  const [requestLogStatusFilter, setRequestLogStatusFilter] =
+    useState<RequestLogStatusFilter>("all");
+  const [requestLogGatewayModeFilter, setRequestLogGatewayModeFilter] =
+    useState<RequestLogGatewayModeFilter>("all");
+  const [requestLogModelQuery, setRequestLogModelQuery] = useState("");
+  const [requestLogAccountQuery, setRequestLogAccountQuery] = useState("");
+  const [requestLogApiKeyQuery, setRequestLogApiKeyQuery] = useState("");
+  const [requestLogInstanceQuery, setRequestLogInstanceQuery] = useState("all");
+  const [requestLogErrorQuery, setRequestLogErrorQuery] = useState("");
   const [codexInstances, setCodexInstances] = useState<InstanceProfile[]>([]);
 
   const codexInstanceStore = useCodexInstanceStore();
@@ -1202,8 +1219,8 @@ export function CodexApiServicePage() {
     pricingRepriceProgress?.phase === "running" ||
     pricingRepriceProgress?.phase === "superseded";
   const avgLatency =
-    totals && totals.requestCount > 0
-      ? totals.totalLatencyMs / totals.requestCount
+    totals && totals.successCount > 0
+      ? totals.totalLatencyMs / totals.successCount
       : 0;
   const successRate =
     totals && totals.requestCount > 0
@@ -1479,6 +1496,14 @@ export function CodexApiServicePage() {
     statsTimeRange.startAt,
     statsTimeRange.endAt,
     requestLogPageSize,
+    requestLogKindFilter,
+    requestLogStatusFilter,
+    requestLogGatewayModeFilter,
+    requestLogModelQuery,
+    requestLogAccountQuery,
+    requestLogApiKeyQuery,
+    requestLogInstanceQuery,
+    requestLogErrorQuery,
   ]);
 
   useEffect(() => {
@@ -1486,6 +1511,12 @@ export function CodexApiServicePage() {
     let disposed = false;
     setRequestLogLoading(true);
     setRequestLogError("");
+    const success =
+      requestLogStatusFilter === "success"
+        ? true
+        : requestLogStatusFilter === "failed"
+          ? false
+          : null;
     void codexLocalAccessService
       .queryCodexLocalAccessRequestLogs({
         page: requestLogPage,
@@ -1493,14 +1524,19 @@ export function CodexApiServicePage() {
         statsRange: statsRange === "custom" ? null : statsRange,
         startAt: statsTimeRange.startAt,
         endAt: statsTimeRange.endAt,
-        modelQuery: "",
-        accountQuery: "",
-        apiKeyQuery: "",
-        instanceQuery: null,
-        gatewayMode: null,
-        requestKind: null,
-        success: null,
-        errorCategory: "",
+        modelQuery: requestLogModelQuery,
+        accountQuery: requestLogAccountQuery,
+        apiKeyQuery: requestLogApiKeyQuery,
+        instanceQuery:
+          requestLogInstanceQuery === "all" ? null : requestLogInstanceQuery,
+        gatewayMode:
+          requestLogGatewayModeFilter === "all"
+            ? null
+            : requestLogGatewayModeFilter,
+        requestKind:
+          requestLogKindFilter === "all" ? null : requestLogKindFilter,
+        success,
+        errorCategory: requestLogErrorQuery,
       })
       .then((result) => {
         if (disposed) return;
@@ -1530,6 +1566,14 @@ export function CodexApiServicePage() {
     statsTimeRange.endAt,
     requestLogPage,
     requestLogPageSize,
+    requestLogKindFilter,
+    requestLogStatusFilter,
+    requestLogGatewayModeFilter,
+    requestLogModelQuery,
+    requestLogAccountQuery,
+    requestLogApiKeyQuery,
+    requestLogInstanceQuery,
+    requestLogErrorQuery,
     stats?.updatedAt,
   ]);
 
@@ -1567,6 +1611,10 @@ export function CodexApiServicePage() {
     );
     setAccountModelRuleSelected(new Set());
     setAccountModelRuleBulkText("");
+    setSessionAffinityDraft(collection?.sessionAffinity ?? true);
+    setSessionAffinityTtlDraft(
+      formatSeconds(collection?.sessionAffinityTtlMs ?? 60 * 60 * 1000),
+    );
     setResponsesWebsocketsEnabledDraft(
       collection?.responsesWebsocketsEnabled ?? false,
     );
@@ -1587,6 +1635,8 @@ export function CodexApiServicePage() {
     collection?.modelAliases,
     collection?.excludedModels,
     collection?.accountModelRules,
+    collection?.sessionAffinity,
+    collection?.sessionAffinityTtlMs,
     collection?.responsesWebsocketsEnabled,
     collection?.maxRetryCredentials,
     collection?.maxRetryIntervalMs,
@@ -1991,6 +2041,7 @@ export function CodexApiServicePage() {
     accountIds: string[],
     restrictFreeAccounts: boolean,
     backupAccountIds?: string[],
+    preferredAccountIds?: string[],
   ) => {
     const filteredAccountIds =
       accountIds.length === 0
@@ -2014,11 +2065,15 @@ export function CodexApiServicePage() {
     const nextBackupAccountIds = (backupAccountIds ?? []).filter((id) =>
       filteredAccountIdSet.has(id),
     );
+    const nextPreferredAccountIds = (preferredAccountIds ?? []).filter((id) =>
+      filteredAccountIdSet.has(id),
+    );
 
     const next = await codexLocalAccessService.saveCodexLocalAccessAccounts(
       filteredAccountIds,
       restrictFreeAccounts,
       nextBackupAccountIds,
+      nextPreferredAccountIds,
     );
     setState(next);
     void fetchAccounts().catch((error) => {
@@ -2033,9 +2088,16 @@ export function CodexApiServicePage() {
     accountIds: string[],
     restrictFreeAccounts: boolean,
     backupAccountIds?: string[],
+    preferredAccountIds?: string[],
   ) => {
     await runAction(
-      () => saveMembers(accountIds, restrictFreeAccounts, backupAccountIds),
+      () =>
+        saveMembers(
+          accountIds,
+          restrictFreeAccounts,
+          backupAccountIds,
+          preferredAccountIds,
+        ),
       t("codex.localAccess.saveSuccess", "API 服务集合已更新"),
     );
   };
@@ -2044,12 +2106,18 @@ export function CodexApiServicePage() {
     accountIds: string[],
     restrictFreeAccounts: boolean,
     backupAccountIds?: string[],
+    preferredAccountIds?: string[],
   ) => {
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      await saveMembers(accountIds, restrictFreeAccounts, backupAccountIds);
+      await saveMembers(
+        accountIds,
+        restrictFreeAccounts,
+        backupAccountIds,
+        preferredAccountIds,
+      );
       setNotice(t("codex.localAccess.saveSuccess", "API 服务集合已更新"));
     } catch (err) {
       const message = String(err).replace(/^Error:\s*/, "");
@@ -2095,10 +2163,14 @@ export function CodexApiServicePage() {
     const backupAccountIds = (collection.customRoutingRules ?? [])
       .filter((rule) => rule.isBackup && remainingSet.has(rule.accountId))
       .map((rule) => rule.accountId);
+    const preferredAccountIds = (collection.customRoutingRules ?? [])
+      .filter((rule) => rule.isPreferred && remainingSet.has(rule.accountId))
+      .map((rule) => rule.accountId);
     await handleSaveMembers(
       remainingIds,
       collection.restrictFreeAccounts,
       backupAccountIds,
+      preferredAccountIds,
     );
   };
 
@@ -2669,6 +2741,21 @@ export function CodexApiServicePage() {
   };
 
   const handleSaveRoutingOptions = async () => {
+    const sessionAffinityTtlSeconds = parseIntegerDraft(
+      sessionAffinityTtlDraft,
+      60,
+      86400,
+    );
+    if (sessionAffinityTtlSeconds === null) {
+      setError(
+        t("codex.apiService.validation.numberRange", {
+          min: 60,
+          max: 86400,
+          defaultValue: "请输入 {{min}} 到 {{max}} 之间的数字",
+        }),
+      );
+      return;
+    }
     const maxRetryCredentials = parseIntegerDraft(
       maxRetryCredentialsDraft,
       0,
@@ -2718,9 +2805,8 @@ export function CodexApiServicePage() {
       async () => {
         const next =
           await codexLocalAccessService.updateCodexLocalAccessRoutingOptions({
-            sessionAffinity: collection?.sessionAffinity ?? true,
-            sessionAffinityTtlMs:
-              collection?.sessionAffinityTtlMs ?? 60 * 60 * 1000,
+            sessionAffinity: sessionAffinityDraft,
+            sessionAffinityTtlMs: sessionAffinityTtlSeconds * 1000,
             responsesWebsocketsEnabled: responsesWebsocketsEnabledDraft,
             maxRetryCredentials,
             maxRetryIntervalMs: maxRetryIntervalSeconds * 1000,
@@ -3157,6 +3243,71 @@ export function CodexApiServicePage() {
         : statsRange === "monthly"
           ? t("codex.apiService.statsRange.thisMonth", "This month")
           : `${statsTimeRange.startInput} - ${statsTimeRange.endInput}`;
+  const requestLogKindOptions: Array<{
+    value: RequestLogKindFilter;
+    label: string;
+  }> = [
+    { value: "all", label: t("codex.apiService.logs.allKinds", "All Types") },
+    { value: "text", label: t("codex.localAccess.requestKind.text", "Text") },
+    {
+      value: "image_generation",
+      label: t("codex.localAccess.requestKind.imageGeneration", "Image Gen"),
+    },
+    {
+      value: "image_edit",
+      label: t("codex.localAccess.requestKind.imageEdit", "Image Edit"),
+    },
+    { value: "other", label: t("codex.localAccess.requestKind.other", "Other") },
+  ];
+  const requestLogStatusOptions: Array<{
+    value: RequestLogStatusFilter;
+    label: string;
+  }> = [
+    { value: "all", label: t("codex.apiService.logs.allStatuses", "All Statuses") },
+    {
+      value: "success",
+      label: t("codex.localAccess.requestLogSuccess", "Success"),
+    },
+    { value: "failed", label: t("codex.localAccess.requestLogFailed", "Failed") },
+  ];
+  const requestLogInstanceOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string }> = [
+      {
+        value: "all",
+        label: t("codex.apiService.logs.allInstances", "All Instances"),
+      },
+    ];
+    const seen = new Set<string>(["all"]);
+    for (const instance of codexInstances) {
+      const value =
+        clientInstanceIdFromUserDataDir(instance.userDataDir || "") ||
+        instance.id;
+      if (!value || seen.has(value)) continue;
+      seen.add(value);
+      options.push({
+        value,
+        label: instanceDisplayName(instance, t),
+      });
+    }
+    return options;
+  }, [codexInstances, t]);
+  const requestLogGatewayModeOptions: Array<{
+    value: RequestLogGatewayModeFilter;
+    label: string;
+  }> = [
+    {
+      value: "all",
+      label: t("codex.apiService.logs.allGatewayModes", "All Modes"),
+    },
+    {
+      value: "sidecar",
+      label: t("codex.localAccess.gatewayModeNewLabel", "API Service-New"),
+    },
+    {
+      value: "legacy",
+      label: t("codex.localAccess.gatewayModeOldLabel", "API Service-Old"),
+    },
+  ];
   const serviceTabs: Array<{
     key: ServiceTab;
     label: string;
@@ -3265,6 +3416,27 @@ export function CodexApiServicePage() {
     requestLogTotal === 0
       ? 0
       : Math.min(requestLogTotal, requestLogCurrentPage * requestLogPageSize);
+  const hasRequestLogFilters = Boolean(
+    requestLogKindFilter !== "all" ||
+    requestLogStatusFilter !== "all" ||
+    requestLogGatewayModeFilter !== "all" ||
+    requestLogInstanceQuery !== "all" ||
+    requestLogModelQuery.trim() ||
+    requestLogAccountQuery.trim() ||
+    requestLogApiKeyQuery.trim() ||
+    requestLogErrorQuery.trim(),
+  );
+  const clearRequestLogFilters = () => {
+    setRequestLogKindFilter("all");
+    setRequestLogStatusFilter("all");
+    setRequestLogGatewayModeFilter("all");
+    setRequestLogModelQuery("");
+    setRequestLogAccountQuery("");
+    setRequestLogApiKeyQuery("");
+    setRequestLogInstanceQuery("all");
+    setRequestLogErrorQuery("");
+  };
+
 
   const findCachedCodexCliInstance = (
     bindAccountId: string,
@@ -3764,7 +3936,7 @@ export function CodexApiServicePage() {
       <div className="page-top-strip">
         <div className="page-top-strip-left">
           <span className="page-top-strip-label">
-            {t("settings.general.account", "账号")}
+            {t("settings.general.account", "Accounts")}
           </span>
           <ManualHelpIconButton className="platform-header-help" />
         </div>
@@ -4004,12 +4176,12 @@ export function CodexApiServicePage() {
             <Activity size={16} />
             <div>
               <strong>
-                {t("codex.apiService.usage.title", "用量统计")}
+                {t("codex.apiService.usage.title", "Usage Stats")}
               </strong>
               <span>
                 {selectedStatsRangeTitle}
                 {stats?.updatedAt
-                  ? ` · ${t("codex.apiService.usage.lastRecorded", "最近入账")} ${formatDateTime(stats.updatedAt)}`
+                  ? ` · ${t("codex.apiService.usage.lastRecorded", "Last recorded")} ${formatDateTime(stats.updatedAt)}`
                   : ""}
               </span>
             </div>
@@ -4416,12 +4588,12 @@ export function CodexApiServicePage() {
                         className={`codex-api-service-pill ${apiKey.enabled ? "success" : "muted"}`}
                       >
                         {apiKey.enabled
-                          ? t("common.enabled", "已启用")
-                          : t("common.disabled", "已停用")}
+                          ? t("common.enabled", "Enabled")
+                          : t("common.disabled", "Disabled")}
                       </span>
                       <span className="codex-api-service-key-last-used">
                         <small>
-                          {t("codex.apiService.keys.lastUsed", "最近使用")}
+                          {t("codex.apiService.keys.lastUsed", "Last used")}
                         </small>
                         <strong>{formatDateTime(apiKey.lastUsedAt)}</strong>
                       </span>
@@ -4432,7 +4604,7 @@ export function CodexApiServicePage() {
                           onClick={() =>
                             void handleCopy(`apiKey:${apiKey.id}`, apiKey.key)
                           }
-                          title={t("common.copy", "复制")}
+                          title={t("common.copy", "Copy")}
                         >
                           {copiedField === `apiKey:${apiKey.id}` ? (
                             <Check size={14} />
@@ -4449,8 +4621,8 @@ export function CodexApiServicePage() {
                           disabled={busy}
                           title={
                             apiKey.enabled
-                              ? t("common.disable", "停用")
-                              : t("common.enable", "启用")
+                              ? t("common.disable", "Disable")
+                              : t("common.enable", "Enable")
                           }
                         >
                           <Power size={14} />
@@ -4462,7 +4634,7 @@ export function CodexApiServicePage() {
                           disabled={busy}
                           title={t(
                             "codex.localAccess.apiKeyRotate",
-                            "轮换 Key",
+                            "Rotate Key",
                           )}
                         >
                           <RefreshCw size={14} />
@@ -4474,7 +4646,7 @@ export function CodexApiServicePage() {
                           disabled={
                             busy || (collection?.apiKeys.length ?? 0) <= 1
                           }
-                          title={t("common.delete", "删除")}
+                          title={t("common.delete", "Delete")}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -4492,23 +4664,23 @@ export function CodexApiServicePage() {
                         <Route size={16} />
                         <div>
                           <span>
-                            {t("codex.apiService.keys.routingAccounts", "分流账号")}
+                            {t("codex.apiService.keys.routingAccounts", "Routing Accounts")}
                           </span>
                           <strong>
                             {persistedInheritAccountPool
                               ? t(
                                   "codex.apiService.keys.accountScopeInheritedCount",
-                                  "继承服务池 · {{count}} 个账号",
+                                  "Account pool: inheriting {{count}}",
                                   { count: memberIds.length },
                                 )
                               : persistedAccountIds.length === 0
                                 ? t(
                                     "codex.apiService.keys.accountScopeUnavailable",
-                                    "无可用账号",
+                                    "Account pool: no available accounts",
                                   )
                                 : t(
                                     "codex.apiService.keys.accountScopeCount",
-                                    "自定义 · {{selected}}/{{total}} 个账号",
+                                    "Account pool: {{selected}}/{{total}}",
                                     {
                                       selected: persistedAccountIds.length,
                                       total: keySelectableAccountIds.length,
@@ -4521,7 +4693,7 @@ export function CodexApiServicePage() {
                         key={`${statsRange}:${statsTimeRange.startAt}:${statsTimeRange.endAt}`}
                         className="api-key-usage-grid"
                         aria-live="polite"
-                        aria-label={`${selectedStatsRangeTitle} Key 用量`}
+                        aria-label={`${selectedStatsRangeTitle} Key Usage`}
                       >
                         <div className="api-key-usage-grid-head">
                           <Activity size={14} />
@@ -4529,7 +4701,7 @@ export function CodexApiServicePage() {
                         </div>
                         <div>
                           <span>
-                            {t("codex.localAccess.stats.requests", "请求")}
+                            {t("codex.localAccess.stats.requests", "Requests")}
                           </span>
                           <strong>
                             {formatCompactNumber(keyUsage?.requestCount ?? 0)}
@@ -4541,13 +4713,13 @@ export function CodexApiServicePage() {
                         </div>
                         <div>
                           <span>
-                            {t("codex.localAccess.stats.successRateLabel", "成功率")}
+                            {t("codex.localAccess.stats.successRateLabel", "Success Rate")}
                           </span>
                           <strong>{keySuccessRate}%</strong>
                         </div>
                         <div>
                           <span>
-                            {t("codex.localAccess.stats.estimatedCost", "估算费用")}
+                            {t("codex.localAccess.stats.estimatedCost", "Estimated Cost")}
                           </span>
                           <strong>
                             {formatUsdCost(keyUsage?.estimatedCostUsd ?? 0)}
@@ -5145,6 +5317,40 @@ export function CodexApiServicePage() {
                 <label>
                   <span>
                     {t(
+                      "codex.apiService.routing.sessionAffinity",
+                      "会话亲和",
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={sessionAffinityDraft}
+                    onChange={(event) =>
+                      setSessionAffinityDraft(event.target.checked)
+                    }
+                    disabled={busy || !collection}
+                  />
+                </label>
+                <label>
+                  <span>
+                    {t(
+                      "codex.apiService.routing.sessionAffinityTtl",
+                      "过期时间（秒）",
+                    )}
+                  </span>
+                  <input
+                    type="number"
+                    min={60}
+                    max={86400}
+                    value={sessionAffinityTtlDraft}
+                    onChange={(event) =>
+                      setSessionAffinityTtlDraft(event.target.value)
+                    }
+                    disabled={busy || !collection}
+                  />
+                </label>
+                <label>
+                  <span>
+                    {t(
                       "codex.apiService.routing.responsesWebsockets",
                       "Responses WebSocket",
                     )}
@@ -5564,6 +5770,141 @@ export function CodexApiServicePage() {
 
             {statsLogTab === "logs" && (
               <>
+                <div className="codex-api-service-log-filters">
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.modelFilter", "模型")}
+                    </span>
+                    <input
+                      value={requestLogModelQuery}
+                      onChange={(event) =>
+                        setRequestLogModelQuery(event.target.value)
+                      }
+                      placeholder={t(
+                        "codex.apiService.logs.modelPlaceholder",
+                        "Model ID",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.accountFilter", "Account")}
+                    </span>
+                    <input
+                      value={requestLogAccountQuery}
+                      onChange={(event) =>
+                        setRequestLogAccountQuery(event.target.value)
+                      }
+                      placeholder={t(
+                        "codex.apiService.logs.accountPlaceholder",
+                        "Email or account ID",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.apiKeyFilter", "API Key")}
+                    </span>
+                    <input
+                      value={requestLogApiKeyQuery}
+                      onChange={(event) =>
+                        setRequestLogApiKeyQuery(event.target.value)
+                      }
+                      placeholder={t(
+                        "codex.apiService.logs.apiKeyPlaceholder",
+                        "Name or ID",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.instanceFilter", "Instance")}
+                    </span>
+                    <SingleSelectDropdown
+                      value={requestLogInstanceQuery}
+                      options={requestLogInstanceOptions}
+                      onChange={setRequestLogInstanceQuery}
+                      ariaLabel={t(
+                        "codex.apiService.logs.instanceFilter",
+                        "Instance",
+                      )}
+                      placeholder={t(
+                        "codex.apiService.logs.allInstances",
+                        "All Instances",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>{t("codex.apiService.logs.kindFilter", "Type")}</span>
+                    <SingleSelectDropdown
+                      value={requestLogKindFilter}
+                      options={requestLogKindOptions}
+                      onChange={(value) =>
+                        setRequestLogKindFilter(value as RequestLogKindFilter)
+                      }
+                      ariaLabel={t("codex.apiService.logs.kindFilter", "Type")}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.statusFilter", "Status")}
+                    </span>
+                    <SingleSelectDropdown
+                      value={requestLogStatusFilter}
+                      options={requestLogStatusOptions}
+                      onChange={(value) =>
+                        setRequestLogStatusFilter(
+                          value as RequestLogStatusFilter,
+                        )
+                      }
+                      ariaLabel={t(
+                        "codex.apiService.logs.statusFilter",
+                        "Status",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.gatewayModeFilter", "Mode")}
+                    </span>
+                    <SingleSelectDropdown
+                      value={requestLogGatewayModeFilter}
+                      options={requestLogGatewayModeOptions}
+                      onChange={(value) =>
+                        setRequestLogGatewayModeFilter(
+                          value as RequestLogGatewayModeFilter,
+                        )
+                      }
+                      ariaLabel={t(
+                        "codex.apiService.logs.gatewayModeFilter",
+                        "Mode",
+                      )}
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {t("codex.apiService.logs.errorFilter", "Error")}
+                    </span>
+                    <input
+                      value={requestLogErrorQuery}
+                      onChange={(event) =>
+                        setRequestLogErrorQuery(event.target.value)
+                      }
+                      placeholder={t(
+                        "codex.apiService.logs.errorPlaceholder",
+                        "Error category",
+                      )}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={clearRequestLogFilters}
+                    disabled={!hasRequestLogFilters}
+                  >
+                    {t("codex.apiService.logs.clearFilters", "Clear Filters")}
+                  </button>
+                </div>
                 <div className="codex-api-service-log-list">
                   {requestLogError && (
                     <div className="codex-api-service-message error">
@@ -5602,6 +5943,34 @@ export function CodexApiServicePage() {
                               ? t("codex.localAccess.requestLogSuccess", "成功")
                               : t("codex.localAccess.requestLogFailed", "失败")}
                           </span>
+                          {event.reasoningEffort ? (
+                            <span
+                              className="codex-api-service-pill muted"
+                              title={t(
+                                "codex.apiService.logs.reasoningEffort",
+                                "思考强度",
+                              )}
+                            >
+                              {t("codex.apiService.logs.reasoningEffortValue", {
+                                effort: event.reasoningEffort,
+                                defaultValue: "思考 {{effort}}",
+                              })}
+                            </span>
+                          ) : null}
+                          {event.serviceTier ? (
+                            <span
+                              className="codex-api-service-pill muted"
+                              title={t(
+                                "codex.apiService.logs.serviceTier",
+                                "服务等级",
+                              )}
+                            >
+                              {t("codex.apiService.logs.serviceTierValue", {
+                                tier: event.serviceTier,
+                                defaultValue: "Tier {{tier}}",
+                              })}
+                            </span>
+                          ) : null}
                           <span
                             className={`codex-api-service-pill ${
                               event.gatewayMode === "legacy"
@@ -7060,17 +7429,34 @@ export function CodexApiServicePage() {
         initialSelectedIds={memberIds}
         maskAccountText={maskAccountText}
         onClose={() => setMemberModalOpen(false)}
-        onSaveAccounts={({
+        onSaveAccounts={async ({
           accountIds,
           restrictFreeAccounts,
           backupAccountIds,
-        }) =>
-          handleSaveMembersFromModal(
+          preferredAccountIds,
+          sessionAffinity,
+          sessionAffinityTtlMs,
+        }) => {
+          await handleSaveMembersFromModal(
             accountIds,
             restrictFreeAccounts,
             backupAccountIds,
-          )
-        }
+            preferredAccountIds,
+          );
+          if (collection) {
+            const next = await codexLocalAccessService.updateCodexLocalAccessRoutingOptions({
+              sessionAffinity,
+              sessionAffinityTtlMs,
+              responsesWebsocketsEnabled: collection.responsesWebsocketsEnabled,
+              maxRetryCredentials: collection.maxRetryCredentials,
+              maxRetryIntervalMs: collection.maxRetryIntervalMs,
+              disableCooling: collection.disableCooling,
+              immediateSseResponse: collection.immediateSseResponse,
+              maxConcurrentImageRequests: collection.maxConcurrentImageRequests,
+            });
+            setState(next);
+          }
+        }}
         onClearStats={() =>
           codexLocalAccessService.clearCodexLocalAccessStats().then(setState)
         }

@@ -47,6 +47,7 @@ import { ModalErrorMessage, useModalErrorState } from "./ModalErrorMessage";
 import { scrollElementIntoView } from "../utils/reducedMotion";
 import { useEscClose } from "../hooks/useEscClose";
 import { useAutoDismissMessage } from "../hooks/useAutoDismissMessage";
+import { useEnterConfirm } from "../hooks/useEnterConfirm";
 import type { InstanceStoreState } from "../stores/createInstanceStore";
 import { showInstanceFloatingCardWindow } from "../services/floatingCardService";
 import {
@@ -1362,6 +1363,13 @@ export function InstancesManager<TAccount extends AccountLike>({
       setActionLoading(null);
     }
   };
+
+  useEnterConfirm(
+    !!deleteConfirmInstance && actionLoading !== deleteConfirmInstance?.id,
+    () => {
+      void handleConfirmDelete();
+    },
+  );
 
   const handleMissingPathError = (error: unknown, instanceId?: string) => {
     const message = String(error ?? "");

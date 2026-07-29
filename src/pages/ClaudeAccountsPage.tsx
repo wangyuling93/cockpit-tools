@@ -52,6 +52,7 @@ import { ModelProviderUsagePanel } from '../components/model-provider/ModelProvi
 import { PlatformGroupSwitcher } from '../components/platform/PlatformGroupSwitcher';
 import { useEscClose } from '../hooks/useEscClose';
 import { useAutoDismissMessage } from '../hooks/useAutoDismissMessage';
+import { useEnterConfirm } from '../hooks/useEnterConfirm';
 import { useExportJsonModal } from '../hooks/useExportJsonModal';
 import { useLaunchTerminalOptions } from '../hooks/useLaunchTerminalOptions';
 import { getProviderCurrentAccountId, type ProviderCurrentPlatform } from '../services/providerCurrentAccountService';
@@ -88,12 +89,15 @@ import {
   getClaudeAuthModeLabel,
   getClaudePlanBadge,
   getClaudePlanBadgeClass,
-  getClaudeQuotaClass,
   isClaudeDesktopGatewayAccount,
   isClaudeDesktopOAuthAccount,
   isClaudeDesktopRuntimeAccount,
   normalizeClaudeAuthMode,
 } from '../types/claude';
+import {
+  resolveClaudeDisplayPercentage,
+  resolveClaudeQuotaClassForDisplayValue,
+} from '../utils/claudeQuotaDisplayPreference';
 import {
   CLAUDE_APIKEY_FUN_BASE_URL,
   CLAUDE_APIKEY_FUN_PROVIDER_ID,
@@ -706,13 +710,13 @@ function buildClaudeQuotaSummaryItems(account: ClaudeAccount, t: TFunction): Cla
     {
       key: 'five-hour',
       label: t('claude.quota.fiveHour', 'Current session'),
-      percentage: quota.five_hour_percentage,
+      percentage: resolveClaudeDisplayPercentage(quota.five_hour_percentage),
       resetTime: quota.five_hour_reset_time,
     },
     {
       key: 'seven-day',
       label: t('claude.quota.sevenDay', 'Current week (all models)'),
-      percentage: quota.seven_day_percentage,
+      percentage: resolveClaudeDisplayPercentage(quota.seven_day_percentage),
       resetTime: quota.seven_day_reset_time,
     },
   ];
@@ -957,7 +961,7 @@ export function ClaudeAccountsPage({ subPlatform = 'desktop' }: ClaudeAccountsPa
 
   useEscClose(showAddModal, closeAddModal);
   useEscClose(Boolean(cliLaunchModal), () => setCliLaunchModal(null));
-  useEscClose(Boolean(deleteConfirm), () => setDeleteConfirm(null));
+  useEscClose(Boolean(deleteConfirm) && !deleting, () => setDeleteConfirm(null));
 
   const refreshCurrentAccountId = useCallback(
     async (platform: ClaudeSubPlatform = activeSubPlatform) => {
@@ -2454,6 +2458,10 @@ export function ClaudeAccountsPage({ subPlatform = 'desktop' }: ClaudeAccountsPa
     }
   };
 
+  useEnterConfirm(Boolean(deleteConfirm) && !deleting, () => {
+    void confirmDelete();
+  });
+
   const openBatchDeleteConfirm = () => {
     if (selectedDeletableIds.length === 0) return;
     setDeleteError(null);
@@ -2668,7 +2676,7 @@ export function ClaudeAccountsPage({ subPlatform = 'desktop' }: ClaudeAccountsPa
       <>
         {items.map((item) => {
           const percentage = clampQuotaPercentage(item.percentage);
-          const quotaClass = getClaudeQuotaClass(percentage);
+          const quotaClass = resolveClaudeQuotaClassForDisplayValue(percentage);
           const resetText = formatClaudeResetTime(item.resetTime);
           const resetDisplay = resetText || '-';
           const Icon = item.key === 'five-hour' ? Clock3 : CalendarDays;
@@ -2801,7 +2809,7 @@ export function ClaudeAccountsPage({ subPlatform = 'desktop' }: ClaudeAccountsPa
       <div className="page-top-strip">
         <div className="page-top-strip-left">
           <span className="page-top-strip-label">
-            {t('settings.general.account', '账号')}
+            {t('settings.general.account', 'Accounts')}
           </span>
           <ManualHelpIconButton className="platform-header-help" />
         </div>
